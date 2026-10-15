@@ -103,6 +103,8 @@ class Board:
     vias: list = field(default_factory=list)
     groups: dict = field(default_factory=dict)       # nome -> [uuids]
     layers: int = 4                                  # 4: planos de VDD/GND; 2: trilhos
+    floorplan: object = None                         # floorplan.Floorplan declarado (ou None)
+    keepouts: list = field(default_factory=list)     # floorplan.Keepout
     unrouted: list = field(default_factory=list)
 
     def nets(self):

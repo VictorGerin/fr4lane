@@ -25,7 +25,7 @@ PYTHONPATH=pcbflow python -m pcbflow --lib pcbflow/lib/rtl --top adder \
     --src rtl/RISC_V/ALU/adder.v --tb sim/testbenches/tb_adder.v
 ```
 
-Opções úteis: `--effort` (esforço do placement), `--row-gap`/`--part-gap` (densidade, em mm), `--route-iter`, `--max-parts`, `--seed`, `--layers 2|4` (veja [Placa de 2 camadas](#placa-de-2-camadas)), `--flatten` e `--module-weight` (veja [Módulos na placa](#módulos-na-placa)).
+Opções úteis: `--effort` (esforço do placement), `--row-gap`/`--part-gap` (densidade, em mm), `--route-iter`, `--max-parts`, `--seed`, `--floorplan arquivo.json` (veja [Floorplan](#floorplan-posição-dos-módulos-e-keepouts)), `--layers 2|4` (veja [Placa de 2 camadas](#placa-de-2-camadas)), `--flatten` e `--module-weight` (veja [Módulos na placa](#módulos-na-placa)).
 
 ## Bibliotecas de células
 
@@ -142,6 +142,43 @@ Para ver cada módulo isolado na placa, instancie-os num topo sem fios em comum,
   - VDD e GND são planos internos, sem trilha: pads SMD de alimentação ganham uma via curta até o plano, e pads com furo ligam-se a ele direto;
   - os sinais são roteados por negociação (PathFinder): as nets podem disputar espaço no início, e o custo dos pontos disputados sobe a cada iteração até ninguém mais compartilhar;
   - trilha de 0,25 mm, folga de 0,2 mm e via de 0,6/0,3 mm.
+
+## Floorplan: posição dos módulos e keepouts
+
+Por padrão o pcbflow decide sozinho onde cada módulo fica. Com `--floorplan arquivo.json` você fixa áreas em **coordenadas absolutas**, em mm, a partir do canto superior esquerdo da placa. O `make pcb` usa automaticamente `<top>.floorplan.json` se houver um em `rtl/`; `PCB_FLOORPLAN=` desliga. Exemplo completo em [`rtl/basic/basic_top.floorplan.json`](../rtl/basic/basic_top.floorplan.json):
+
+```json
+{
+  "board":   { "width": 230, "height": 150 },
+  "modules": {
+    "u_fa":   { "type": "fence",  "rect": [17, 5, 78, 42] },
+    "u_mux4": { "type": "region", "rect": [101, 5, 88, 42] },
+    "u_dff":  { "type": "guide",  "near": [150, 95] }
+  },
+  "keepouts": [
+    { "name": "furo_fixacao", "rect": [120, 52, 10, 10], "what": ["place", "route"] },
+    { "name": "area_livre",   "rect": [150, 52, 25, 20], "what": ["place"], "layers": ["F.Cu"] }
+  ]
+}
+```
+
+`rect` é `[x, y, largura, altura]`. `board` é opcional: sem ele, a placa cresce até caber tudo e conter as áreas.
+
+| Tipo | Componentes do módulo | Componentes de outros módulos |
+|---|---|---|
+| `fence` | obrigatoriamente dentro | não entram |
+| `region` | obrigatoriamente dentro | podem usar o espaço que sobrar |
+| `guide` (`rect` ou `near`) | preferem ficar perto; cada bloco paga a distância até a área | — |
+
+Keepouts: `"place"` proíbe componentes; `"route"` proíbe trilhas e vias nas camadas de `layers` (padrão: as duas). As regras de módulo valem só para o **posicionamento**, como nas ferramentas de chip: fios de outros módulos podem atravessar uma fence. Para impedir, use um keepout de roteamento.
+
+Os módulos são caminhos de instância (`u_fa`, `u0.u2`), os mesmos da seção *Módulos* do `report.md`. Uma regra vale para os submódulos do caminho, e a mais específica prevalece.
+
+**Fileiras.** Os componentes ficam em fileiras de uma grade fixa, e uma área de fence/region só usa as fileiras que couberem **inteiras** dentro dela. O passo da grade depende da família e do número de camadas: o RTL usa 13,05 mm em 4 camadas e 15,55 mm em 2. A seção *Floorplan* do `report.md` lista a área de lógica e a faixa de y de cada fileira, e mostra quanto de fileira cada área usa e oferece. Se uma área não comportar o módulo, o fluxo para antes do roteamento e diz quanto falta e onde ficam as fileiras próximas.
+
+**Verificação.** O passo 5/6 confere por conta própria que todo componente de um módulo está na sua fence/region, que nenhum de fora invadiu uma fence e que nada caiu num keepout.
+
+**No KiCad:** os keepouts viram *Rule Areas* (o DRC do KiCad passa a aplicá-los se você editar a placa). As áreas dos módulos são desenhadas em *User.Drawings*: fence com linha cheia, region tracejada, guide pontilhada (ou um círculo, para `near`).
 
 ## Placa de 2 camadas
 

@@ -102,6 +102,7 @@ class Router:
                 if d < edge_v:
                     self.via_static[iy * self.nx + ix] = BLOCK
         self._fixed_copper()
+        self._keepouts()
         for pad in self.b.pads():
             if not pad.net:
                 continue
@@ -153,6 +154,21 @@ class Router:
                         nodes.add(self.node(layer, ix, iy))
             for ix, iy, d in self._points_near(rect, v.size + r.clearance):
                 self._claim(self.via_static, iy * self.nx + ix, net)
+
+    def _keepouts(self):
+        """Keepouts de roteamento do floorplan: nenhuma trilha nas camadas dadas
+        e nenhuma via (a via atravessa as duas camadas)."""
+        r = self.r
+        for k in getattr(self.b, "keepouts", []):
+            if not k.route:
+                continue
+            for ix, iy, _ in self._points_near(k.rect, r.clearance + r.track_width / 2):
+                for layer, name in enumerate(LAYERS):
+                    i = self.node(layer, ix, iy)
+                    if name in k.layers and self.static[i] == FREE:
+                        self.static[i] = BLOCK
+            for ix, iy, _ in self._points_near(k.rect, r.clearance + r.via_size / 2):
+                self.via_static[iy * self.nx + ix] = BLOCK
 
     def _halo(self, p):
         iy, ix = divmod(p, self.nx)

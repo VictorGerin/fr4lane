@@ -95,4 +95,46 @@ def check_board(board):
         if it.kind == "pad" and it.net:
             comps[it.net].add(find(i))
     unconnected = {net: len(c) for net, c in comps.items() if len(c) > 1}
+    errors += _floorplan_errors(board, items)
     return errors, unconnected
+
+
+def _overlaps(a, b, m=0.0):
+    return a[0] - m < b[2] and b[0] - m < a[2] and a[1] - m < b[3] and b[1] - m < a[3]
+
+
+def _floorplan_errors(board, items):
+    """Confere, independentemente do placement e do roteador, as restrições do
+    floorplan: membros dentro da sua fence/region, ninguém de fora numa fence,
+    nada nos keepouts."""
+    fp = getattr(board, "floorplan", None)
+    if fp is None:
+        return []
+    errors = []
+    gmod = getattr(board, "group_modules", {})
+    for f in board.footprints:
+        x0, y0, x1, y1 = f.courtyard
+        box = (f.x + x0, f.y + y0, f.x + x1, f.y + y1)
+        for k in fp.keepouts:
+            if k.place and _overlaps(box, k.rect):
+                errors.append(f"floorplan: {f.ref} dentro do keepout '{k.name}'")
+        if not f.group:
+            continue                     # desacopladores e conectores não pertencem a módulo
+        mod = gmod.get(f.group, "")
+        rule = fp.rule_of(mod) if mod else None
+        if rule and rule.type in ("fence", "region"):
+            r = rule.rect
+            if not (r[0] - 1e-6 <= box[0] and r[1] - 1e-6 <= box[1] and box[2] <= r[2] + 1e-6
+                    and box[3] <= r[3] + 1e-6):
+                errors.append(f"floorplan: {f.ref} ({mod}) fora da {rule.type} de '{rule.path}'")
+        for other in fp.modules.values():
+            if other.type == "fence" and other is not rule and _overlaps(box, other.rect) \
+                    and not (mod == other.path or mod.startswith(other.path + ".")):
+                errors.append(f"floorplan: {f.ref} ({mod or 'topo'}) invade a fence de '{other.path}'")
+    for it in items:
+        if it.kind == "pad":
+            continue
+        for k in fp.keepouts:
+            if k.route and set(it.layers) & set(k.layers) and _overlaps(it.rect, k.rect, it.half):
+                errors.append(f"floorplan: {it.ref} [{it.net}] dentro do keepout de roteamento '{k.name}'")
+    return errors

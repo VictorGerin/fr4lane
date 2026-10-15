@@ -14,7 +14,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from . import cellcheck, check, kicad, netlist, place, route, synth
+from . import cellcheck, check, floorplan, kicad, netlist, place, route, synth
 from .layout import Rules
 from .library import Library, LibraryError
 
@@ -63,6 +63,7 @@ def main(argv=None):
                     help="aborta antes do P&R se o projeto for maior que isso")
     ap.add_argument("--layers", type=int, choices=(2, 4), default=4,
                     help="4: VDD/GND em planos internos (padrão); 2: trilhos de alimentação")
+    ap.add_argument("--floorplan", help="arquivo JSON com a posição (mm) dos módulos e keepouts")
     ap.add_argument("--flatten", action="store_true",
                     help="achata antes do mapeamento: o ABC otimiza entre módulos, "
                          "mas a placa perde o agrupamento por módulo")
@@ -83,6 +84,16 @@ def main(argv=None):
     except LibraryError as e:
         log(f"ERRO: {e}")
         return 3
+    fplan = None
+    if args.floorplan:
+        if args.flatten:
+            log("ERRO: --floorplan precisa da hierarquia dos módulos; não use --flatten")
+            return 3
+        try:
+            fplan = floorplan.load(args.floorplan)
+        except floorplan.FloorplanError as e:
+            log(f"ERRO: {e}")
+            return 3
     log(f"[0/6] Biblioteca '{lib.name}' ({len(lib.cells)} células): verificando montagem x Liberty")
     problems = cellcheck.check_cells(lib, out)
     if problems:
@@ -139,12 +150,17 @@ def main(argv=None):
                                effort=args.effort, seed=args.seed, layers=args.layers)
     if args.module_weight is not None:
         params.module_weight = args.module_weight
-    board = place.place(lib, design, params, rules)
+    try:
+        board = place.place(lib, design, params, rules, fplan)
+    except floorplan.FloorplanError as e:
+        log(f"ERRO: {e}")
+        return 3
     board.group_cells = {inst: cell for inst, (cell, _) in design.instances.items()}
     board.group_modules = {inst: m for inst, m in design.inst_module.items() if m}
     board.module_types = design.modules
     reg = board.place_stats.get("regions")
-    log(f"      {f'{reg} regiões (uma por módulo), ' if reg else ''}{board.place_stats['rows']} fileiras, HPWL {board.place_stats['hpwl_mm']} mm, "
+    what = "áreas declaradas" if fplan else "regiões (uma por módulo)"
+    log(f"      {f'{reg} {what}, ' if reg else ''}{board.place_stats['rows']} fileiras, HPWL {board.place_stats['hpwl_mm']} mm, "
         f"placa {board.width:.0f} x {board.height:.0f} mm")
 
     log("[4/6] Roteamento")
@@ -198,6 +214,23 @@ def _write_report(path, args, design, board, by_cell, errors, unconnected, lib, 
             L.append(f"| {m or '(topo)'} | {design.modules.get(m, '')} | "
                      + ", ".join(f"{c}×{k}" for c, k in sorted(cells.items()))
                      + f" | {_ref_ranges(refs.get(m, []))} |")
+    if board.floorplan:
+        fp = board.floorplan
+        y_top, pitch, bh, n_rows = board.place_stats["grid"]
+        lx0, lx1 = board.place_stats["logic_x"]
+        bands = ", ".join(f"{y_top + k * pitch:.1f}–{y_top + k * pitch + bh:.1f}" for k in range(n_rows))
+        L += ["", "## Floorplan", "", f"Arquivo: `{fp.source}`", "",
+              f"Área de lógica: x de {lx0:g} a {lx1:g} mm. Fileiras (passo {pitch:.2f} mm, y em mm): {bands}. "
+              "Uma área de fence/region só usa as fileiras que cabem inteiras dentro dela.", "",
+              "| Área | Tipo | Fileira usada (mm) | Fileira disponível (mm) |", "|---|---|---:|---:|"]
+        for area, typ, need, have in board.place_stats.get("usage", []):
+            L.append(f"| {area} | {typ} | {need:.0f} | {have:.0f} |")
+        for r in fp.modules.values():
+            if r.type == "guide":
+                L.append(f"| {r.path} | guide | — | — |")
+        for k in fp.keepouts:
+            what = " + ".join(w for w, on in (("posicionamento", k.place), ("roteamento", k.route)) if on)
+            L.append(f"| keepout `{k.name}` | {what} ({', '.join(k.layers)}) | — | — |")
     L += ["", "## Pendências", ""]
     if not errors and not unconnected and not board.unrouted:
         L.append("Nenhuma: todas as nets roteadas e sem violações de folga.")

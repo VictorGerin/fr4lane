@@ -112,9 +112,42 @@ def write_pcb(board, path, title=""):
         w(f"\t(via (at {_n(OX + v.x)} {_n(OY + v.y)}) (size {_n(v.size)}) (drill {_n(v.drill)}) "
           f"(layers \"F.Cu\" \"B.Cu\") (net {nid[v.net]}) (uuid {_q(v.uuid)}))")
 
+    _rule_areas(w, board)
     _groups(w, board)
     w(")")
     Path(path).write_text("\n".join(L) + "\n", encoding="utf-8")
+
+
+def _rule_areas(w, board):
+    """Keepouts do floorplan como Rule Areas do KiCad (o DRC do KiCad passa a
+    aplicá-los) e as áreas dos módulos desenhadas em User.Drawings."""
+    fp = getattr(board, "floorplan", None)
+    if fp is None:
+        return
+    for k in fp.keepouts:
+        x0, y0, x1, y1 = k.rect
+        pts = " ".join(f"(xy {_n(OX + x)} {_n(OY + y)})" for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1)))
+        route = "not_allowed" if k.route else "allowed"
+        place = "not_allowed" if k.place else "allowed"
+        w(f"\t(zone (net 0) (net_name \"\") (layers {' '.join(_q(l) for l in k.layers)}) "
+          f"(uuid {_q(new_uuid())}) (name {_q(k.name)}) (hatch full 0.5) "
+          f"(connect_pads (clearance 0)) (min_thickness 0.25) (filled_areas_thickness no) "
+          f"(keepout (tracks {route}) (vias {route}) (pads allowed) (copperpour {route}) "
+          f"(footprints {place})) (fill (thermal_gap 0.5) (thermal_bridge_width 0.5)) "
+          f"(polygon (pts {pts})))")
+    for r in fp.modules.values():
+        x0, y0, x1, y1 = r.rect
+        types = getattr(board, "module_types", {})
+        label = f"{r.path} [{r.type}]" + (f" ({types[r.path]})" if r.path in types else "")
+        if r.type == "guide" and x0 == x1:
+            w(f"\t(gr_circle (center {_n(OX + x0)} {_n(OY + y0)}) (end {_n(OX + x0 + 1.5)} {_n(OY + y0)}) "
+              f"(stroke (width 0.2) (type solid)) (fill none) (layer \"Dwgs.User\") (uuid {_q(new_uuid())}))")
+        else:
+            style = {"fence": "solid", "region": "dash", "guide": "dot"}[r.type]
+            w(f"\t(gr_rect (start {_n(OX + x0)} {_n(OY + y0)}) (end {_n(OX + x1)} {_n(OY + y1)}) "
+              f"(stroke (width 0.3) (type {style})) (fill none) (layer \"Dwgs.User\") (uuid {_q(new_uuid())}))")
+        w(f"\t(gr_text {_q(label)} (at {_n(OX + x0 + 0.5)} {_n(OY + y0 + 1.2)} 0) (layer \"Dwgs.User\") "
+          f"(uuid {_q(new_uuid())}) (effects (font (size 1.2 1.2) (thickness 0.2)) (justify left)))")
 
 
 def _groups(w, board):
@@ -146,12 +179,16 @@ def _groups(w, board):
                 box[2] = max(box[2], fp.x + x1)
                 box[3] = max(box[3], fp.y + y1)
     # do mais profundo para o mais raso: o grupo do submódulo entra no do pai
+    fplan = getattr(board, "floorplan", None)
     for mod in sorted(boxes, key=lambda m: -m.count(".")):
         gid = new_uuid()
         label = f"{mod} ({types[mod]})" if mod in types else mod
         w(f"\t(group {_q(label)} (uuid {_q(gid)}) (members {' '.join(_q(m) for m in members.get(mod, []))}))")
         if "." in mod:
             members.setdefault(mod.rsplit(".", 1)[0], []).append(gid)
+        rule = fplan.modules.get(mod) if fplan else None
+        if rule and rule.type in ("fence", "region"):
+            continue                          # a área declarada já está desenhada
         inset = 0.6 * mod.count(".")          # submódulos ficam por dentro do pai
         x0, y0, x1, y1 = boxes[mod]
         x0, y0 = OX + x0 - 1.0 + inset, OY + y0 - 1.0 + inset
