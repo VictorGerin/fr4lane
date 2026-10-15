@@ -1,0 +1,10 @@
+{
+  "description": "inversor CMOS",
+  "max_fanout": 8,
+  "layout": {
+    "rows": [
+      ["MP1"],
+      ["MN1"]
+    ]
+  }
+}

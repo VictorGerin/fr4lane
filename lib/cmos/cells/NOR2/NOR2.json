@@ -1,0 +1,10 @@
+{
+  "description": "NOR de 2 entradas, CMOS estático",
+  "max_fanout": 8,
+  "layout": {
+    "rows": [
+      ["MP1", "MP2"],
+      ["MN1", "MN2"]
+    ]
+  }
+}

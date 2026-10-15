@@ -1,0 +1,27 @@
+{
+  "name": "discrete_rtl",
+  "family": "rtl",
+  "description": "Lógica RTL (resistor-transistor) com NPN BC548 em TO-92 e resistores de 1/4 W. Pull-up de 1k e resistor de base de 10k: ~5 mA por porta com saída em 0.",
+  "supply": {
+    "vdd": "VDD",
+    "gnd": "GND",
+    "voltage": "5V"
+  },
+  "footprints": "../footprints.json",
+  "liberty_header": [
+    "delay_model : table_lookup;",
+    "time_unit : \"1ns\";",
+    "voltage_unit : \"1V\";",
+    "current_unit : \"1mA\";",
+    "capacitive_load_unit (1, pf);",
+    "pulling_resistance_unit : \"1kohm\";"
+  ],
+  "decoupling": {
+    "row": "CDEC",
+    "bulk": "CBULK"
+  },
+  "placement": {
+    "part_gap": 1.0,
+    "row_gap": 5.0
+  }
+}

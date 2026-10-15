@@ -1,0 +1,13 @@
+/* DFF — flip-flop D, borda de subida (6 NANDs) */
+library(cmos_DFF) {
+  cell(DFF) {
+    area : 26;
+    ff(IQ, IQN) {
+      clocked_on : "C";
+      next_state : "D";
+    }
+    pin(D) { direction : input; }
+    pin(C) { direction : input; clock : true; }
+    pin(Q) { direction : output; function : "IQ"; }
+  }
+}

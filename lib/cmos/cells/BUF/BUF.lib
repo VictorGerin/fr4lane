@@ -1,0 +1,8 @@
+/* BUF — buffer (dois inversores) */
+library(cmos_BUF) {
+  cell(BUF) {
+    area : 4;
+    pin(A) { direction : input; }
+    pin(Y) { direction : output; function : "A"; }
+  }
+}

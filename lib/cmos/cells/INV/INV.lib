@@ -1,0 +1,8 @@
+/* INV — inversor CMOS */
+library(cmos_INV) {
+  cell(INV) {
+    area : 2;
+    pin(A) { direction : input; }
+    pin(Y) { direction : output; function : "!A"; }
+  }
+}

@@ -1,0 +1,8 @@
+/* INV — inversor RTL (1 NPN + 2 resistores) */
+library(rtl_INV) {
+  cell(INV) {
+    area : 3;
+    pin(A) { direction : input; }
+    pin(Y) { direction : output; function : "!A"; }
+  }
+}

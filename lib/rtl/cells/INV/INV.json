@@ -1,0 +1,10 @@
+{
+  "description": "inversor RTL (1 NPN + 2 resistores)",
+  "max_fanout": 8,
+  "layout": {
+    "rows": [
+      ["RL", "R1"],
+      ["Q1"]
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "description": "NOR de 3 entradas RTL",
+  "max_fanout": 8,
+  "layout": {
+    "rows": [
+      ["RL", "R1", "R2", "R3"],
+      ["Q1", "Q2", "Q3"]
+    ]
+  }
+}

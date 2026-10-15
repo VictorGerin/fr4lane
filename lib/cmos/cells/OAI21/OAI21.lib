@@ -1,0 +1,10 @@
+/* OAI21 — OR-AND-INVERT: Y = !((A|B)&C) */
+library(cmos_OAI21) {
+  cell(OAI21) {
+    area : 6;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(C) { direction : input; }
+    pin(Y) { direction : output; function : "!((A|B)&C)"; }
+  }
+}

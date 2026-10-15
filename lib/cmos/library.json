@@ -1,0 +1,27 @@
+{
+  "name": "discrete_cmos",
+  "family": "cmos",
+  "description": "CMOS estático com MOSFETs discretos 2N7002/BSS84 (SOT-23).",
+  "supply": {
+    "vdd": "VDD",
+    "gnd": "GND",
+    "voltage": "5V"
+  },
+  "footprints": "../footprints.json",
+  "liberty_header": [
+    "delay_model : table_lookup;",
+    "time_unit : \"1ns\";",
+    "voltage_unit : \"1V\";",
+    "current_unit : \"1mA\";",
+    "capacitive_load_unit (1, pf);",
+    "pulling_resistance_unit : \"1kohm\";"
+  ],
+  "decoupling": {
+    "row": "CDEC",
+    "bulk": "CBULK"
+  },
+  "placement": {
+    "part_gap": 0.6,
+    "row_gap": 4.4
+  }
+}

@@ -1,0 +1,406 @@
+"""Roteador em grade para 2 camadas de sinal (F.Cu/B.Cu) + planos internos.
+
+Estratégia:
+  1. Alimentação: cada pad SMD de VDD/GND ganha um "fanout" curto até uma via
+     que desce para o plano interno correspondente (In1.Cu=GND, In2.Cu=VDD).
+  2. Sinais: roteamento negociado (PathFinder). Todas as nets são roteadas
+     permitindo conflito; o custo dos nós disputados cresce a cada iteração
+     até que ninguém compartilhe recurso. F.Cu prefere trilhas horizontais e
+     B.Cu verticais.
+
+A grade só usa movimentos ortogonais. Com grade <= menor dimensão de pad,
+verificar a folga nos nós da grade garante a folga ao longo das trilhas.
+"""
+
+import heapq
+import math
+
+from .layout import Track, Via
+
+FREE = -1
+BLOCK = -2
+LAYERS = ("F.Cu", "B.Cu")
+
+
+def _dist_point_rect(px, py, r):
+    x0, y0, x1, y1 = r
+    dx = max(x0 - px, 0.0, px - x1)
+    dy = max(y0 - py, 0.0, py - y1)
+    return math.hypot(dx, dy)
+
+
+class Router:
+    def __init__(self, board, log=print):
+        self.b = board
+        self.r = board.rules
+        self.log = log
+        g = self.r.grid
+        self.g = g
+        self.nx = int(board.width / g) + 1
+        self.ny = int(board.height / g) + 1
+        self.nxy = self.nx * self.ny
+        self.n = 2 * self.nxy
+        self.nets = board.nets()
+        self.net_id = {name: i for i, name in enumerate(self.nets)}
+        self.power = {self.net_id[n] for n in (board.vdd, board.gnd) if n in self.net_id}
+        self.static = [FREE] * self.n
+        self.via_static = [FREE] * self.nxy
+        self.terminals = {}            # net -> [set(nós) por pad]
+        self.power_pads = []
+        self._build_static()
+
+    # ------------------------------------------------------------ utilitários
+    def node(self, layer, ix, iy):
+        return layer * self.nxy + iy * self.nx + ix
+
+    def coords(self, node):
+        layer, p = divmod(node, self.nxy)
+        iy, ix = divmod(p, self.nx)
+        return layer, ix, iy
+
+    def _claim(self, arr, idx, net):
+        cur = arr[idx]
+        if cur == FREE:
+            arr[idx] = net
+        elif cur != net and cur != BLOCK:
+            arr[idx] = BLOCK
+
+    def _points_near(self, rect, radius):
+        g = self.g
+        x0, y0, x1, y1 = rect
+        ix0 = max(0, int(math.floor((x0 - radius) / g)))
+        ix1 = min(self.nx - 1, int(math.ceil((x1 + radius) / g)))
+        iy0 = max(0, int(math.floor((y0 - radius) / g)))
+        iy1 = min(self.ny - 1, int(math.ceil((y1 + radius) / g)))
+        for iy in range(iy0, iy1 + 1):
+            for ix in range(ix0, ix1 + 1):
+                d = _dist_point_rect(ix * g, iy * g, rect)
+                if d < radius - 1e-6:
+                    yield ix, iy, d
+
+    # ----------------------------------------------------- obstáculos fixos
+    def _build_static(self):
+        r, g = self.r, self.g
+        track_r = r.clearance + r.track_width / 2
+        via_r = r.clearance + r.via_size / 2
+        edge_t = r.edge_clearance + r.track_width / 2
+        edge_v = r.edge_clearance + r.via_size / 2
+        for iy in range(self.ny):
+            for ix in range(self.nx):
+                x, y = ix * g, iy * g
+                d = min(x, y, self.b.width - x, self.b.height - y)
+                if d < edge_t:
+                    self.static[self.node(0, ix, iy)] = BLOCK
+                    self.static[self.node(1, ix, iy)] = BLOCK
+                if d < edge_v:
+                    self.via_static[iy * self.nx + ix] = BLOCK
+        for pad in self.b.pads():
+            if not pad.net:
+                continue
+            net = self.net_id[pad.net]
+            rect = pad.bbox()
+            layers = (0, 1) if pad.tht else (0,)
+            term = set()
+            for ix, iy, d in self._points_near(rect, track_r):
+                for layer in layers:
+                    self._claim(self.static, self.node(layer, ix, iy), net)
+                    if d <= 1e-9:
+                        term.add(self.node(layer, ix, iy))
+            for ix, iy, d in self._points_near(rect, via_r):
+                self._claim(self.via_static, iy * self.nx + ix, net)
+            if not term:
+                raise RuntimeError(f"pad {pad.fp.ref}.{pad.num} não contém nenhum ponto da grade "
+                                   f"(grade {g} mm maior que o pad?)")
+            if net in self.power:
+                if not pad.tht:
+                    self.power_pads.append((pad, net, term))
+            else:
+                self.terminals.setdefault(net, []).append(term)
+
+    def _halo(self, p):
+        iy, ix = divmod(p, self.nx)
+        out = []
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            jx, jy = ix + dx, iy + dy
+            if 0 <= jx < self.nx and 0 <= jy < self.ny:
+                out.append(jy * self.nx + jx)
+        return out
+
+    def _via_static_ok(self, p, net):
+        if self.via_static[p] not in (FREE, net):
+            return False
+        for layer in (0, 1):
+            if self.static[layer * self.nxy + p] not in (FREE, net):
+                return False
+        for q in self._halo(p):
+            for layer in (0, 1):
+                if self.static[layer * self.nxy + q] not in (FREE, net, BLOCK):
+                    return False
+        return True
+
+    # ---------------------------------------------------- fanout de energia
+    def fanout_power(self):
+        vias_at = {}                # ponto -> net
+        failed = []
+        for pad, net, term in self.power_pads:
+            start = [n for n in term if n < self.nxy]
+            prev = {n: None for n in start}
+            frontier = list(start)
+            found = None
+            for depth in range(14):
+                nxt = []
+                for n in frontier:
+                    in_pad = _dist_point_rect((n % self.nx) * self.g, (n // self.nx) * self.g,
+                                              pad.bbox()) < self.r.via_size / 2 + 0.05
+                    if vias_at.get(n) == net or (not in_pad and n not in vias_at
+                                                 and self._via_static_ok(n, net)):
+                        found = n
+                        break
+                    iy, ix = divmod(n, self.nx)
+                    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                        jx, jy = ix + dx, iy + dy
+                        if not (0 <= jx < self.nx and 0 <= jy < self.ny):
+                            continue
+                        m = jy * self.nx + jx
+                        if m in prev or self.static[m] not in (FREE, net):
+                            continue
+                        prev[m] = n
+                        nxt.append(m)
+                if found is not None:
+                    break
+                frontier = nxt
+            if found is None:
+                failed.append(f"{pad.fp.ref}.{pad.num} ({self.nets[net]})")
+                continue
+            path = [found]
+            while prev[path[-1]] is not None:
+                path.append(prev[path[-1]])
+            for n in path:
+                self.static[n] = net
+            self._emit_path(list(reversed(path)), self.nets[net])
+            if vias_at.get(found) != net:
+                vias_at[found] = net
+                iy, ix = divmod(found, self.nx)
+                self.b.vias.append(Via(ix * self.g, iy * self.g, self.nets[net],
+                                       self.r.via_size, self.r.via_drill))
+                for layer in (0, 1):
+                    self.static[layer * self.nxy + found] = net
+                    for q in self._halo(found):
+                        i = layer * self.nxy + q
+                        if self.static[i] == FREE:
+                            self.static[i] = net
+                        elif self.static[i] != net:
+                            self.static[i] = BLOCK
+                for q in self._halo(found):
+                    self._claim(self.via_static, q, net)
+        return failed
+
+    # ----------------------------------------------------- roteamento sinais
+    def route_signals(self, max_iter=40):
+        nets = [n for n, t in self.terminals.items() if len(t) > 1]
+
+        def bbox_size(n):
+            xs, ys = [], []
+            for t in self.terminals[n]:
+                _, ix, iy = self.coords(next(iter(t)))
+                xs.append(ix)
+                ys.append(iy)
+            return (max(xs) - min(xs)) + (max(ys) - min(ys))
+
+        nets.sort(key=bbox_size)
+        self.occ = [0] * self.n
+        self.hist = [0.0] * self.n
+        self.usage = {n: set() for n in nets}
+        self.paths = {n: [] for n in nets}
+        pres = 0.5
+        todo = list(nets)
+        conflicted = set()
+        for it in range(max_iter):
+            failed = []
+            for net in todo:
+                self._rip(net)
+                if not self._route_net(net, pres):
+                    failed.append(net)
+            over = [i for i in range(self.n) if self.occ[i] > 1]
+            for i in over:
+                self.hist[i] += 0.4
+            over_set = set(over)
+            conflicted = {n for n in nets if self.usage[n] & over_set}
+            self.log(f"  iteração {it + 1:2d}: nós em conflito={len(over):5d}  "
+                     f"nets em conflito={len(conflicted):4d}  falhas={len(failed)}")
+            if not over and not failed:
+                break
+            todo = sorted(conflicted | set(failed), key=bbox_size)
+            pres *= 1.6
+        # nets que continuam em conflito são descartadas (ficam no ratsnest)
+        dropped = set(n for n in nets if not self.paths[n])
+        while True:
+            over = [i for i in range(self.n) if self.occ[i] > 1]
+            if not over:
+                break
+            score = {}
+            over_set = set(over)
+            for n in nets:
+                if n not in dropped:
+                    c = len(self.usage[n] & over_set)
+                    if c:
+                        score[n] = c
+            worst = max(score, key=lambda n: (score[n], bbox_size(n)))
+            self._rip(worst)
+            self.paths[worst] = []
+            dropped.add(worst)
+        for net in nets:
+            for path in self.paths[net]:
+                self._emit_path(path, self.nets[net])
+        return [self.nets[n] for n in sorted(dropped)]
+
+    def _rip(self, net):
+        for i in self.usage[net]:
+            self.occ[i] -= 1
+        self.usage[net] = set()
+        self.paths[net] = []
+
+    def _route_net(self, net, pres):
+        terms = self.terminals[net]
+        tree = set(terms[0])
+        remaining = list(range(1, len(terms)))
+        used = set()
+        paths = []
+        while remaining:
+            remaining = [k for k in remaining if not (terms[k] & tree)]
+            if not remaining:
+                break
+            target = {}
+            xs, ys = [], []
+            for k in remaining:
+                for nd in terms[k]:
+                    target[nd] = k
+                    _, ix, iy = self.coords(nd)
+                    xs.append(ix)
+                    ys.append(iy)
+            box = (min(xs), max(xs), min(ys), max(ys))
+            path = self._astar(net, tree, target, box, pres)
+            if path is None:
+                for i in used:
+                    self.occ[i] -= 1
+                return False
+            paths.append(path)
+            tree.update(path)
+            new = set(path)
+            for a, b2 in zip(path, path[1:]):
+                if a % self.nxy == b2 % self.nxy:          # via
+                    p = a % self.nxy
+                    for layer in (0, 1):
+                        new.add(layer * self.nxy + p)
+                        for q in self._halo(p):
+                            new.add(layer * self.nxy + q)
+            for i in new - used:
+                self.occ[i] += 1
+            used |= new
+        self.usage[net] = used
+        self.paths[net] = paths
+        return True
+
+    def _astar(self, net, sources, target, box, pres):
+        nx, nxy = self.nx, self.nxy
+        static, occ, hist = self.static, self.occ, self.hist
+        bx0, bx1, by0, by1 = box
+        via_cost = 8.0
+        best = {}
+        prev = {}
+        heap = []
+        for s in sources:
+            best[s] = 0.0
+            prev[s] = None
+            heapq.heappush(heap, (0.0, 0.0, s))
+        expanded = 0
+        while heap:
+            f, gcost, u = heapq.heappop(heap)
+            if gcost > best.get(u, math.inf):
+                continue
+            if u in target:
+                path = [u]
+                while prev[path[-1]] is not None:
+                    path.append(prev[path[-1]])
+                return list(reversed(path))
+            expanded += 1
+            if expanded > 400000:
+                return None
+            layer, p = divmod(u, nxy)
+            iy, ix = divmod(p, nx)
+            moves = []
+            if ix + 1 < nx: moves.append((u + 1, layer == 1))
+            if ix > 0: moves.append((u - 1, layer == 1))
+            if iy + 1 < self.ny: moves.append((u + nx, layer == 0))
+            if iy > 0: moves.append((u - nx, layer == 0))
+            for v, wrong_dir in moves:
+                sv = static[v]
+                if sv != FREE and sv != net:
+                    continue
+                c = (2.0 if wrong_dir else 1.0) * (1.0 + hist[v]) * (1.0 + pres * occ[v])
+                self._relax(u, v, gcost + c, best, prev, heap, bx0, bx1, by0, by1)
+            # troca de camada (via)
+            v = (1 - layer) * nxy + p
+            sv = static[v]
+            if sv == FREE or sv == net:
+                if self._via_static_ok(p, net):
+                    load = occ[p] + occ[nxy + p]
+                    h = hist[p] + hist[nxy + p]
+                    for q in self._halo(p):
+                        load += occ[q] + occ[nxy + q]
+                    c = via_cost * (1.0 + h) * (1.0 + pres * load)
+                    self._relax(u, v, gcost + c, best, prev, heap, bx0, bx1, by0, by1)
+        return None
+
+    def _relax(self, u, v, gnew, best, prev, heap, bx0, bx1, by0, by1):
+        if gnew < best.get(v, math.inf):
+            best[v] = gnew
+            prev[v] = u
+            p = v % self.nxy
+            iy, ix = divmod(p, self.nx)
+            h = max(bx0 - ix, 0, ix - bx1) + max(by0 - iy, 0, iy - by1)
+            heapq.heappush(heap, (gnew + h, gnew, v))
+
+    # ------------------------------------------------------------- geometria
+    def _emit_path(self, path, net_name):
+        g, w = self.g, self.r.track_width
+        run = [path[0]]
+
+        def flush(run):
+            if len(run) < 2:
+                return
+            layer = run[0] // self.nxy
+            pts = [divmod(n % self.nxy, self.nx)[::-1] for n in run]   # (ix, iy)
+            start = pts[0]
+            for i in range(1, len(pts)):
+                last = i == len(pts) - 1
+                if not last:
+                    d1 = (pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])
+                    d2 = (pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1])
+                    if d1 == d2:
+                        continue
+                self.b.tracks.append(Track(start[0] * g, start[1] * g, pts[i][0] * g, pts[i][1] * g,
+                                           LAYERS[layer], net_name, w))
+                start = pts[i]
+
+        for a, b2 in zip(path, path[1:]):
+            if a % self.nxy == b2 % self.nxy:
+                flush(run)
+                iy, ix = divmod(a % self.nxy, self.nx)
+                self.b.vias.append(Via(ix * g, iy * g, net_name, self.r.via_size, self.r.via_drill))
+                run = [b2]
+            else:
+                run.append(b2)
+        flush(run)
+
+
+def route(board, max_iter=40, log=print):
+    rt = Router(board, log)
+    log(f"  grade {rt.nx}x{rt.ny}x2 ({rt.g} mm), {len(rt.terminals)} nets de sinal, "
+        f"{len(rt.power_pads)} pads de alimentação SMD")
+    failed_power = rt.fanout_power()
+    if failed_power:
+        log(f"  AVISO: {len(failed_power)} pads de alimentação sem fanout: {failed_power[:8]}")
+    dropped = rt.route_signals(max_iter)
+    board.unrouted = dropped + [f"(alim) {p}" for p in failed_power]
+    return board

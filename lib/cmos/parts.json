@@ -1,0 +1,44 @@
+{
+  "NMOS": {
+    "kind": "nmos",
+    "part": "2N7002",
+    "ref": "Q",
+    "footprint": "Package_TO_SOT_SMD:SOT-23",
+    "pins": {
+      "G": "1",
+      "S": "2",
+      "D": "3"
+    }
+  },
+  "PMOS": {
+    "kind": "pmos",
+    "part": "BSS84",
+    "ref": "Q",
+    "footprint": "Package_TO_SOT_SMD:SOT-23",
+    "pins": {
+      "G": "1",
+      "S": "2",
+      "D": "3"
+    }
+  },
+  "CDEC": {
+    "kind": "capacitor",
+    "value": "100n",
+    "ref": "C",
+    "footprint": "Capacitor_SMD:C_0603_1608Metric",
+    "pins": {
+      "1": "1",
+      "2": "2"
+    }
+  },
+  "CBULK": {
+    "kind": "capacitor",
+    "value": "10u",
+    "ref": "C",
+    "footprint": "Capacitor_SMD:C_0805_2012Metric",
+    "pins": {
+      "1": "1",
+      "2": "2"
+    }
+  }
+}

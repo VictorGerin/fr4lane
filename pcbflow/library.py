@@ -1,0 +1,255 @@
+"""Biblioteca de células de uma família (pasta pcbflow/lib/<família>/).
+
+  library.json            dados gerais (alimentação, cabeçalho Liberty, desacoplamento)
+  parts.json              componentes reais: modelo SPICE -> peça, footprint, pinagem
+  cells/<CELULA>/
+      <CELULA>.lib        o que a célula faz (Liberty) — é o que o Yosys vê
+      <CELULA>.sp         como a célula é montada (.subckt SPICE)
+      <CELULA>.json       metadados (descrição, layout, max_fanout, dont_use...)
+
+Uma pasta sem .lib é um subcircuito auxiliar: pode ser usado por outras
+células (X...), mas não é oferecido ao Yosys.
+"""
+
+import json
+from pathlib import Path
+
+from . import liberty, spice
+
+# terminais lógicos de cada tipo de componente, na ordem dos nós no SPICE
+KIND_ROLES = {
+    "nmos": ("D", "G", "S"),
+    "pmos": ("D", "G", "S"),
+    "npn": ("C", "B", "E"),
+    "pnp": ("C", "B", "E"),
+    "resistor": ("1", "2"),
+    "capacitor": ("1", "2"),
+}
+SPICE_LETTER = {"nmos": "M", "pmos": "M", "npn": "Q", "pnp": "Q", "resistor": "R", "capacitor": "C"}
+CONTROL_ROLES = {"G", "B"}
+KIND_ROW = {"pmos": 0, "pnp": 0, "resistor": 1, "capacitor": 1, "nmos": 2, "npn": 2}
+
+
+class LibraryError(Exception):
+    pass
+
+
+class Library:
+    def __init__(self, path):
+        self.path = Path(path)
+        if self.path.is_file():
+            raise LibraryError(f"{path}: aponte para a pasta da família (ex.: pcbflow/lib/cmos)")
+        meta = json.loads((self.path / "library.json").read_text(encoding="utf-8"))
+        self.meta = meta
+        self.name = meta.get("name", self.path.name)
+        self.family = meta.get("family", self.path.name)
+        sup = meta.get("supply", {})
+        self.vdd = sup.get("vdd", "VDD")
+        self.gnd = sup.get("gnd", "GND")
+        self.supply_voltage = sup.get("voltage", "")
+        self.placement = meta.get("placement", {})
+        self.parts = json.loads((self.path / "parts.json").read_text(encoding="utf-8"))
+        fp_path = (self.path / meta.get("footprints", "../footprints.json")).resolve()
+        self.footprints = {k: v for k, v in json.loads(fp_path.read_text(encoding="utf-8")).items()
+                           if not k.startswith("_")}
+        self.subckts = {}
+        self.cells = {}           # células Liberty (oferecidas ao Yosys)
+        self.cell_meta = {}
+        for d in sorted(p for p in (self.path / "cells").iterdir() if p.is_dir()):
+            for sp in sorted(d.glob("*.sp")):
+                for name, sub in spice.read_subckts(sp).items():
+                    if name in self.subckts:
+                        raise LibraryError(f"subcircuito {name} definido duas vezes "
+                                           f"({self.subckts[name].source} e {sp})")
+                    self.subckts[name] = sub
+            for lf in sorted(d.glob("*.lib")):
+                for c in liberty.read_cells(lf):
+                    if c.name in self.cells:
+                        raise LibraryError(f"célula Liberty {c.name} definida duas vezes")
+                    self.cells[c.name] = c
+            for jf in sorted(d.glob("*.json")):
+                self.cell_meta[jf.stem] = json.loads(jf.read_text(encoding="utf-8"))
+        problems = self.check()
+        if problems:
+            raise LibraryError("biblioteca inconsistente:\n  " + "\n  ".join(problems))
+
+    # ------------------------------------------------------------ consultas
+    def meta_of(self, cell):
+        return self.cell_meta.get(cell, {})
+
+    def usable(self, cell):
+        return not self.meta_of(cell).get("dont_use", False)
+
+    def part(self, element):
+        return self.parts[element.model]
+
+    def element_roles(self, element):
+        """Mapeia os nós de um elemento SPICE para os terminais lógicos do componente."""
+        kind = self.part(element)["kind"]
+        return dict(zip(KIND_ROLES[kind], element.nodes))
+
+    def supplies(self):
+        return {self.vdd, self.gnd}
+
+    def outputs_of(self, subckt_name):
+        """Pinos de saída de um subcircuito: do Liberty quando existe; senão,
+        pinos ligados ao canal (dreno/fonte, coletor/emissor) de algum transistor."""
+        if subckt_name in self.cells:
+            return self.cells[subckt_name].outputs
+        sub = self.subckts[subckt_name]
+        outs = []
+        for pin in sub.pins:
+            if pin in self.supplies():
+                continue
+            for el in sub.devices:
+                if self.part(el)["kind"] in ("resistor", "capacitor"):
+                    continue
+                if any(n == pin and r not in CONTROL_ROLES for r, n in self.element_roles(el).items()):
+                    outs.append(pin)
+                    break
+        return outs
+
+    def count_parts(self, subckt_name):
+        sub = self.subckts[subckt_name]
+        return len(sub.devices) + sum(self.count_parts(x.model) for x in sub.instances)
+
+    # ----------------------------------------------------------- consistência
+    def check(self):
+        p = []
+        for key, part in self.parts.items():
+            if part.get("kind") not in KIND_ROLES:
+                p.append(f"parts.json: {key}: kind '{part.get('kind')}' desconhecido "
+                         f"(use {', '.join(KIND_ROLES)})")
+                continue
+            if part.get("footprint") not in self.footprints:
+                p.append(f"parts.json: {key}: footprint '{part.get('footprint')}' sem geometria em footprints.json")
+                continue
+            for role in KIND_ROLES[part["kind"]]:
+                if role not in part.get("pins", {}):
+                    p.append(f"parts.json: {key}: falta o pino '{role}' em 'pins'")
+            pads = {pd["num"] for pd in self.footprints[part["footprint"]]["pads"]}
+            for role, num in part.get("pins", {}).items():
+                if num not in pads:
+                    p.append(f"parts.json: {key}: pino {role} -> pad {num} inexistente no footprint")
+        for key in self.meta.get("decoupling", {}).values():
+            if key not in self.parts:
+                p.append(f"library.json: decoupling usa '{key}', que não está no parts.json")
+        for name, sub in self.subckts.items():
+            for el in sub.elements:
+                if el.letter == "X":
+                    if el.model not in self.subckts:
+                        p.append(f"{name}: {el.name} instancia subcircuito inexistente '{el.model}'")
+                    elif len(el.nodes) != len(self.subckts[el.model].pins):
+                        p.append(f"{name}: {el.name} liga {len(el.nodes)} nós, mas {el.model} tem "
+                                 f"{len(self.subckts[el.model].pins)} pinos")
+                    continue
+                part = self.parts.get(el.model)
+                if part is None:
+                    p.append(f"{name}: {el.name} usa o modelo '{el.model}', que não está no parts.json")
+                elif SPICE_LETTER.get(part["kind"]) != el.letter:
+                    p.append(f"{name}: {el.name} é '{el.letter}' mas {el.model} é {part['kind']}")
+            rows = self.meta_of(name).get("layout", {}).get("rows")
+            if rows:
+                names = [n for row in rows for n in row]
+                devs = {e.name for e in sub.devices}
+                for n in set(names) - devs:
+                    p.append(f"{name}.json: layout cita '{n}', que não é componente do .sp")
+                for n in devs - set(names):
+                    p.append(f"{name}.json: componente '{n}' não aparece no layout")
+        for name, cell in self.cells.items():
+            if name not in self.subckts:
+                p.append(f"{name}.lib: não há .subckt {name} (como a célula é montada?)")
+                continue
+            sub_pins = set(self.subckts[name].pins) - self.supplies()
+            if sub_pins != set(cell.pins):
+                p.append(f"{name}: pinos do .lib {sorted(cell.pins)} != pinos do .sp {sorted(sub_pins)}")
+            for pin, d in cell.pins.items():
+                if d["direction"] != "output":
+                    continue
+                f = d["function"]
+                if not f:
+                    p.append(f"{name}.lib: saída {pin} sem function")
+                    continue
+                try:
+                    ast = liberty.parse_expr(f)
+                except liberty.LibertyError as e:
+                    p.append(f"{name}.lib: {e}")
+                    continue
+                allowed = set(cell.inputs) | ({cell.ff["iq"], cell.ff["iqn"]} if cell.ff else set())
+                extra = liberty.expr_vars(ast) - allowed
+                if extra:
+                    p.append(f"{name}.lib: function de {pin} usa {sorted(extra)}")
+        return p
+
+    # ------------------------------------------------------------ geração
+    def write_liberty(self, path):
+        out = [f"/* Gerado pelo pcbflow a partir dos .lib de {self.path.as_posix()}/cells */",
+               f"library({self.name}) {{"]
+        out += ["  " + l for l in self.meta.get("liberty_header", [])]
+        for name, cell in self.cells.items():
+            if self.usable(name):
+                out.append(f"  /* {Path(cell.source).name} */")
+                out.append("  " + cell.text.replace("\n", "\n  ").rstrip())
+        out.append("}")
+        Path(path).write_text("\n".join(out) + "\n", encoding="utf-8")
+
+    def write_verilog_models(self, path):
+        """Modelos comportamentais (a partir do Liberty) para a simulação gate-level."""
+        out = ["// Modelos das células gerados do Liberty pelo pcbflow", "`timescale 1ns/1ps"]
+        for cell in self.cells.values():
+            out += self.reference_model(cell, cell.name)
+        Path(path).write_text("\n".join(out) + "\n", encoding="utf-8")
+
+    def reference_model(self, cell, module_name):
+        ports = cell.inputs + cell.outputs
+        out = [f"module {module_name} ({', '.join(ports)});"]
+        if cell.inputs:
+            out.append(f"  input {', '.join(cell.inputs)};")
+        out.append(f"  output {', '.join(cell.outputs)};")
+        if cell.ff:
+            ff = cell.ff
+            iq, iqn = ff["iq"], ff["iqn"]
+            clk = liberty.to_verilog(liberty.parse_expr(ff["clocked_on"]))
+            nxt = liberty.to_verilog(liberty.parse_expr(ff["next_state"]))
+            out.append(f"  reg {iq};")
+            out.append(f"  wire {iqn} = ~{iq};")
+            out.append(f"  wire ck_ = {clk};")
+            sens = ["posedge ck_"]
+            body = []
+            for k, val in (("clear", "1'b0"), ("preset", "1'b1")):
+                if k in ff:
+                    out.append(f"  wire {k}_ = {liberty.to_verilog(liberty.parse_expr(ff[k]))};")
+                    sens.append(f"posedge {k}_")
+                    body.append(f"if ({k}_) {iq} <= {val}; else ")
+            out.append(f"  always @({' or '.join(sens)}) {''.join(body)}{iq} <= {nxt};")
+        for o in cell.outputs:
+            expr = liberty.to_verilog(liberty.parse_expr(cell.pins[o]["function"]))
+            out.append(f"  assign #0.01 {o} = {expr};")
+        out.append("endmodule\n")
+        return out
+
+    # ------------------------------------------------------------- layout
+    def block_layout(self, subckt_name, part_gap):
+        """Posição de cada componente dentro do bloco (origem do footprint,
+        relativa ao canto superior esquerdo) e o tamanho do bloco."""
+        sub = self.subckts[subckt_name]
+        devs = {e.name: e for e in sub.devices}
+        rows = self.meta_of(subckt_name).get("layout", {}).get("rows")
+        if not rows:
+            by = {}
+            for e in sub.devices:
+                by.setdefault(KIND_ROW[self.part(e)["kind"]], []).append(e.name)
+            rows = [by[k] for k in sorted(by)]
+        pos = {}
+        y = 0.0
+        width = 0.0
+        for row in rows:
+            geo = [self.footprints[self.part(devs[n])["footprint"]]["courtyard"] for n in row]
+            h = max(c[3] - c[1] for c in geo)
+            x = 0.0
+            for n, c in zip(row, geo):
+                pos[n] = (x - c[0], y + h / 2 - (c[1] + c[3]) / 2)
+                x += (c[2] - c[0]) + part_gap
+            width = max(width, x - part_gap)
+            y += h + part_gap
+        return pos, width, y - part_gap

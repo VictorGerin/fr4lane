@@ -1,0 +1,10 @@
+{
+  "description": "OR-AND-INVERT: Y = !((A|B)&C)",
+  "max_fanout": 8,
+  "layout": {
+    "rows": [
+      ["MP1", "MP2", "MP3"],
+      ["MN1", "MN2", "MN3"]
+    ]
+  }
+}
