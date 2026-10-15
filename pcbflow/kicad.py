@@ -1,6 +1,8 @@
 """Escrita do projeto KiCad (formato KiCad 8; abre também no KiCad 9)."""
 
 import json
+import os
+import re
 from pathlib import Path
 
 from .layout import new_uuid
@@ -14,6 +16,33 @@ def _q(s):
 
 def _n(v):
     return f"{v:.4f}".rstrip("0").rstrip(".") if isinstance(v, float) else str(v)
+
+
+def _model_dir_var():
+    """Variável do KiCad que aponta para a biblioteca de modelos 3D. O nome muda
+    com a versão (KICAD8_3DMODEL_DIR, KICAD9_..., KICAD10_...): usa a versão
+    mais nova instalada, ou PCBFLOW_3DMODEL_VAR se definida."""
+    if os.environ.get("PCBFLOW_3DMODEL_VAR"):
+        return os.environ["PCBFLOW_3DMODEL_VAR"]
+    versions = []
+    for base in (Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "KiCad",
+                 Path("/usr/share/kicad"), Path("/Applications/KiCad")):
+        if base.is_dir():
+            for d in base.iterdir():
+                m = re.match(r"(\d+)", d.name)
+                if m:
+                    versions.append(int(m.group(1)))
+    return f"KICAD{max(versions) if versions else 8}_3DMODEL_DIR"
+
+
+def _model_path(fp, var):
+    """'Package_TO_SOT_SMD:SOT-23' -> '${VAR}/Package_TO_SOT_SMD.3dshapes/SOT-23.step'.
+    A origem dos footprints do pcbflow é a mesma dos oficiais, então o modelo
+    entra sem deslocamento."""
+    if ":" not in fp.lib_name:
+        return None
+    lib, name = fp.lib_name.split(":", 1)
+    return f"${{{var}}}/{lib}.3dshapes/{name}.step"
 
 
 def _font(size, thick):
@@ -34,9 +63,10 @@ def write_pcb(board, path, title=""):
     w("\t(general (thickness 1.6) (legacy_teardrops no))")
     w(f'\t(paper "User" {_n(pw)} {_n(ph)})')
     if title:
-        w(f"\t(title_block (title {_q(title)}) (comment 1 \"Gerado pelo pcbflow (Yosys + células CMOS discretas)\"))")
+        w(f"\t(title_block (title {_q(title)}) (comment 1 \"Gerado pelo pcbflow (Yosys + células de componentes discretos)\"))")
     w("\t(layers")
-    for item in ('0 "F.Cu" signal', '1 "In1.Cu" power', '2 "In2.Cu" power', '31 "B.Cu" signal',
+    inner = ('1 "In1.Cu" power', '2 "In2.Cu" power') if board.layers >= 4 else ()
+    for item in ('0 "F.Cu" signal', *inner, '31 "B.Cu" signal',
                  '32 "B.Adhes" user "B.Adhesive"', '33 "F.Adhes" user "F.Adhesive"',
                  '34 "B.Paste" user', '35 "F.Paste" user',
                  '36 "B.SilkS" user "B.Silkscreen"', '37 "F.SilkS" user "F.Silkscreen"',
@@ -52,6 +82,7 @@ def write_pcb(board, path, title=""):
     for n in nets:
         w(f"\t(net {nid[n]} {_q(n)})")
 
+    board.model_var = _model_dir_var()
     for fp in board.footprints:
         _footprint(w, fp, nid, board)
 
@@ -62,8 +93,8 @@ def write_pcb(board, path, title=""):
         w(f"\t(gr_text {_q(title)} (at {_n(OX + 1)} {_n(OY - 1.5)} 0) (layer \"Cmts.User\") "
           f"(uuid {_q(new_uuid())}) (effects (font (size 1.5 1.5) (thickness 0.2)) (justify left)))")
 
-    # planos internos (In1 = GND, In2 = VDD). Preencher no KiCad com "B".
-    for layer, net in (("In1.Cu", board.gnd), ("In2.Cu", board.vdd)):
+    # planos internos (In1 = GND, In2 = VDD), só na placa de 4 camadas. Preencher no KiCad com "B".
+    for layer, net in ((("In1.Cu", board.gnd), ("In2.Cu", board.vdd)) if board.layers >= 4 else ()):
         if net not in nid:
             continue
         m = 0.3
@@ -177,6 +208,9 @@ def _footprint(w, fp, nid, board):
             just = "left" if left_side else "right"
             w(f"\t\t(fp_text user {_q(text)} (at {_n(dx)} {_n(pad.ry)} 0) (layer \"F.SilkS\") "
               f"(uuid {_q(new_uuid())}) (effects (font (size 0.7 0.7) (thickness 0.1)) (justify {just})))")
+    model = _model_path(fp, board.model_var)
+    if model:
+        w(f"\t\t(model {_q(model)} (offset (xyz 0 0 0)) (scale (xyz 1 1 1)) (rotate (xyz 0 0 0)))")
     w("\t)")
 
 

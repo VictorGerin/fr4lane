@@ -12,14 +12,21 @@ região são mantidos juntos por uma net virtual (só no custo).
 
 As fileiras são tratadas como "trechos": (x inicial, y, capacidade). Sem
 floorplan há um trecho por fileira da placa; com floorplan, um por fileira de
-cada região.
+cada região. Como as alturas das regiões são múltiplos do passo das fileiras,
+todos os trechos caem numa mesma grade global de fileiras.
+
+Placa de 2 camadas (layers=2): sem planos internos, a alimentação vira uma
+grade de cobre fixa, desenhada aqui — um trilho de VDD acima e um de GND
+abaixo de cada fileira global (F.Cu, horizontais), ligados por vias a troncos
+verticais (B.Cu) dos dois lados da lógica, e estes aos pinos de alimentação
+dos conectores. O roteador liga cada pad de alimentação ao trilho mais próximo.
 """
 
 import math
 import random
 from dataclasses import dataclass
 
-from .layout import Board, Rules, footprint_from_library, pin_header
+from .layout import Board, Rules, Track, Via, footprint_from_library, pin_header
 
 
 @dataclass
@@ -31,6 +38,10 @@ class PlaceParams:
     io_gap: float = 6.0          # distância entre conectores e a área de lógica
     effort: float = 1.0          # multiplica o número de movimentos do anelamento
     floorplan: bool = True       # uma região retangular por módulo do topo
+    layers: int = 4              # 4: VDD/GND em planos internos; 2: trilhos de alimentação
+    rail_extra: float = 2.5      # 2 camadas: canal extra entre fileiras para os trilhos (mm)
+    rail_width: float = 0.8      # 2 camadas: largura dos trilhos horizontais
+    trunk_width: float = 1.0     # 2 camadas: largura dos troncos verticais
     module_weight: float = 2.0   # peso da net virtual que agrupa submódulos (0 = desliga)
     module_max_blocks: int = 400 # módulos maiores não ganham net virtual (custo do anelamento)
     seed: int = 1
@@ -43,8 +54,16 @@ def _snap(v, g):
 def place(lib, design, params=None, rules=None):
     params = params or PlaceParams()
     rules = rules or Rules()
-    part_gap = params.part_gap if params.part_gap is not None else lib.placement.get("part_gap", 1.0)
+    two = params.layers == 2
+    part_gap = lib.placement.get("part_gap", 1.0)
+    if two:   # na placa de 2 camadas as ligações aos trilhos passam entre os componentes
+        part_gap = lib.placement.get("part_gap_2layer", part_gap)
+    if params.part_gap is not None:
+        part_gap = params.part_gap
     row_gap = params.row_gap if params.row_gap is not None else lib.placement.get("row_gap", 4.5)
+    if two and params.row_gap is None:
+        row_gap += params.rail_extra
+    trunk_band = 4.0 if two else 0.0    # faixa dos troncos de alimentação de cada lado
     rng = random.Random(params.seed)
     blocks = design.blocks
     n = len(blocks)
@@ -115,10 +134,10 @@ def place(lib, design, params=None, rules=None):
     logic_h = max(reg_xy[r][1] + reg_size[r][3] for r in range(n_reg))
 
     io_h = max(len(left), len(right)) * 2.54
-    x0 = params.margin + 2.54 + params.io_gap
-    y0 = params.margin + 2.0 + max(0.0, (io_h - logic_h) / 2)
+    x0 = _snap(params.margin + 2.54 + params.io_gap + trunk_band, rules.grid)
+    y0 = _snap(params.margin + 2.0 + (0.5 if two else 0.0) + max(0.0, (io_h - logic_h) / 2), rules.grid)
     left_x = params.margin + 1.27
-    right_x = x0 + logic_w + params.io_gap + 1.27
+    right_x = x0 + logic_w + trunk_band + params.io_gap + 1.27
 
     slots = []                          # (x inicial, y, capacidade, região)
     reg_slots = [[] for _ in range(n_reg)]
@@ -369,6 +388,12 @@ def place(lib, design, params=None, rules=None):
     bh = max(y0 + logic_h - row_gap + params.margin,
              params.margin + 1.27 + max(len(left) + 4, len(right)) * 2.54 + params.margin + 4.0)
     board = Board(_snap(bw + 0.5, 1.0), _snap(bh + 0.5, 1.0), footprints, design.vdd, design.gnd, rules)
+    board.layers = params.layers
+    if two:
+        n_global = max(1, round(logic_h / row_pitch))
+        hdr_y = lambda k: params.margin + 1.27 + k * 2.54
+        _power_grid(board, params, rules, x0, x0 + logic_w, y0, n_global, row_pitch, block_h,
+                    left_x, right_x, hdr_y(0), hdr_y(1), hdr_y(len(right) - 1))
     for fp in footprints:
         if fp.group:
             board.groups.setdefault(fp.group, []).append(fp.uuid)
@@ -376,3 +401,36 @@ def place(lib, design, params=None, rules=None):
     board.place_stats = {"rows": n_rows, "regions": n_reg if n_reg > 1 else 0,
                          "hpwl_mm": round(sum(net_cost[:n_real]), 1), "blocks": n}
     return board
+
+
+def _power_grid(board, params, rules, xl, xr, y0, n_rows, row_pitch, block_h,
+                left_x, right_x, y_vdd_in, y_gnd_in, y_gnd_out):
+    """Grade de alimentação fixa da placa de 2 camadas (veja o docstring do módulo)."""
+    g = rules.grid
+    rw, tw = params.rail_width, params.trunk_width
+    off = _snap(rw / 2 + rules.clearance + 0.6, g)       # trilho -> borda da fileira
+    xs = {"gnd": (_snap(xl - 3.5, g), _snap(xr + 3.5, g)),   # troncos: GND por fora,
+          "vdd": (_snap(xl - 1.5, g), _snap(xr + 1.5, g))}   # VDD por dentro
+    nets = {"gnd": board.gnd, "vdd": board.vdd}
+    rails = {"vdd": [], "gnd": []}
+    for m in range(n_rows):
+        y = y0 + m * row_pitch
+        rails["vdd"].append(_snap(y - off, g))
+        rails["gnd"].append(_snap(y + block_h + off, g))
+    # ligações dos pinos de alimentação dos conectores aos troncos: (x do pino, y, lado)
+    stubs = {"vdd": [(left_x, y_vdd_in, 0)], "gnd": [(left_x, y_gnd_in, 0), (right_x, y_gnd_out, 1)]}
+    for key in ("vdd", "gnd"):
+        net = nets[key]
+        a, b = xs[key]
+        span = [list(rails[key]), list(rails[key])]        # extensão vertical de cada tronco
+        for y in rails[key]:
+            board.tracks.append(Track(a, y, b, y, "F.Cu", net, rw))
+            board.vias.append(Via(a, y, net, rules.via_size, rules.via_drill))
+            board.vias.append(Via(b, y, net, rules.via_size, rules.via_drill))
+        for hx, hy, side in stubs[key]:
+            tx = xs[key][side]
+            board.tracks.append(Track(hx, hy, tx, hy, "F.Cu", net, rw))
+            board.vias.append(Via(tx, hy, net, rules.via_size, rules.via_drill))
+            span[side].append(hy)
+        for side, x in enumerate(xs[key]):
+            board.tracks.append(Track(x, min(span[side]), x, max(span[side]), "B.Cu", net, tw))

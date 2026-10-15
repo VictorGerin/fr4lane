@@ -22,6 +22,7 @@
   },
   "placement": {
     "part_gap": 0.6,
+    "part_gap_2layer": 1.0,
     "row_gap": 4.4
   }
 }

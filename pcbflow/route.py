@@ -1,8 +1,12 @@
-"""Roteador em grade para 2 camadas de sinal (F.Cu/B.Cu) + planos internos.
+"""Roteador em grade para 2 camadas de sinal (F.Cu/B.Cu).
 
 Estratégia:
-  1. Alimentação: cada pad SMD de VDD/GND ganha um "fanout" curto até uma via
-     que desce para o plano interno correspondente (In1.Cu=GND, In2.Cu=VDD).
+  1. Alimentação, placa de 4 camadas: cada pad SMD de VDD/GND ganha um
+     "fanout" curto até uma via que desce para o plano interno correspondente
+     (In1.Cu=GND, In2.Cu=VDD); pads com furo já tocam os planos.
+     Placa de 2 camadas: o placement já desenhou a grade de alimentação
+     (trilhos e troncos, tratados aqui como cobre fixo); cada pad de VDD/GND
+     vira uma ligação "pad -> trilho" negociada junto com os sinais.
   2. Sinais: roteamento negociado (PathFinder). Todas as nets são roteadas
      permitindo conflito; o custo dos nós disputados cresce a cada iteração
      até que ninguém compartilhe recurso. F.Cu prefere trilhas horizontais e
@@ -46,7 +50,10 @@ class Router:
         self.static = [FREE] * self.n
         self.via_static = [FREE] * self.nxy
         self.terminals = {}            # net -> [set(nós) por pad]
-        self.power_pads = []
+        self.power_pads = []           # 4 camadas: pads SMD que precisam de fanout
+        self.planes = getattr(board, "layers", 4) >= 4
+        self.rail = {}                 # net -> nós do cobre fixo (grade de alimentação)
+        self.stubs = []                # 2 camadas: (pad, net, nós do pad) a ligar ao trilho
         self._build_static()
 
     # ------------------------------------------------------------ utilitários
@@ -94,6 +101,7 @@ class Router:
                     self.static[self.node(1, ix, iy)] = BLOCK
                 if d < edge_v:
                     self.via_static[iy * self.nx + ix] = BLOCK
+        self._fixed_copper()
         for pad in self.b.pads():
             if not pad.net:
                 continue
@@ -112,10 +120,39 @@ class Router:
                 raise RuntimeError(f"pad {pad.fp.ref}.{pad.num} não contém nenhum ponto da grade "
                                    f"(grade {g} mm maior que o pad?)")
             if net in self.power:
-                if not pad.tht:
+                if not self.planes:
+                    self.stubs.append((pad, net, term))
+                elif not pad.tht:
                     self.power_pads.append((pad, net, term))
             else:
                 self.terminals.setdefault(net, []).append(term)
+
+    def _fixed_copper(self):
+        """Trilhas e vias que já existem na placa (a grade de alimentação da placa
+        de 2 camadas) viram obstáculo para as outras nets e alvo para a própria."""
+        r = self.r
+        for t in self.b.tracks:
+            net = self.net_id[t.net]
+            layer = LAYERS.index(t.layer)
+            rect = (min(t.x1, t.x2), min(t.y1, t.y2), max(t.x1, t.x2), max(t.y1, t.y2))
+            nodes = self.rail.setdefault(net, set())
+            for ix, iy, d in self._points_near(rect, t.width / 2 + r.clearance + r.track_width / 2):
+                self._claim(self.static, self.node(layer, ix, iy), net)
+                if d <= t.width / 2 + 1e-9:
+                    nodes.add(self.node(layer, ix, iy))
+            for ix, iy, d in self._points_near(rect, t.width / 2 + r.clearance + r.via_size / 2):
+                self._claim(self.via_static, iy * self.nx + ix, net)
+        for v in self.b.vias:
+            net = self.net_id[v.net]
+            rect = (v.x, v.y, v.x, v.y)
+            nodes = self.rail.setdefault(net, set())
+            for ix, iy, d in self._points_near(rect, v.size / 2 + r.clearance + r.track_width / 2):
+                for layer in (0, 1):
+                    self._claim(self.static, self.node(layer, ix, iy), net)
+                    if d <= v.size / 2 + 1e-9:
+                        nodes.add(self.node(layer, ix, iy))
+            for ix, iy, d in self._points_near(rect, v.size + r.clearance):
+                self._claim(self.via_static, iy * self.nx + ix, net)
 
     def _halo(self, p):
         iy, ix = divmod(p, self.nx)
@@ -197,9 +234,24 @@ class Router:
 
     # ----------------------------------------------------- roteamento sinais
     def route_signals(self, max_iter=40):
-        nets = [n for n, t in self.terminals.items() if len(t) > 1]
+        # cada "job" é uma net de sinal (chave = id da net) ou, na placa de 2
+        # camadas, a ligação de um pad de alimentação ao trilho (chave = ("pw", i))
+        self.jobs = {n: (n, t) for n, t in self.terminals.items() if len(t) > 1}
+        self.rail_target = {}
+        for net, nodes in self.rail.items():
+            if net in self.power and nodes:
+                ps = [self.coords(nd) for nd in nodes]
+                self.rail_target[net] = (dict.fromkeys(nodes, 0),
+                                         (min(p[1] for p in ps), max(p[1] for p in ps),
+                                          min(p[2] for p in ps), max(p[2] for p in ps)))
+        for i, (pad, net, term) in enumerate(self.stubs):
+            if net in self.rail_target:
+                self.jobs[("pw", i)] = (net, [term, None])
+        nets = list(self.jobs)
 
         def bbox_size(n):
+            if isinstance(n, tuple):
+                return -1                    # ligações de alimentação primeiro
             xs, ys = [], []
             for t in self.terminals[n]:
                 _, ix, iy = self.coords(next(iter(t)))
@@ -212,6 +264,7 @@ class Router:
         self.hist = [0.0] * self.n
         self.usage = {n: set() for n in nets}
         self.paths = {n: [] for n in nets}
+        self.ok = set()
         pres = 0.5
         todo = list(nets)
         conflicted = set()
@@ -233,7 +286,7 @@ class Router:
             todo = sorted(conflicted | set(failed), key=bbox_size)
             pres *= 1.6
         # nets que continuam em conflito são descartadas (ficam no ratsnest)
-        dropped = set(n for n in nets if not self.paths[n])
+        dropped = set(n for n in nets if n not in self.ok)
         while True:
             over = [i for i in range(self.n) if self.occ[i] > 1]
             if not over:
@@ -249,19 +302,40 @@ class Router:
             self._rip(worst)
             self.paths[worst] = []
             dropped.add(worst)
-        for net in nets:
-            for path in self.paths[net]:
-                self._emit_path(path, self.nets[net])
-        return [self.nets[n] for n in sorted(dropped)]
+        for key in nets:
+            for path in self.paths[key]:
+                self._emit_path(path, self.nets[self.jobs[key][0]])
+        return sorted(self._job_name(k) for k in dropped)
+
+    def _job_name(self, key):
+        if isinstance(key, tuple):
+            pad, net, _ = self.stubs[key[1]]
+            return f"(alim) {pad.fp.ref}.{pad.num} ({self.nets[net]})"
+        return self.nets[key]
 
     def _rip(self, net):
         for i in self.usage[net]:
             self.occ[i] -= 1
         self.usage[net] = set()
         self.paths[net] = []
+        self.ok.discard(net)
 
-    def _route_net(self, net, pres):
-        terms = self.terminals[net]
+    def _route_net(self, key, pres):
+        net, terms = self.jobs[key]
+        if terms[1] is None:                 # pad de alimentação -> trilho
+            target, box = self.rail_target[net]
+            if not terms[0].isdisjoint(target):
+                self.ok.add(key)
+                return True
+            path = self._astar(net, terms[0], target, box, pres)
+            if path is None:
+                return False
+            self.usage[key] = self._footprint_of(path)
+            for i in self.usage[key]:
+                self.occ[i] += 1
+            self.paths[key] = [path]
+            self.ok.add(key)
+            return True
         tree = set(terms[0])
         remaining = list(range(1, len(terms)))
         used = set()
@@ -286,20 +360,26 @@ class Router:
                 return False
             paths.append(path)
             tree.update(path)
-            new = set(path)
-            for a, b2 in zip(path, path[1:]):
-                if a % self.nxy == b2 % self.nxy:          # via
-                    p = a % self.nxy
-                    for layer in (0, 1):
-                        new.add(layer * self.nxy + p)
-                        for q in self._halo(p):
-                            new.add(layer * self.nxy + q)
+            new = self._footprint_of(path)
             for i in new - used:
                 self.occ[i] += 1
             used |= new
-        self.usage[net] = used
-        self.paths[net] = paths
+        self.usage[key] = used
+        self.paths[key] = paths
+        self.ok.add(key)
         return True
+
+    def _footprint_of(self, path):
+        """Nós ocupados por um caminho (uma via ocupa as duas camadas e o entorno)."""
+        new = set(path)
+        for a, b2 in zip(path, path[1:]):
+            if a % self.nxy == b2 % self.nxy:          # via
+                p = a % self.nxy
+                for layer in (0, 1):
+                    new.add(layer * self.nxy + p)
+                    for q in self._halo(p):
+                        new.add(layer * self.nxy + q)
+        return new
 
     def _astar(self, net, sources, target, box, pres):
         nx, nxy = self.nx, self.nxy
@@ -396,9 +476,14 @@ class Router:
 
 def route(board, max_iter=40, log=print):
     rt = Router(board, log)
-    log(f"  grade {rt.nx}x{rt.ny}x2 ({rt.g} mm), {len(rt.terminals)} nets de sinal, "
-        f"{len(rt.power_pads)} pads de alimentação SMD")
-    failed_power = rt.fanout_power()
+    if rt.planes:
+        log(f"  grade {rt.nx}x{rt.ny}x2 ({rt.g} mm), {len(rt.terminals)} nets de sinal, "
+            f"{len(rt.power_pads)} pads de alimentação SMD")
+        failed_power = rt.fanout_power()
+    else:
+        log(f"  grade {rt.nx}x{rt.ny}x2 ({rt.g} mm), {len(rt.terminals)} nets de sinal, "
+            f"{len(rt.stubs)} pads de alimentação ligados aos trilhos")
+        failed_power = []
     if failed_power:
         log(f"  AVISO: {len(failed_power)} pads de alimentação sem fanout: {failed_power[:8]}")
     dropped = rt.route_signals(max_iter)

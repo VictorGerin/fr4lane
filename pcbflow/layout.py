@@ -102,6 +102,7 @@ class Board:
     tracks: list = field(default_factory=list)
     vias: list = field(default_factory=list)
     groups: dict = field(default_factory=dict)       # nome -> [uuids]
+    layers: int = 4                                  # 4: planos de VDD/GND; 2: trilhos
     unrouted: list = field(default_factory=list)
 
     def nets(self):

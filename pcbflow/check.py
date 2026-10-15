@@ -80,8 +80,9 @@ def check_board(board):
                         union(i, j)
                 elif gap < rules.clearance - 1e-3:
                     errors.append(f"folga {gap:.3f} mm entre {a.ref} [{a.net}] e {b.ref} [{b.net}]")
-    # planos internos ligam todas as vias / pads THT da mesma net de alimentação
-    for net in (board.vdd, board.gnd):
+    # planos internos (só na placa de 4 camadas) ligam todas as vias / pads THT
+    # da mesma net de alimentação; na de 2 camadas a ligação é conferida pelo cobre
+    for net in ((board.vdd, board.gnd) if board.layers >= 4 else ()):
         anchor = None
         for i, it in enumerate(items):
             if it.net == net and (it.kind == "via" or (it.kind == "pad" and len(it.layers) == 2)):

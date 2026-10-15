@@ -61,6 +61,8 @@ def main(argv=None):
     ap.add_argument("--route-iter", type=int, default=40)
     ap.add_argument("--max-parts", type=int, default=8000,
                     help="aborta antes do P&R se o projeto for maior que isso")
+    ap.add_argument("--layers", type=int, choices=(2, 4), default=4,
+                    help="4: VDD/GND em planos internos (padrão); 2: trilhos de alimentação")
     ap.add_argument("--flatten", action="store_true",
                     help="achata antes do mapeamento: o ABC otimiza entre módulos, "
                          "mas a placa perde o agrupamento por módulo")
@@ -71,7 +73,8 @@ def main(argv=None):
     # o nome da família (pasta da biblioteca) vai na pasta e nos arquivos do KiCad,
     # para as versões cmos/rtl do mesmo módulo não se confundirem
     family = Path(args.lib).resolve().name
-    out = Path(args.out or f"build/pcb/{args.top}_{family}")
+    tag = f"{args.top}_{family}" + ("_2l" if args.layers == 2 else "")
+    out = Path(args.out or f"build/pcb/{tag}")
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
 
@@ -133,7 +136,7 @@ def main(argv=None):
     log("[3/6] Placement")
     rules = Rules()
     params = place.PlaceParams(part_gap=args.part_gap, row_gap=args.row_gap,
-                               effort=args.effort, seed=args.seed)
+                               effort=args.effort, seed=args.seed, layers=args.layers)
     if args.module_weight is not None:
         params.module_weight = args.module_weight
     board = place.place(lib, design, params, rules)
@@ -155,7 +158,7 @@ def main(argv=None):
     log(f"      nets incompletas: {len(unconnected)}")
 
     log("[6/6] Projeto KiCad")
-    name = f"{args.top}_{family}"
+    name = tag
     kicad.write_pcb(board, out / f"{name}.kicad_pcb", title=f"{name} — {lib.name}, {n_parts} componentes")
     kicad.write_project(board, out / f"{name}.kicad_pro")
     kicad.write_bom(board, out / f"{name}_bom.csv")
@@ -171,8 +174,9 @@ def _write_report(path, args, design, board, by_cell, errors, unconnected, lib, 
     L = [f"# Relatório pcbflow — `{design.top}`", "",
          f"- Fontes: {', '.join(args.src)}",
          f"- Biblioteca: `{lib.name}` ({lib.family}, VDD = {lib.supply_voltage})",
-         f"- Placa: {board.width:.0f} x {board.height:.0f} mm, 4 camadas "
-         "(F.Cu sinais H, In1.Cu GND, In2.Cu VDD, B.Cu sinais V)",
+         f"- Placa: {board.width:.0f} x {board.height:.0f} mm, "
+         + ("4 camadas (F.Cu sinais H, In1.Cu GND, In2.Cu VDD, B.Cu sinais V)" if board.layers >= 4 else
+            "2 camadas (F.Cu sinais H + trilhos de VDD/GND, B.Cu sinais V + troncos de VDD/GND)"),
          f"- Trilhas: {len(board.tracks)}, vias: {len(board.vias)}", "",
          "## Células lógicas", "", "| Célula | Qtd | Componentes |", "|---|---:|---:|"]
     for c, k in sorted(by_cell.items()):

@@ -17,6 +17,7 @@ Pré-requisitos: Python ≥ 3.11 (sem dependências externas), Yosys e Icarus Ve
 make pcb PCB_TOP=adder                               # família CMOS (padrão)
 make pcb PCB_TOP=adder PCB_LIB=pcbflow/lib/rtl       # família RTL com BC548
 make pcb PCB_TOP=counter4 PCB_SRC=pcbflow/examples/counter4.v PCB_TB=pcbflow/examples/tb_counter4.v
+make pcb PCB_TOP=adder PCB_LIB=pcbflow/lib/rtl PCB_ARGS="--layers 2"   # placa de 2 camadas
 make pcb-stat PCB_TOP=ALU                            # só síntese + contagem
 
 # direto
@@ -24,7 +25,7 @@ PYTHONPATH=pcbflow python -m pcbflow --lib pcbflow/lib/rtl --top adder \
     --src rtl/RISC_V/ALU/adder.v --tb sim/testbenches/tb_adder.v
 ```
 
-Opções úteis: `--effort` (esforço do placement), `--row-gap`/`--part-gap` (densidade, em mm), `--route-iter`, `--max-parts`, `--seed`, `--flatten` e `--module-weight` (veja [Módulos na placa](#módulos-na-placa)).
+Opções úteis: `--effort` (esforço do placement), `--row-gap`/`--part-gap` (densidade, em mm), `--route-iter`, `--max-parts`, `--seed`, `--layers 2|4` (veja [Placa de 2 camadas](#placa-de-2-camadas)), `--flatten` e `--module-weight` (veja [Módulos na placa](#módulos-na-placa)).
 
 ## Bibliotecas de células
 
@@ -100,13 +101,13 @@ Copie uma pasta existente e ajuste três coisas:
 
 Footprints novos entram em `footprints.json`. O roteador exige que o menor lado de cada pad seja ≥ 0,5 mm, o passo da grade.
 
-## Saídas (`build/pcb/<top>_<família>/`, ex.: `adder_cmos`, `adder_rtl`)
+## Saídas (`build/pcb/<top>_<família>[_2l]/`, ex.: `adder_cmos`, `adder_rtl_2l`)
 
 | Arquivo | Conteúdo |
 |---|---|
-| `<top>_<família>.kicad_pro`, `.kicad_pcb` | projeto KiCad: placa de 4 camadas já posicionada e roteada |
+| `<top>_<família>[_2l].kicad_pro`, `.kicad_pcb` | projeto KiCad: placa de 4 (ou 2) camadas já posicionada e roteada |
 | `report.md` | células, módulos (com a faixa de referências de cada um), componentes, fan-out, pendências e mapa das instâncias do Yosys para a placa |
-| `<top>_<família>_bom.csv` | lista de materiais |
+| `<top>_<família>[_2l]_bom.csv` | lista de materiais |
 | `<top>_gates.v` | netlist gate-level (saída do Yosys) |
 | `<top>_switch.v` | netlist em nível de componente, com a mesma interface do módulo |
 | `sim_gates.log`, `sim_switch.log` | resultado do testbench contra cada netlist |
@@ -114,12 +115,12 @@ Footprints novos entram em `footprints.json`. O roteador exige que o menor lado 
 
 ## Como revisar no KiCad
 
-1. Abra o `.kicad_pro` e, no editor de PCB, pressione **B** para preencher os planos (In1.Cu = GND, In2.Cu = VDD).
+1. Abra o `.kicad_pro` e, no editor de PCB, pressione **B** para preencher os planos (In1.Cu = GND, In2.Cu = VDD). A placa de 2 camadas não tem planos.
 2. Rode o DRC. O pcbflow já verifica folgas e conectividade por conta própria (passo 5/6), mas o DRC do KiCad é a referência.
 3. Cada célula lógica é um **grupo** com o nome da instância (`U12 (NOR2)`, `FF3 (DFFR)`…), dentro do grupo do seu módulo (`u_fa (full_adder)`). O `report.md` liga esses nomes aos do Yosys.
 4. Nets que o roteador não fechou, se houver, aparecem no ratsnest e em *Pendências* no relatório.
 
-O projeto não tem esquemático: a referência lógica é o `_switch.v`, que é simulado com o testbench. A geometria dos footprints é aproximada e vem embutida no arquivo. *Update Footprints from Library* troca pelos footprints oficiais.
+O projeto não tem esquemático: a referência lógica é o `_switch.v`, que é simulado com o testbench. A geometria dos footprints é aproximada e vem embutida no arquivo. *Update Footprints from Library* troca pelos footprints oficiais. Cada footprint aponta para o modelo 3D oficial (`${KICAD<versão>_3DMODEL_DIR}/<lib>.3dshapes/<nome>.step`), então o visualizador 3D (**Alt+3**) funciona sem ajuste. O pcbflow usa a variável da versão mais nova do KiCad instalada; para forçar outra, defina `PCBFLOW_3DMODEL_VAR` (ex.: `KICAD9_3DMODEL_DIR`).
 
 ## Módulos na placa
 
@@ -141,6 +142,24 @@ Para ver cada módulo isolado na placa, instancie-os num topo sem fios em comum,
   - VDD e GND são planos internos, sem trilha: pads SMD de alimentação ganham uma via curta até o plano, e pads com furo ligam-se a ele direto;
   - os sinais são roteados por negociação (PathFinder): as nets podem disputar espaço no início, e o custo dos pontos disputados sobe a cada iteração até ninguém mais compartilhar;
   - trilha de 0,25 mm, folga de 0,2 mm e via de 0,6/0,3 mm.
+
+## Placa de 2 camadas
+
+Com `--layers 2` não há planos internos. Os sinais continuam em F.Cu (horizontais) e B.Cu (verticais), como na de 4 camadas, e a alimentação vira uma grade de cobre desenhada pelo placement:
+
+- um trilho de VDD acima e um de GND abaixo de cada fileira (F.Cu, 0,8 mm). As células já têm a parte ligada ao VDD em cima (PMOS, resistores de pull-up) e a ligada ao GND embaixo (NMOS, emissores);
+- troncos verticais de 1 mm na B.Cu dos dois lados da lógica, ligados aos trilhos por vias e aos pinos VDD/GND dos conectores;
+- o roteador liga cada pad de alimentação ao trilho mais próximo, negociando espaço junto com os sinais;
+- a verificação (passo 5/6) confere de verdade a conectividade de VDD e GND, já que não há plano para supor.
+
+Os canais entre fileiras ficam 2,5 mm mais largos para caber os trilhos, e a família pode pedir mais folga entre componentes (`"part_gap_2layer"` no `library.json`; a CMOS usa 1,0 mm, porque no SOT-23 o pino da fonte do PMOS fica do lado oposto ao trilho de VDD). A placa sai uns 10 a 25 % maior que a de 4 camadas.
+
+| | 4 camadas | 2 camadas |
+|---|---|---|
+| `adder`, RTL | 135 x 97 mm | 143 x 112 mm |
+| `basic_top`, RTL | 156 x 149 mm | 174 x 175 mm |
+
+Os trilhos de 0,8 mm levam cerca de 2 A em cobre de 1 oz, folga suficiente para as placas deste tamanho. Para projetos com muitas centenas de portas RTL (5 mA por porta com saída em 0), vale conferir a corrente total.
 
 ## Escala (família CMOS)
 
