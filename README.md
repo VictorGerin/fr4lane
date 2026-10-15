@@ -180,6 +180,26 @@ Os módulos são caminhos de instância (`u_fa`, `u0.u2`), os mesmos da seção 
 
 **No KiCad:** os keepouts viram *Rule Areas* (o DRC do KiCad passa a aplicá-los se você editar a placa). As áreas dos módulos são desenhadas em *User.Drawings*: fence com linha cheia, region tracejada, guide pontilhada (ou um círculo, para `near`).
 
+### Editor visual
+
+```sh
+make fpedit PCB_TOP=basic_top
+# ou
+PYTHONPATH=pcbflow python -m pcbflow.fpedit rtl/basic/basic_top.floorplan.json
+```
+
+Abre um servidor local (só em `127.0.0.1`; `--host`/`--port` mudam isso) e o navegador padrão com o arquivo carregado. Se ele não existir, o editor começa vazio e o cria ao salvar; o `make fpedit` usa `<top>.floorplan.json` ao lado de `<top>.v`. Arraste as áreas para mover, os cantos para redimensionar; as setas movem 0,5 mm (Shift: 5 mm), Delete apaga, Ctrl+Z/Ctrl+Y desfazem/refazem e Ctrl+S salva. Os campos `_comment` do arquivo são preservados.
+
+Para desenhar as fileiras, o placement e a capacidade de cada área, o editor lê o `placement.json` que toda rodada grava em `build/pcb/<top>_*/`. Basta um `make pcb-stat` (só a síntese, bem mais rápido) ou um `make pcb`, com ou sem floorplan: a grade e o quanto cada módulo precisa vêm da síntese e não dependem do floorplan. Para um projeto novo:
+
+```sh
+make pcb-stat PCB_TOP=basic_top PCB_LIB=pcbflow/lib/rtl   # síntese: mede os módulos
+make fpedit   PCB_TOP=basic_top                            # desenha vendo o tamanho mínimo
+make pcb      PCB_TOP=basic_top PCB_LIB=pcbflow/lib/rtl    # fluxo completo com o floorplan
+```
+
+O `pcb-stat` grava na mesma pasta do `make pcb` correspondente, então substitui o `placement.json` dele: o editor mostra as fileiras e a capacidade, mas não o placement por baixo até o próximo `make pcb`. Com várias rodadas (famílias ou camadas diferentes), a lista *Rodada* troca entre elas (`--run` escolhe pela linha de comando), e o editor avisa quando um fonte Verilog mudou depois da rodada. A verificação usa as mesmas funções do fluxo: o que o editor aprova o `make pcb` aceita. Sem rodada, ele só confere o formato.
+
 ## Placa de 2 camadas
 
 Com `--layers 2` não há planos internos. Os sinais continuam em F.Cu (horizontais) e B.Cu (verticais), como na de 4 camadas, e a alimentação vira uma grade de cobre desenhada pelo placement:

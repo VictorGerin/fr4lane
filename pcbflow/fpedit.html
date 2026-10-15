@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor de floorplan</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #677085; --line: #d9dde5;
+  --board: #ffffff; --logic: #eef2f7; --band: #e3e8f0; --foot: #8a93a6;
+  --fence: #2563eb; --region: #16a34a; --guide: #d97706; --keepout: #dc2626; --free: #94a3b8;
+  --ok: #16a34a; --bad: #dc2626; --accent: #2563eb; --sel: #7c3aed;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12151b; --panel: #1a1f28; --text: #e6e9ef; --muted: #8e97a8; --line: #2c3340;
+    --board: #171b22; --logic: #1e2530; --band: #26303d; --foot: #6b7486;
+    --fence: #60a5fa; --region: #4ade80; --guide: #fbbf24; --keepout: #f87171; --free: #64748b;
+    --ok: #4ade80; --bad: #f87171; --accent: #60a5fa; --sel: #a78bfa;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+       display: grid; grid-template-rows: auto 1fr; }
+header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 12px;
+         background: var(--panel); border-bottom: 1px solid var(--line); }
+header .file { font-weight: 600; margin-right: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40vw; }
+header .dirty { color: var(--guide); }
+header .sp { flex: 1; }
+button, select, input { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+                        border-radius: 5px; padding: 3px 8px; }
+button { cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+button:disabled { opacity: .5; cursor: default; }
+input[type=number] { width: 72px; }
+main { display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
+#stage { position: relative; min-height: 0; overflow: hidden; }
+svg { width: 100%; height: 100%; display: block; user-select: none; cursor: default; }
+svg.panning { cursor: grabbing; }
+aside { background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; padding: 10px 12px; }
+aside h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 14px 0 6px; }
+aside h3:first-child { margin-top: 0; }
+.row { display: flex; gap: 6px; align-items: center; margin: 4px 0; flex-wrap: wrap; }
+.row label { color: var(--muted); min-width: 52px; }
+.msg { padding: 6px 8px; border-radius: 5px; margin: 4px 0; font-size: 12px; }
+.msg.err { background: color-mix(in srgb, var(--bad) 14%, transparent); }
+.msg.warn { background: color-mix(in srgb, var(--guide) 16%, transparent); }
+.msg.ok { background: color-mix(in srgb, var(--ok) 14%, transparent); }
+.list .item { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 5px; cursor: pointer; }
+.list .item:hover { background: var(--bg); }
+.list .item.sel { outline: 1.5px solid var(--sel); }
+.swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.usage { margin: 6px 0; }
+.usage .bar { height: 7px; border-radius: 4px; background: var(--line); overflow: hidden; margin-top: 2px; }
+.usage .bar > div { height: 100%; }
+.muted { color: var(--muted); }
+.hint { color: var(--muted); font-size: 12px; }
+#toast { position: absolute; left: 12px; bottom: 12px; background: var(--panel); border: 1px solid var(--line);
+         border-radius: 6px; padding: 6px 10px; display: none; }
+@media (max-width: 760px) { main { grid-template-columns: 1fr; grid-template-rows: 55vh auto; } aside { border-left: 0; border-top: 1px solid var(--line); } }
+</style>
+</head>
+<body>
+<header>
+  <span class="file" id="file"></span><span class="dirty" id="dirty"></span>
+  <button data-add="fence" title="Membros dentro, ninguém de fora entra">+ Fence</button>
+  <button data-add="region" title="Membros dentro, outros podem usar o que sobrar">+ Region</button>
+  <button data-add="guide" title="Preferência: custo no placement">+ Guide</button>
+  <button data-add="keepout" title="Área proibida para componentes e/ou trilhas">+ Keepout</button>
+  <span class="sp"></span>
+  <label class="muted">Rodada <select id="run"></select></label>
+  <label class="muted"><input type="checkbox" id="showParts" checked> placement</label>
+  <button id="fit" title="Enquadrar (F)">Enquadrar</button>
+  <button id="undo" title="Desfazer (Ctrl+Z)">↶</button>
+  <button id="redo" title="Refazer (Ctrl+Y)">↷</button>
+  <button id="save" class="primary" title="Salvar (Ctrl+S)">Salvar</button>
+</header>
+<main>
+  <div id="stage">
+    <svg id="svg" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="hatch" width="2" height="2" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="2" stroke="var(--keepout)" stroke-width="0.5" />
+        </pattern>
+      </defs>
+      <g id="gBoard"></g><g id="gRows"></g><g id="gParts"></g><g id="gAreas"></g><g id="gHandles"></g>
+    </svg>
+    <div id="toast"></div>
+  </div>
+  <aside>
+    <h3>Placa</h3>
+    <div class="row"><label><input type="checkbox" id="boardAuto"> automática</label></div>
+    <div class="row"><label>Largura</label><input type="number" id="boardW" step="1" min="1"> mm
+      <label>Altura</label><input type="number" id="boardH" step="1" min="1"> mm</div>
+    <div class="row hint" id="boardInfo"></div>
+
+    <h3>Selecionado</h3>
+    <div id="props" class="hint">Clique numa área ou keepout. Arraste para mover, pelos cantos para redimensionar;
+      setas movem 0,5 mm (Shift: 5 mm), Delete apaga. Arraste o fundo para mover a vista e use a roda para zoom.</div>
+
+    <h3>Verificação</h3>
+    <div id="checks"></div>
+
+    <h3>Áreas e keepouts</h3>
+    <div id="list" class="list"></div>
+
+    <h3>Módulos do projeto</h3>
+    <div id="mods" class="list"></div>
+  </aside>
+</main>
+<datalist id="modPaths"></datalist>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+const SNAP = 0.5;
+const COLORS = { fence: "var(--fence)", region: "var(--region)", guide: "var(--guide)", keepout: "var(--keepout)" };
+const DASH = { fence: "", region: "1.2 0.8", guide: "0.3 0.6" };
+
+let state = null;            // /api/state
+let data = null;             // floorplan em edição (o próprio JSON, preserva _comment)
+let run = null;              // placement.json da rodada escolhida
+let result = null;           // /api/check
+let sel = null;              // {kind: "mod", key} | {kind: "ko", idx}
+let view = null;             // {x, y, w, h} em mm
+let mtime = null, dirty = false;
+const undoStack = [], redoStack = [];
+
+// ---------------------------------------------------------------- utilidades
+const snap = v => Math.round(v / SNAP) * SNAP;
+const fmt = v => (Math.round(v * 100) / 100).toLocaleString("pt-BR");
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function h(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const k in attrs) {
+    if (k.startsWith("on")) e.addEventListener(k.slice(2), attrs[k]);
+    else if (k === "checked" || k === "value" || k === "disabled") e[k] = attrs[k];
+    else e.setAttribute(k, attrs[k]);
+  }
+  for (const k of kids) if (k != null) e.append(k);
+  return e;
+}
+function toast(msg, ms = 2500) {
+  const t = $("toast");
+  t.textContent = msg; t.style.display = "block";
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = "none", ms);
+}
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+function ensure() {
+  if (!data || typeof data !== "object" || Array.isArray(data)) data = {};
+  if (!data.modules || typeof data.modules !== "object") data.modules = {};
+  if (!Array.isArray(data.keepouts)) data.keepouts = [];
+}
+// retângulo [x0, y0, x1, y1] de um item; guide com near vira ponto
+function boxOf(it) {
+  const o = it.obj || it;
+  const r = o.rect || (o.near ? [o.near[0], o.near[1], 0, 0] : [0, 0, 0, 0]);
+  return [r[0], r[1], r[0] + r[2], r[1] + r[3]];
+}
+function items() {
+  const out = [];
+  for (const [key, m] of Object.entries(data.modules)) out.push({ kind: "mod", key, obj: m, type: m.type });
+  data.keepouts.forEach((k, idx) => out.push({ kind: "ko", idx, obj: k, type: "keepout" }));
+  return out;
+}
+function selected() {
+  if (!sel) return null;
+  if (sel.kind === "mod") { const m = data.modules[sel.key]; return m ? { ...sel, obj: m, type: m.type } : null; }
+  const k = data.keepouts[sel.idx];
+  return k ? { ...sel, obj: k, type: "keepout" } : null;
+}
+function isSel(it) { return sel && sel.kind === it.kind && (it.kind === "mod" ? sel.key === it.key : sel.idx === it.idx); }
+function labelOf(it) {
+  if (it.kind === "ko") return it.obj.name || `keepout${it.idx + 1}`;
+  const t = run && run.module_types && run.module_types[it.key];
+  return it.key + (t ? ` (${t})` : "");
+}
+
+// ------------------------------------------------------------ histórico
+function snapshot() { return JSON.stringify(data); }
+function commit(before) {
+  if (before === snapshot()) return;
+  undoStack.push(before); redoStack.length = 0;
+  if (undoStack.length > 200) undoStack.shift();
+  setDirty(true); renderAll(); scheduleCheck();
+}
+function edit(fn) { const before = snapshot(); fn(); commit(before); }
+function undo() { if (!undoStack.length) return; redoStack.push(snapshot()); data = JSON.parse(undoStack.pop()); fixSel(); setDirty(true); renderAll(); scheduleCheck(); }
+function redo() { if (!redoStack.length) return; undoStack.push(snapshot()); data = JSON.parse(redoStack.pop()); fixSel(); setDirty(true); renderAll(); scheduleCheck(); }
+function fixSel() { if (!selected()) sel = null; }
+function setDirty(v) {
+  dirty = v;
+  $("dirty").textContent = v ? "● não salvo" : "";
+  $("undo").disabled = !undoStack.length; $("redo").disabled = !redoStack.length;
+}
+
+// ---------------------------------------------------------------- placa
+function boardSize() {
+  if (data.board) return [data.board.width, data.board.height];
+  if (result && result.board) return result.board;
+  if (run) return run.board;
+  let w = 100, hh = 80;
+  for (const it of items()) { const b = boxOf(it); w = Math.max(w, b[2] + 20); hh = Math.max(hh, b[3] + 20); }
+  return [w, hh];
+}
+function fit() {
+  const [w, hh] = boardSize();
+  view = { x: -5, y: -5, w: w + 10, h: hh + 10 };
+  applyView();
+}
+function applyView() {
+  $("svg").setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`);
+  renderHandles();
+}
+function mmPerPx() {
+  const r = $("svg").getBoundingClientRect();
+  return Math.max(view.w / r.width, view.h / r.height);
+}
+function toMM(ev) {
+  const svg = $("svg");
+  const p = svg.createSVGPoint(); p.x = ev.clientX; p.y = ev.clientY;
+  return p.matrixTransform(svg.getScreenCTM().inverse());
+}
+
+// ---------------------------------------------------------------- desenho
+function renderAll() { renderBoard(); renderRows(); renderParts(); renderAreas(); renderHandles(); renderPanel(); }
+
+function renderBoard() {
+  const g = $("gBoard"); g.innerHTML = "";
+  const [w, hh] = boardSize();
+  const auto = !data.board;
+  el("rect", { x: 0, y: 0, width: w, height: hh, fill: "var(--board)", stroke: "var(--text)", "stroke-width": 0.3,
+               "stroke-dasharray": auto ? "2 1.2" : "" }, g);
+  if (result && result.logic) {
+    const [x0, x1] = result.logic;
+    el("rect", { x: x0, y: 0, width: x1 - x0, height: hh, fill: "var(--logic)" }, g);
+  }
+  const t = el("text", { x: 0.5, y: -1.2, "font-size": 2.2, fill: "var(--muted)" }, g);
+  t.textContent = `placa ${fmt(w)} x ${fmt(hh)} mm${auto ? " (automática" + (result && result.board ? ", estimada)" : ")") : ""}`;
+}
+
+function renderRows() {
+  const g = $("gRows"); g.innerHTML = "";
+  if (!result || !result.logic) return;
+  const [x0, x1] = result.logic;
+  for (const [y, bh] of result.bands)
+    el("rect", { x: x0, y, width: x1 - x0, height: bh, fill: "var(--band)", opacity: 0.55 }, g);
+  for (const [x, y, cap, tag] of result.slots) {
+    const owner = tag === "free" ? null : data.modules[tag];
+    const color = owner ? COLORS[owner.type] : "var(--free)";
+    const r = el("rect", { x, y: y + 0.4, width: cap, height: 0.9, fill: color, opacity: 0.8 }, g);
+    el("title", {}, r).textContent = `trecho de fileira: ${fmt(cap)} mm (${tag === "free" ? "livre" : tag})`;
+  }
+}
+
+function hue(s) { let x = 0; for (const c of s) x = (x * 31 + c.charCodeAt(0)) % 360; return x; }
+function renderParts() {
+  const g = $("gParts"); g.innerHTML = "";
+  if (!run || !$("showParts").checked) return;
+  for (const p of run.footprints) {
+    const [x0, y0, x1, y1] = p.box;
+    const top = p.module ? p.module.split(".")[0] : "";
+    const fill = p.module === null ? "var(--foot)" : `hsl(${hue(top)} 45% 55%)`;
+    const r = el("rect", { x: x0, y: y0, width: x1 - x0, height: y1 - y0, fill, opacity: 0.35 }, g);
+    el("title", {}, r).textContent = `${p.ref}${p.module ? " — " + p.module : p.module === "" ? " — topo" : ""}`;
+  }
+}
+
+function renderAreas() {
+  const g = $("gAreas"); g.innerHTML = "";
+  for (const it of items()) {
+    const color = COLORS[it.type] || "var(--muted)";
+    const [x0, y0, x1, y1] = boxOf(it);
+    const grp = el("g", { "data-kind": it.kind, "data-key": it.kind === "mod" ? it.key : it.idx, style: "cursor: move" }, g);
+    const width = isSel(it) ? 0.5 : 0.3;
+    if (it.kind === "mod" && it.obj.near) {
+      el("circle", { cx: x0, cy: y0, r: 2, fill: color, "fill-opacity": 0.25, stroke: isSel(it) ? "var(--sel)" : color, "stroke-width": width }, grp);
+      el("circle", { cx: x0, cy: y0, r: 0.5, fill: color }, grp);
+    } else if (it.kind === "ko") {
+      el("rect", { x: x0, y: y0, width: x1 - x0, height: y1 - y0, fill: "url(#hatch)", stroke: isSel(it) ? "var(--sel)" : color,
+                   "stroke-width": width }, grp);
+    } else {
+      el("rect", { x: x0, y: y0, width: x1 - x0, height: y1 - y0, fill: color, "fill-opacity": 0.07,
+                   stroke: isSel(it) ? "var(--sel)" : color, "stroke-width": width, "stroke-dasharray": DASH[it.type] || "" }, grp);
+    }
+    // rótulo acima da borda: dentro dela a barra da primeira fileira o cobriria
+    const t = el("text", { x: x0 + (it.obj.near ? 2.5 : 0.3), y: y0 + (it.obj.near ? 0.8 : -0.7), "font-size": 2.2, fill: color,
+                           "font-weight": 600, "pointer-events": "none" }, grp);
+    t.textContent = `${labelOf(it)} [${it.type}]`;
+    if (it.kind === "ko") {
+      const what = (it.obj.what || ["place", "route"]).map(w => w === "place" ? "comp." : "trilhas").join(" + ");
+      const layers = (it.obj.layers || ["F.Cu", "B.Cu"]).join(", ");
+      const t2 = el("text", { x: x0 + 0.8, y: y0 + 2.6, "font-size": 1.8, fill: color, "pointer-events": "none" }, grp);
+      t2.textContent = `${what} · ${layers}`;
+    }
+  }
+}
+
+const HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+function renderHandles() {
+  const g = $("gHandles"); g.innerHTML = "";
+  const it = selected();
+  if (!it || it.obj.near) return;
+  const [x0, y0, x1, y1] = boxOf(it);
+  const s = 9 * mmPerPx();
+  const xs = { w: x0, n: (x0 + x1) / 2, e: x1 }, ys = { n: y0, w: (y0 + y1) / 2, s: y1 };
+  for (const hd of HANDLES) {
+    const x = hd.includes("w") ? x0 : hd.includes("e") ? x1 : (x0 + x1) / 2;
+    const y = hd.includes("n") ? y0 : hd.includes("s") ? y1 : (y0 + y1) / 2;
+    el("rect", { x: x - s / 2, y: y - s / 2, width: s, height: s, fill: "var(--panel)", stroke: "var(--sel)",
+                 "stroke-width": s / 6, "data-handle": hd, style: `cursor: ${hd}-resize` }, g);
+  }
+}
+
+// ---------------------------------------------------------------- painel
+function numInput(value, onchange, step = 0.5) {
+  return h("input", { type: "number", step, value: fmtIn(value), onchange: e => {
+    const v = parseFloat(e.target.value); if (!isNaN(v)) onchange(v); else renderPanel(); } });
+}
+const fmtIn = v => String(Math.round(v * 1000) / 1000);
+
+function renderPanel() {
+  // placa
+  const auto = !data.board;
+  $("boardAuto").checked = auto;
+  const [bw, bh] = boardSize();
+  $("boardW").value = fmtIn(bw); $("boardH").value = fmtIn(bh);
+  $("boardW").disabled = $("boardH").disabled = auto;
+  $("boardInfo").textContent = auto ? "Cresce até caber tudo; o tamanho mostrado é a estimativa do fluxo." : "";
+
+  // propriedades do selecionado
+  const p = $("props"); p.innerHTML = ""; p.className = "";
+  const it = selected();
+  if (!it) {
+    p.className = "hint";
+    p.textContent = "Clique numa área ou keepout. Arraste para mover, pelos cantos para redimensionar; setas movem 0,5 mm (Shift: 5 mm), Delete apaga. Arraste o fundo para mover a vista e use a roda para zoom.";
+  } else if (it.kind === "mod") {
+    const m = it.obj;
+    const path = h("input", { list: "modPaths", value: it.key, style: "flex: 1", onchange: e => renameModule(it.key, e.target.value.trim()) });
+    const type = h("select", { onchange: e => edit(() => setType(it.key, e.target.value)) },
+      ...["fence", "region", "guide"].map(t => h("option", { value: t, ...(t === m.type ? { selected: "" } : {}) }, t)));
+    p.append(h("div", { class: "row" }, h("label", {}, "Módulo"), path),
+             h("div", { class: "row" }, h("label", {}, "Tipo"), type));
+    if (m.near) {
+      p.append(h("div", { class: "row" }, h("label", {}, "Perto de"),
+        numInput(m.near[0], v => edit(() => m.near[0] = v)), numInput(m.near[1], v => edit(() => m.near[1] = v))),
+        h("div", { class: "row" }, h("button", { onclick: () => edit(() => { m.rect = [m.near[0] - 15, m.near[1] - 10, 30, 20].map(snap); delete m.near; }) }, "Usar retângulo")));
+    } else {
+      p.append(rectInputs(m));
+      if (m.type === "guide")
+        p.append(h("div", { class: "row" }, h("button", { onclick: () => edit(() => { const b = boxOf(it); m.near = [snap((b[0] + b[2]) / 2), snap((b[1] + b[3]) / 2)]; delete m.rect; }) }, "Usar ponto (near)")));
+    }
+    p.append(h("div", { class: "row" }, h("button", { onclick: removeSel }, "Apagar")));
+  } else {
+    const k = it.obj;
+    const what = k.what || ["place", "route"], layers = k.layers || ["F.Cu", "B.Cu"];
+    const toggle = (field, cur, v, all) => e => edit(() => {
+      const s = new Set(cur); e.target.checked ? s.add(v) : s.delete(v);
+      const arr = all.filter(x => s.has(x));
+      if (!arr.length) { toast("Marque ao menos uma opção"); setTimeout(renderPanel); return; }
+      if (field === "layers" && arr.length === all.length) delete k.layers; else k[field] = arr;
+    });
+    p.append(
+      h("div", { class: "row" }, h("label", {}, "Nome"), h("input", { value: k.name || "", style: "flex: 1",
+        onchange: e => edit(() => { k.name = e.target.value.trim() || `keepout${it.idx + 1}`; }) })),
+      h("div", { class: "row" }, h("label", {}, "Proíbe"),
+        h("label", {}, h("input", { type: "checkbox", checked: what.includes("place"), onchange: toggle("what", what, "place", ["place", "route"]) }), " componentes"),
+        h("label", {}, h("input", { type: "checkbox", checked: what.includes("route"), onchange: toggle("what", what, "route", ["place", "route"]) }), " trilhas/vias")),
+      h("div", { class: "row" }, h("label", {}, "Camadas"),
+        ...["F.Cu", "B.Cu"].map(l => h("label", {}, h("input", { type: "checkbox", checked: layers.includes(l), onchange: toggle("layers", layers, l, ["F.Cu", "B.Cu"]) }), " " + l))),
+      rectInputs(k),
+      h("div", { class: "row" }, h("button", { onclick: removeSel }, "Apagar")));
+  }
+
+  // verificação
+  const c = $("checks"); c.innerHTML = "";
+  if (state && !state.runs.length)
+    c.append(h("div", { class: "msg warn" }, `Nenhuma rodada em build/pcb/${state.top}_*/. Rode make pcb-stat PCB_TOP=${state.top} (só a síntese) para ver fileiras e capacidade.`));
+  const ri = runInfo();
+  if (ri && ri.stale) c.append(h("div", { class: "msg warn" }, "Há Verilog mais novo que esta rodada: rode make pcb-stat de novo para atualizar fileiras e capacidade."));
+  if (ri && !ri.placed) c.append(h("div", { class: "msg ok" }, "Rodada só de síntese (make pcb-stat): fileiras e capacidade valem; o placement por baixo aparece depois de um make pcb."));
+  if (state && state.load_error) c.append(h("div", { class: "msg err" }, `O arquivo no disco não é JSON válido: ${state.load_error}. Salvar vai substituí-lo.`));
+  if (result) {
+    for (const e of result.errors) c.append(h("div", { class: "msg err" }, e.replace(/^[^:]+\.json: /, "")));
+    if (!result.errors.length) c.append(h("div", { class: "msg ok" }, run ? "Tudo cabe: o fluxo deve aceitar este floorplan." : "Formato válido."));
+    for (const u of result.usage) {
+      const pct = u.have > 0 ? Math.min(100, u.need / u.have * 100) : 100;
+      const color = u.ok ? "var(--ok)" : "var(--bad)";
+      c.append(h("div", { class: "usage" },
+        h("div", { class: "row", style: "justify-content: space-between; margin: 0" },
+          h("span", {}, u.path || "módulos sem área"), h("span", { class: "muted" }, `precisa ${fmt(u.need)} / oferece ${fmt(u.have)} mm`)),
+        h("div", { class: "bar" }, h("div", { style: `width: ${pct}%; background: ${color}` }))));
+    }
+  }
+
+  // lista de itens
+  const l = $("list"); l.innerHTML = "";
+  const all = items();
+  if (!all.length) l.append(h("div", { class: "hint" }, "Nenhuma área ainda: use os botões + no topo."));
+  for (const it2 of all)
+    l.append(h("div", { class: "item" + (isSel(it2) ? " sel" : ""), onclick: () => select(it2) },
+      h("span", { class: "swatch", style: `background: ${COLORS[it2.type]}` }), h("span", {}, labelOf(it2)),
+      h("span", { class: "muted" }, it2.type)));
+
+  // módulos do projeto
+  const md = $("mods"); md.innerHTML = "";
+  if (!run) { md.append(h("div", { class: "hint" }, "Sem rodada: a lista de módulos vem do placement.json.")); return; }
+  const tree = moduleTree();
+  for (const [path, w] of tree) {
+    const depth = path.split(".").length - 1;
+    const rule = data.modules[path];
+    md.append(h("div", { class: "item", style: `padding-left: ${6 + depth * 14}px`, title: rule ? "Selecionar a área" : "Criar uma fence para este módulo",
+                         onclick: () => rule ? select({ kind: "mod", key: path }) : addArea("fence", path) },
+      h("span", { class: "swatch", style: `background: ${rule ? COLORS[rule.type] : "transparent"}; border: 1px solid var(--line)` }),
+      h("span", {}, path), h("span", { class: "muted" }, `${run.module_types[path] || ""} · ${fmt(w)} mm`)));
+  }
+}
+
+function rectInputs(o) {
+  const r = o.rect;
+  const set = i => v => edit(() => { r[i] = i >= 2 ? Math.max(SNAP, v) : Math.max(0, v); });
+  return h("div", {},
+    h("div", { class: "row" }, h("label", {}, "x, y"), numInput(r[0], set(0)), numInput(r[1], set(1)), h("span", { class: "muted" }, "mm")),
+    h("div", { class: "row" }, h("label", {}, "larg., alt."), numInput(r[2], set(2)), numInput(r[3], set(3)), h("span", { class: "muted" }, "mm")));
+}
+
+// caminhos de módulo (com os pais) e a largura de fileira somada de cada um
+function moduleTree() {
+  const tot = new Map();
+  for (const [m, w] of Object.entries(run.module_width)) {
+    if (!m) continue;
+    const parts = m.split(".");
+    for (let i = 1; i <= parts.length; i++) {
+      const p = parts.slice(0, i).join(".");
+      tot.set(p, (tot.get(p) || 0) + w);
+    }
+  }
+  return [...tot.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+}
+function runInfo() { const i = parseInt($("run").value); return state && !isNaN(i) ? state.runs[i] : null; }
+
+// ---------------------------------------------------------------- edição
+function select(it) { sel = it ? (it.kind === "mod" ? { kind: "mod", key: it.key } : { kind: "ko", idx: it.idx }) : null; renderAreas(); renderHandles(); renderPanel(); }
+function setType(key, t) {
+  const m = data.modules[key]; m.type = t;
+  if (t !== "guide" && m.near) { m.rect = [m.near[0] - 15, m.near[1] - 10, 30, 20].map(snap); delete m.near; }
+}
+function renameModule(oldKey, newKey) {
+  if (!newKey || newKey === oldKey) { renderPanel(); return; }
+  if (data.modules[newKey]) { toast(`'${newKey}' já tem uma área`); renderPanel(); return; }
+  edit(() => {
+    const ent = Object.entries(data.modules).map(([k, v]) => [k === oldKey ? newKey : k, v]);
+    data.modules = Object.fromEntries(ent);
+    sel = { kind: "mod", key: newKey };
+  });
+}
+function removeSel() {
+  const it = selected(); if (!it) return;
+  edit(() => { if (it.kind === "mod") delete data.modules[it.key]; else data.keepouts.splice(it.idx, 1); sel = null; });
+}
+function viewCenterRect(w, hh) {
+  const [bw, bh] = boardSize();
+  const cx = Math.min(Math.max(view.x + view.w / 2, w / 2), bw - w / 2), cy = Math.min(Math.max(view.y + view.h / 2, hh / 2), bh - hh / 2);
+  return [snap(Math.max(0, cx - w / 2)), snap(Math.max(0, cy - hh / 2)), w, hh];
+}
+function addArea(type, path) {
+  if (type === "keepout") {
+    let n = data.keepouts.length + 1;
+    while (data.keepouts.some(k => k.name === `keepout${n}`)) n++;
+    edit(() => { data.keepouts.push({ name: `keepout${n}`, rect: viewCenterRect(10, 10), what: ["place", "route"] }); sel = { kind: "ko", idx: data.keepouts.length - 1 }; });
+    return;
+  }
+  if (!path) {
+    const free = run ? moduleTree().map(([p]) => p).filter(p => !data.modules[p] && !p.includes(".")) : [];
+    path = free[0] || prompt("Caminho de instância do módulo (ex.: u_fa ou u0.u2):", "");
+    if (!path) return;
+    path = path.trim();
+  }
+  if (data.modules[path]) { select({ kind: "mod", key: path }); toast(`'${path}' já tem uma área`); return; }
+  // tamanho inicial: a fileira que o módulo precisa, em ~3 fileiras
+  let w = 40, hh = 30;
+  if (run) {
+    const need = (moduleTree().find(([p]) => p === path) || [0, 0])[1] / 0.9;
+    const g = run.geo, rows = Math.max(1, Math.min(4, Math.ceil(need / 80)));
+    hh = snap(rows * g.row_pitch - g.row_gap + 1); w = snap(Math.max(20, need / rows + g.cell_gap + g.dec_w + 3));
+  }
+  edit(() => { data.modules[path] = { type, rect: viewCenterRect(w, hh) }; sel = { kind: "mod", key: path }; });
+}
+
+// ---------------------------------------------------------------- mouse
+let drag = null;
+$("svg").addEventListener("mousedown", ev => {
+  if (ev.button !== 0 && ev.button !== 1) return;
+  const p = toMM(ev);
+  const hd = ev.target.getAttribute("data-handle");
+  const grp = ev.target.closest("[data-kind]");
+  if (ev.button === 0 && hd) {
+    const it = selected();
+    drag = { mode: "resize", hd, start: p, rect0: [...it.obj.rect], before: snapshot(), obj: it.obj };
+  } else if (ev.button === 0 && grp) {
+    const kind = grp.getAttribute("data-kind"), key = grp.getAttribute("data-key");
+    select(kind === "mod" ? { kind, key } : { kind, idx: +key });
+    const it = selected();
+    drag = { mode: "move", start: p, pos0: it.obj.near ? [...it.obj.near] : [...it.obj.rect], before: snapshot(), obj: it.obj };
+  } else {
+    if (ev.button === 0) select(null);
+    drag = { mode: "pan", cx: ev.clientX, cy: ev.clientY, view0: { ...view } };
+    $("svg").classList.add("panning");
+  }
+  ev.preventDefault();
+});
+window.addEventListener("mousemove", ev => {
+  if (!drag) return;
+  if (drag.mode === "pan") {
+    const k = mmPerPx();
+    view.x = drag.view0.x - (ev.clientX - drag.cx) * k; view.y = drag.view0.y - (ev.clientY - drag.cy) * k;
+    applyView(); return;
+  }
+  const p = toMM(ev), dx = p.x - drag.start.x, dy = p.y - drag.start.y;
+  const o = drag.obj;
+  if (drag.mode === "move") {
+    if (o.near) { o.near = [snap(Math.max(0, drag.pos0[0] + dx)), snap(Math.max(0, drag.pos0[1] + dy))]; }
+    else { o.rect[0] = snap(Math.max(0, drag.pos0[0] + dx)); o.rect[1] = snap(Math.max(0, drag.pos0[1] + dy)); }
+  } else {
+    let [x0, y0, w, hh] = drag.rect0, x1 = x0 + w, y1 = y0 + hh;
+    if (drag.hd.includes("w")) x0 = Math.min(snap(x0 + dx), x1 - SNAP);
+    if (drag.hd.includes("e")) x1 = Math.max(snap(x1 + dx), x0 + SNAP);
+    if (drag.hd.includes("n")) y0 = Math.min(snap(y0 + dy), y1 - SNAP);
+    if (drag.hd.includes("s")) y1 = Math.max(snap(y1 + dy), y0 + SNAP);
+    x0 = Math.max(0, x0); y0 = Math.max(0, y0);
+    o.rect.splice(0, 4, x0, y0, x1 - x0, y1 - y0);
+  }
+  renderAreas(); renderHandles();
+});
+window.addEventListener("mouseup", () => {
+  if (!drag) return;
+  $("svg").classList.remove("panning");
+  if (drag.before) commit(drag.before);
+  drag = null;
+});
+$("svg").addEventListener("wheel", ev => {
+  ev.preventDefault();
+  const p = toMM(ev), k = Math.exp(ev.deltaY * 0.0015);
+  const w = Math.min(5000, Math.max(5, view.w * k)), hh = view.h * (w / view.w);
+  view = { x: p.x - (p.x - view.x) * (w / view.w), y: p.y - (p.y - view.y) * (hh / view.h), w, h: hh };
+  applyView();
+}, { passive: false });
+
+window.addEventListener("keydown", ev => {
+  const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
+  const mod = ev.ctrlKey || ev.metaKey;
+  if (mod && ev.key.toLowerCase() === "s") { ev.preventDefault(); save(); return; }
+  if (typing) return;
+  if (mod && ev.key.toLowerCase() === "z") { ev.preventDefault(); ev.shiftKey ? redo() : undo(); return; }
+  if (mod && ev.key.toLowerCase() === "y") { ev.preventDefault(); redo(); return; }
+  if (ev.key === "f" || ev.key === "F") { fit(); return; }
+  if (ev.key === "Escape") { select(null); return; }
+  const it = selected(); if (!it) return;
+  if (ev.key === "Delete" || ev.key === "Backspace") { ev.preventDefault(); removeSel(); return; }
+  const step = ev.shiftKey ? 5 : SNAP;
+  const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[ev.key];
+  if (!d) return;
+  ev.preventDefault();
+  edit(() => { const a = it.obj.near || it.obj.rect; a[0] = Math.max(0, snap(a[0] + d[0])); a[1] = Math.max(0, snap(a[1] + d[1])); });
+});
+
+// ---------------------------------------------------------------- servidor
+let checkTimer = null, checkSeq = 0;
+function scheduleCheck() { clearTimeout(checkTimer); checkTimer = setTimeout(runCheck, 200); }
+async function runCheck() {
+  const seq = ++checkSeq;
+  try {
+    const r = await api("/api/check", { data, run: run ? parseInt($("run").value) : null });
+    if (seq !== checkSeq) return;
+    result = r;
+  } catch (e) { result = { errors: [String(e.message || e)], usage: [], slots: [], bands: [] }; }
+  renderBoard(); renderRows(); renderPanel();
+}
+async function loadRun() {
+  const i = parseInt($("run").value);
+  run = isNaN(i) ? null : (await api("/api/run", { run: i })).run;
+  const dl = $("modPaths"); dl.innerHTML = "";
+  if (run) for (const [p] of moduleTree()) dl.append(h("option", { value: p }));
+  renderParts(); await runCheck(); renderAreas();
+}
+async function save(force = false) {
+  const clean = JSON.parse(JSON.stringify(data));
+  if (!clean.keepouts.length) delete clean.keepouts;
+  try {
+    const r = await api("/api/save", { data: clean, mtime, force });
+    if (r.conflict) {
+      if (confirm("O arquivo mudou no disco depois que foi aberto. Sobrescrever com o que está no editor?")) return save(true);
+      return;
+    }
+    mtime = r.mtime; setDirty(false);
+    toast(result && result.errors.length ? "Salvo — atenção: o fluxo ainda vai recusar (veja Verificação)" : "Salvo");
+  } catch (e) { toast("Não salvo: " + e.message.replace(/^[^:]+\.json: /, ""), 6000); }
+}
+
+$("boardAuto").addEventListener("change", e => edit(() => {
+  if (e.target.checked) delete data.board;
+  else { const [w, hh] = boardSize(); data.board = { width: Math.ceil(w), height: Math.ceil(hh) }; }
+}));
+for (const [id, k] of [["boardW", "width"], ["boardH", "height"]])
+  $(id).addEventListener("change", e => { const v = parseFloat(e.target.value); if (v > 0 && data.board) edit(() => data.board[k] = v); else renderPanel(); });
+document.querySelectorAll("[data-add]").forEach(b => b.addEventListener("click", () => addArea(b.dataset.add)));
+$("fit").onclick = fit; $("undo").onclick = undo; $("redo").onclick = redo; $("save").onclick = () => save();
+$("showParts").onchange = renderParts;
+$("run").onchange = loadRun;
+window.addEventListener("beforeunload", e => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
+window.addEventListener("resize", renderHandles);
+
+(async function init() {
+  state = await api("/api/state");
+  $("file").textContent = state.file; $("file").title = state.file;
+  document.title = `${state.top} — floorplan`;
+  data = state.data; ensure(); mtime = state.mtime;
+  if (!state.exists) toast("Arquivo novo: será criado ao salvar", 4000);
+  const rs = $("run"); rs.innerHTML = "";
+  if (!state.runs.length) rs.append(h("option", { value: "" }, "nenhuma"));
+  for (const r of state.runs) rs.append(h("option", { value: r.index, title: r.dir }, `${r.name} · ${r.time}${r.placed ? "" : " · só síntese"}${r.stale ? " ⚠" : ""}`));
+  view = { x: 0, y: 0, w: 100, h: 80 };
+  setDirty(false);
+  await loadRun();
+  fit(); renderAll();
+})().catch(e => toast("Erro ao carregar: " + e.message, 10000));
+</script>
+</body>
+</html>

@@ -6,6 +6,7 @@ Uso:
 """
 
 import argparse
+import json
 import re
 import shutil
 import subprocess
@@ -138,6 +139,9 @@ def main(argv=None):
 
     if args.synth_only:
         log(stat.read_text())
+        info = place.measure(lib, design, _place_params(args), Rules())
+        _write_placement(out / "placement.json", args, lib, design, info)
+        log(f"Medidas para o editor de floorplan: {out / 'placement.json'}")
         return 0
     if n_parts > args.max_parts:
         log(f"ABORTADO: {n_parts} componentes > --max-parts {args.max_parts}. "
@@ -146,10 +150,7 @@ def main(argv=None):
 
     log("[3/6] Placement")
     rules = Rules()
-    params = place.PlaceParams(part_gap=args.part_gap, row_gap=args.row_gap,
-                               effort=args.effort, seed=args.seed, layers=args.layers)
-    if args.module_weight is not None:
-        params.module_weight = args.module_weight
+    params = _place_params(args)
     try:
         board = place.place(lib, design, params, rules, fplan)
     except floorplan.FloorplanError as e:
@@ -158,6 +159,7 @@ def main(argv=None):
     board.group_cells = {inst: cell for inst, (cell, _) in design.instances.items()}
     board.group_modules = {inst: m for inst, m in design.inst_module.items() if m}
     board.module_types = design.modules
+    _write_placement(out / "placement.json", args, lib, design, board.place_stats["editor"], board, fplan)
     reg = board.place_stats.get("regions")
     what = "áreas declaradas" if fplan else "regiões (uma por módulo)"
     log(f"      {f'{reg} {what}, ' if reg else ''}{board.place_stats['rows']} fileiras, HPWL {board.place_stats['hpwl_mm']} mm, "
@@ -183,6 +185,35 @@ def main(argv=None):
     log(f"      {out / (name + '.kicad_pro')}")
     log(f"Concluído em {time.time() - t0:.1f} s")
     return 0 if not errors and not unconnected else 1
+
+
+def _place_params(args):
+    params = place.PlaceParams(part_gap=args.part_gap, row_gap=args.row_gap,
+                               effort=args.effort, seed=args.seed, layers=args.layers)
+    if args.module_weight is not None:
+        params.module_weight = args.module_weight
+    return params
+
+
+def _write_placement(path, args, lib, design, info, board=None, fplan=None):
+    """Resumo para o editor de floorplan (python -m pcbflow.fpedit): grade de
+    fileiras e largura que cada módulo ocupa; depois do placement, também onde
+    ficou cada componente (com --synth-only, a lista fica vazia)."""
+    parts = []
+    if board is not None:
+        gmod = board.group_modules
+        for f in board.footprints:
+            x0, y0, x1, y1 = f.courtyard
+            parts.append({"ref": f.ref, "module": gmod.get(f.group, "") if f.group else None,
+                          "box": [round(f.x + x0, 3), round(f.y + y0, 3), round(f.x + x1, 3), round(f.y + y1, 3)]})
+    data = {"top": args.top, "family": Path(args.lib).resolve().name, "library": lib.name,
+            "sources": [str(Path(f).resolve()) for f in args.src],
+            "layers": args.layers, "placed": board is not None,
+            "board": [board.width, board.height] if board is not None else info["board"],
+            "floorplan": str(fplan.source) if fplan else None,
+            "geo": info["geo"], "min_width": info["min_width"], "module_width": info["module_width"],
+            "module_types": design.modules, "footprints": parts}
+    Path(path).write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
 
 def _write_report(path, args, design, board, by_cell, errors, unconnected, lib, fanout):

@@ -104,6 +104,18 @@ def load(path):
         data = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as e:
         raise FloorplanError(f"{path}: {e}") from None
+    return parse(data, path)
+
+
+def _num(v, what, where):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        raise FloorplanError(f"{where}: '{what}' deve ser um número (mm)") from None
+
+
+def parse(data, path="floorplan"):
+    """Valida um floorplan já lido do JSON (path só aparece nas mensagens)."""
     if not isinstance(data, dict):
         raise FloorplanError(f"{path}: esperado um objeto JSON")
     _keys(data, ("board", "modules", "keepouts", "_comment"), path)
@@ -118,8 +130,16 @@ def load(path):
             fp.board = (float(b["width"]), float(b["height"]))
         except (KeyError, TypeError, ValueError):
             raise FloorplanError(f"{path}: 'board' precisa de 'width' e 'height' numéricos (mm)") from None
+        if fp.board[0] <= 0 or fp.board[1] <= 0:
+            raise FloorplanError(f"{path}: 'board' com largura/altura <= 0")
 
-    for name, m in data.get("modules", {}).items():
+    modules = data.get("modules", {})
+    if not isinstance(modules, dict):
+        raise FloorplanError(f"{path}: 'modules' deve ser um objeto {{\"caminho\": {{...}}}}")
+    keepouts = data.get("keepouts", [])
+    if not isinstance(keepouts, list):
+        raise FloorplanError(f"{path}: 'keepouts' deve ser uma lista")
+    for name, m in modules.items():
         where = f"{path}: módulo '{name}'"
         if not isinstance(m, dict):
             raise FloorplanError(f"{where}: esperado um objeto")
@@ -133,23 +153,25 @@ def load(path):
             p = m["near"]
             if not (isinstance(p, (list, tuple)) and len(p) == 2):
                 raise FloorplanError(f"{where}: 'near' deve ser [x, y] em mm")
-            rect = (float(p[0]), float(p[1]), float(p[0]), float(p[1]))
+            x, y = _num(p[0], "near", where), _num(p[1], "near", where)
+            rect = (x, y, x, y)
         elif "rect" in m:
             rect = _rect(m["rect"], where)
         else:
             raise FloorplanError(f"{where}: falta 'rect'")
         fp.modules[name] = ModuleRule(name, t, rect)
 
-    for i, k in enumerate(data.get("keepouts", [])):
+    for i, k in enumerate(keepouts):
         name = k.get("name", f"keepout{i + 1}") if isinstance(k, dict) else ""
         where = f"{path}: keepout '{name}'"
         if not isinstance(k, dict):
             raise FloorplanError(f"{path}: keepout {i + 1}: esperado um objeto")
         _keys(k, ("name", "rect", "what", "layers", "_comment"), where)
         what = k.get("what", ["place", "route"])
-        if not what or any(w not in WHAT for w in what):
+        if not isinstance(what, list) or not what or any(w not in WHAT for w in what):
             raise FloorplanError(f"{where}: 'what' deve conter 'place' e/ou 'route'")
-        layers = tuple(k.get("layers", LAYERS))
+        layers = k.get("layers", LAYERS)
+        layers = tuple(layers) if isinstance(layers, (list, tuple)) else ()
         if not layers or any(l not in LAYERS for l in layers):
             raise FloorplanError(f"{where}: 'layers' deve conter 'F.Cu' e/ou 'B.Cu'")
         fp.keepouts.append(Keepout(name, _rect(k.get("rect"), where), "place" in what, "route" in what, layers))

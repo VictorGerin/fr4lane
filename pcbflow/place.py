@@ -27,6 +27,7 @@ O roteador liga cada pad de alimentação ao trilho mais próximo.
 import math
 import random
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 from .floorplan import FloorplanError, contains, overlap
 from .layout import Board, Rules, Track, Via, footprint_from_library, pin_header
@@ -71,12 +72,18 @@ class _Geo:
         self.y_top = _snap(params.margin + 2.0 + (0.5 if two else 0.0), g)
         self.min_h = params.margin + 1.27 + max(n_left + 4, n_right) * 2.54 + params.margin + 4.0
         self.io_h = max(n_left, n_right) * 2.54
+        self.margin, self.cell_gap = params.margin, params.cell_gap
+
+    def as_dict(self):
+        """Medidas da grade para o placement.json (o fpedit refaz as fileiras com elas)."""
+        keys = ("two", "block_h", "dec_w", "row_gap", "row_pitch", "x0", "reserve_r", "y_top",
+                "min_h", "margin", "cell_gap")
+        return {k: getattr(self, k) for k in keys}
 
 
-def place(lib, design, params=None, rules=None, floorplan=None):
-    params = params or PlaceParams()
-    rules = rules or Rules()
-    g = rules.grid
+def _measure(lib, design, params, rules):
+    """Medidas que só dependem da síntese, da família e do número de camadas:
+    largura de cada bloco, altura das fileiras, conectores e a grade (_Geo)."""
     two = params.layers == 2
     part_gap = lib.placement.get("part_gap", 1.0)
     if two:   # na placa de 2 camadas as ligações aos trilhos passam entre os componentes
@@ -86,10 +93,7 @@ def place(lib, design, params=None, rules=None, floorplan=None):
     row_gap = params.row_gap if params.row_gap is not None else lib.placement.get("row_gap", 4.5)
     if two and params.row_gap is None:
         row_gap += params.rail_extra
-    rng = random.Random(params.seed)
     blocks = design.blocks
-    n = len(blocks)
-    power = {design.vdd, design.gnd}
 
     layouts = {}
     for b in blocks:
@@ -97,12 +101,6 @@ def place(lib, design, params=None, rules=None, floorplan=None):
             layouts[b.cell] = lib.block_layout(b.cell, part_gap)
     width = [layouts[b.cell][1] + params.cell_gap for b in blocks]
     block_h = max(l[2] for l in layouts.values())
-
-    # --- nets de sinal ------------------------------------------------------
-    net_blocks = {}
-    for i, b in enumerate(blocks):
-        for net in set(b.pins.values()) - power:
-            net_blocks.setdefault(net, set()).add(i)
 
     # --- conectores de E/S --------------------------------------------------
     inputs = [p for p in design.ports if p.direction == "input"]
@@ -118,6 +116,47 @@ def place(lib, design, params=None, rules=None, floorplan=None):
         dec_w = c[2] - c[0]
 
     geo = _Geo(params, rules, two, row_gap, block_h, dec_w, len(left), len(right))
+    return SimpleNamespace(two=two, part_gap=part_gap, layouts=layouts, width=width, block_h=block_h,
+                           left=left, right=right, geo=geo, dec=dec, dec_row=dec_row)
+
+
+def _editor_info(blocks, width, geo):
+    """Para o fpedit: grade e largura de fileira que cada módulo ocupa."""
+    mod_w = {}
+    for v, b in enumerate(blocks):
+        mod_w[b.module] = mod_w.get(b.module, 0.0) + width[v]
+    return {"geo": geo.as_dict(), "module_width": mod_w, "min_width": min(width, default=0.0)}
+
+
+def measure(lib, design, params=None, rules=None):
+    """As mesmas medidas do placement, sem posicionar nada (make pcb-stat): o
+    que o fpedit precisa e o tamanho que a placa teria sem floorplan."""
+    params = params or PlaceParams()
+    m = _measure(lib, design, params, rules or Rules())
+    info = _editor_info(design.blocks, m.width, m.geo)
+    fm = _auto_slots(design.blocks, m.width, m.geo)
+    info["board"] = [fm["W"], fm["H"]]
+    return info
+
+
+def place(lib, design, params=None, rules=None, floorplan=None):
+    params = params or PlaceParams()
+    rules = rules or Rules()
+    g = rules.grid
+    m = _measure(lib, design, params, rules)
+    two, layouts, width, block_h = m.two, m.layouts, m.width, m.block_h
+    left, right, geo, dec, dec_row = m.left, m.right, m.geo, m.dec, m.dec_row
+    rng = random.Random(params.seed)
+    blocks = design.blocks
+    n = len(blocks)
+    power = {design.vdd, design.gnd}
+
+    # --- nets de sinal ------------------------------------------------------
+    net_blocks = {}
+    for i, b in enumerate(blocks):
+        for net in set(b.pins.values()) - power:
+            net_blocks.setdefault(net, set()).add(i)
+
     if floorplan is None:
         fm = _auto_slots(blocks, width, geo)
     else:
@@ -412,6 +451,7 @@ def place(lib, design, params=None, rules=None, floorplan=None):
                          "hpwl_mm": round(sum(net_cost[:n_real]), 1), "blocks": n,
                          "usage": fm.get("usage", []), "grid": fm.get("grid"),
                          "logic_x": (x0, lx1)}
+    board.place_stats["editor"] = _editor_info(blocks, width, geo)
     return board
 
 
@@ -526,8 +566,143 @@ def _auto_slots(blocks, width, geo):
 
 
 # -------------------------------------------------------- trechos: declarado
+def declared_rows(geo, fplan, W, H, min_width):
+    """Fileiras de uma placa W x H cortadas pelas áreas do floorplan: devolve
+    (trechos, n_fileiras, x final da lógica). Cada trecho é (x, y, capacidade,
+    dono), com dono = caminho da fence/region ou "free". geo é um _Geo ou
+    qualquer objeto com os mesmos atributos (o fpedit usa o do placement.json)."""
+    hard = {r.path: r for r in fplan.modules.values() if r.type in ("fence", "region")}
+    lx0, lx1 = geo.x0, W - geo.reserve_r
+    ly1 = H - geo.margin - (1.5 if geo.two else 0.0)
+    for r in hard.values():
+        if r.rect[0] < lx0 - 1e-6 or r.rect[2] > lx1 + 1e-6:
+            raise FloorplanError(
+                f"{fplan.source}: a área de '{r.path}' sai da região de lógica, que vai de "
+                f"x = {lx0:g} a {lx1:g} mm (fora dela ficam os conectores"
+                + (" e os troncos de alimentação)" if geo.two else ")"))
+    slots = []
+    k = 0
+    while geo.y_top + k * geo.row_pitch + geo.block_h <= ly1:
+        y = geo.y_top + k * geo.row_pitch
+        band = (lx0, y, lx1, y + geo.block_h)
+        # pontos de corte: bordas x das áreas que tocam a faixa da fileira
+        rects = [(r.rect, ("mod", r)) for r in hard.values() if overlap(r.rect, band)]
+        rects += [(ko.rect, ("ko", ko)) for ko in fplan.keepouts if ko.place and overlap(ko.rect, band)]
+        cuts = sorted({lx0, lx1} | {min(max(x, lx0), lx1) for rc, _ in rects for x in (rc[0], rc[2])})
+        pieces = []
+        for a, b in zip(cuts, cuts[1:]):
+            if b - a < 1e-6:
+                continue
+            cell = (a, y, b, y + geo.block_h)
+            tag = "free"
+            inside = None
+            for rc, (kind, obj) in rects:
+                if not overlap(rc, cell):
+                    continue
+                if kind == "ko":
+                    tag = None
+                    break
+                if contains(rc, cell):
+                    if inside is None or len(obj.path) > len(inside.path):
+                        inside = obj
+                elif obj.type == "fence":
+                    tag = None              # fileira cortada pela borda de uma fence
+                    break
+            if tag is not None and inside is not None:
+                tag = inside.path
+            if pieces and pieces[-1][2] == tag and abs(pieces[-1][1] - a) < 1e-6:
+                pieces[-1][1] = b
+            else:
+                pieces.append([a, b, tag])
+        for a, b, tag in pieces:
+            if tag is None:
+                continue
+            # folga nas pontas: o arredondamento para a grade não encosta o
+            # bloco (ou o desacoplador) na borda de uma área ou keepout
+            a, b = a + 0.5, b - 0.5
+            cap = (b - a) - geo.cell_gap - geo.dec_w
+            if cap >= min_width - 1e-6:
+                slots.append((_snap(a, 0.5), y, cap, tag))
+        k += 1
+    return slots, k, lx1
+
+
+def owner_of(fplan, module_path):
+    """Dono de um bloco no floorplan declarado: o caminho da fence/region que
+    vale para o módulo dele, ou None (bloco livre)."""
+    r = fplan.rule_of(module_path) if module_path else None
+    return r.path if r and r.type in ("fence", "region") else None
+
+
+def declared_capacity(fplan, slots, need):
+    """Fileira oferecida por dono e o que falta: (have, áreas curtas, livres curtos).
+    need: dono -> largura somada dos blocos (None = blocos livres)."""
+    hard = {r.path: r for r in fplan.modules.values() if r.type in ("fence", "region")}
+    have = {}
+    for s in slots:
+        have[s[3]] = have.get(s[3], 0.0) + s[2]
+    short = [path for path in hard if need.get(path, 0.0) > have.get(path, 0.0) * 0.9]
+    # os blocos livres usam os trechos livres e o que sobra das regions
+    spare = have.get("free", 0.0) + sum(max(0.0, have.get(p, 0.0) * 0.95 - need.get(p, 0.0))
+                                        for p, r in hard.items() if r.type == "region")
+    return have, short, need.get(None, 0.0) > spare * 0.95
+
+
+def declared_layout(geo, fplan, need, total_width, min_width):
+    """Tamanho da placa e trechos do floorplan declarado. Com 'board' a placa é
+    fixa; sem ele, começa pela estimativa sem restrições e cresce a altura até
+    os blocos livres caberem, sempre contendo as áreas declaradas."""
+    if fplan.board:
+        W, H = fplan.board
+        if H < geo.min_h:
+            raise FloorplanError(f"{fplan.source}: placa com {H:g} mm de altura não comporta os "
+                                 f"conectores ({geo.min_h:.0f} mm)")
+        slots, n_global, lx1 = declared_rows(geo, fplan, W, H, min_width)
+        have, short, free_short = declared_capacity(fplan, slots, need)
+    else:
+        nr = max(1, round(math.sqrt(total_width / geo.row_pitch)))
+        logic_w = total_width / nr * 1.08 + 2 * geo.cell_gap + geo.dec_w
+        W = max(geo.x0 + logic_w + geo.reserve_r,
+                max((r.rect[2] for r in fplan.modules.values()), default=0) + geo.reserve_r)
+        H = max(geo.y_top + nr * geo.row_pitch + geo.margin + (1.5 if geo.two else 0.0), geo.min_h,
+                max((r.rect[3] for r in fplan.modules.values()), default=0) + geo.margin)
+        W, H = _snap(W + 0.5, 1.0), _snap(H + 0.5, 1.0)
+        for _ in range(400):
+            slots, n_global, lx1 = declared_rows(geo, fplan, W, H, min_width)
+            have, short, free_short = declared_capacity(fplan, slots, need)
+            if short or not free_short:
+                break
+            H += geo.row_pitch / 2
+        H = _snap(H + 0.5, 1.0)
+    return {"slots": slots, "n_global": n_global, "lx1": lx1, "W": W, "H": H, "have": have,
+            "short": short, "free_short": free_short}
+
+
+def declared_problems(geo, fplan, lay, need):
+    """Mensagens para as áreas que não comportam seus módulos (vazia se tudo cabe)."""
+    slots, have, W, H = lay["slots"], lay["have"], lay["W"], lay["H"]
+    out = []
+    for path in lay["short"]:
+        r = fplan.modules[path]
+        x0, y0, x1, y1 = r.rect
+        rows_in = len({s[1] for s in slots if s[3] == path})
+        bands = [(geo.y_top + k * geo.row_pitch, geo.y_top + k * geo.row_pitch + geo.block_h)
+                 for k in range(lay["n_global"] + 2)]
+        near = [f"{a:.1f}–{b:.1f}" for a, b in bands if b > y0 - geo.row_pitch and a < y1 + geo.row_pitch]
+        out.append(
+            f"{fplan.source}: '{path}' ({r.type}) não cabe na área {x1 - x0:g} x {y1 - y0:g} mm: "
+            f"precisa de ~{need.get(path, 0.0) / 0.9:.0f} mm de fileira e a área oferece {have.get(path, 0):.0f} mm "
+            f"em {rows_in} fileira(s). Uma fileira só conta se a faixa inteira estiver dentro da área; "
+            f"perto dela as fileiras ocupam y = {', '.join(near)} mm. Aumente a largura ou a altura")
+    if lay["free_short"]:
+        out.append(
+            f"{fplan.source}: os módulos sem área declarada precisam de ~{need.get(None, 0) / 0.95:.0f} mm de "
+            f"fileira e a placa de {W:g} x {H:g} mm oferece {have.get('free', 0):.0f} mm livres: "
+            "aumente a placa ou remova 'board' para o tamanho automático")
+    return out
+
+
 def _declared_slots(blocks, width, geo, fplan):
-    params = geo.params
     n = len(blocks)
     modules = {b.module for b in blocks if b.module}
     for path in fplan.modules:
@@ -536,123 +711,16 @@ def _declared_slots(blocks, width, geo, fplan):
                                  f"(módulos: {', '.join(sorted({m.split('.')[0] for m in modules})) or 'nenhum'})")
     rule = [fplan.rule_of(b.module) if b.module else None for b in blocks]
     hard = {r.path: r for r in fplan.modules.values() if r.type in ("fence", "region")}
-    owner = [r.path if r and r.type in ("fence", "region") else None for r in rule]
+    owner = [owner_of(fplan, b.module) for b in blocks]
     need = {}
     for v in range(n):
         need[owner[v]] = need.get(owner[v], 0.0) + width[v]
 
-    def build(W, H):
-        lx0, lx1 = geo.x0, W - geo.reserve_r
-        ly1 = H - params.margin - (1.5 if geo.two else 0.0)
-        for r in list(fplan.modules.values()):
-            if r.type == "guide":
-                continue
-            if r.rect[0] < lx0 - 1e-6 or r.rect[2] > lx1 + 1e-6:
-                raise FloorplanError(
-                    f"{fplan.source}: a área de '{r.path}' sai da região de lógica, que vai de "
-                    f"x = {lx0:g} a {lx1:g} mm (fora dela ficam os conectores"
-                    + (" e os troncos de alimentação)" if geo.two else ")"))
-        slots = []
-        k = 0
-        while geo.y_top + k * geo.row_pitch + geo.block_h <= ly1:
-            y = geo.y_top + k * geo.row_pitch
-            band = (lx0, y, lx1, y + geo.block_h)
-            # pontos de corte: bordas x das áreas que tocam a faixa da fileira
-            rects = [(r.rect, ("mod", r)) for r in hard.values() if overlap(r.rect, band)]
-            rects += [(ko.rect, ("ko", ko)) for ko in fplan.keepouts if ko.place and overlap(ko.rect, band)]
-            cuts = sorted({lx0, lx1} | {min(max(x, lx0), lx1) for rc, _ in rects for x in (rc[0], rc[2])})
-            pieces = []
-            for a, b in zip(cuts, cuts[1:]):
-                if b - a < 1e-6:
-                    continue
-                cell = (a, y, b, y + geo.block_h)
-                tag = "free"
-                inside = None
-                for rc, (kind, obj) in rects:
-                    if not overlap(rc, cell):
-                        continue
-                    if kind == "ko":
-                        tag = None
-                        break
-                    if contains(rc, cell):
-                        if inside is None or len(obj.path) > len(inside.path):
-                            inside = obj
-                    elif obj.type == "fence":
-                        tag = None              # fileira cortada pela borda de uma fence
-                        break
-                if tag is not None and inside is not None:
-                    tag = inside.path
-                if pieces and pieces[-1][2] == tag and abs(pieces[-1][1] - a) < 1e-6:
-                    pieces[-1][1] = b
-                else:
-                    pieces.append([a, b, tag])
-            for a, b, tag in pieces:
-                if tag is None:
-                    continue
-                # folga nas pontas: o arredondamento para a grade não encosta o
-                # bloco (ou o desacoplador) na borda de uma área ou keepout
-                a, b = a + 0.5, b - 0.5
-                cap = (b - a) - params.cell_gap - geo.dec_w
-                if cap >= min(width) - 1e-6:
-                    slots.append((_snap(a, 0.5), y, cap, tag))
-            k += 1
-        return slots, k, lx1
-
-    def capacity(slots):
-        have = {}
-        for s in slots:
-            have[s[3]] = have.get(s[3], 0.0) + s[2]
-        short = []
-        for path in hard:
-            if need.get(path, 0.0) > have.get(path, 0.0) * 0.9:
-                short.append(path)
-        # os blocos livres usam os trechos livres e o que sobra das regions
-        spare = have.get("free", 0.0) + sum(max(0.0, have.get(p, 0.0) * 0.95 - need.get(p, 0.0))
-                                            for p, r in hard.items() if r.type == "region")
-        return have, short, need.get(None, 0.0) > spare * 0.95
-
-    if fplan.board:
-        W, H = fplan.board
-        if H < geo.min_h:
-            raise FloorplanError(f"{fplan.source}: placa com {H:g} mm de altura não comporta os "
-                                 f"conectores ({geo.min_h:.0f} mm)")
-        slots, n_global, lx1 = build(W, H)
-        have, short, free_short = capacity(slots)
-    else:
-        # tamanho automático: começa pela estimativa sem restrições e cresce a
-        # altura até caber, sempre contendo as áreas declaradas
-        tot = sum(width)
-        nr = max(1, round(math.sqrt(tot / geo.row_pitch)))
-        logic_w = tot / nr * 1.08 + 2 * params.cell_gap + geo.dec_w
-        W = max(geo.x0 + logic_w + geo.reserve_r,
-                max((r.rect[2] for r in fplan.modules.values()), default=0) + geo.reserve_r)
-        H = max(geo.y_top + nr * geo.row_pitch + params.margin + (1.5 if geo.two else 0.0), geo.min_h,
-                max((r.rect[3] for r in fplan.modules.values()), default=0) + params.margin)
-        W, H = _snap(W + 0.5, 1.0), _snap(H + 0.5, 1.0)
-        for _ in range(400):
-            slots, n_global, lx1 = build(W, H)
-            have, short, free_short = capacity(slots)
-            if short or not free_short:
-                break
-            H += geo.row_pitch / 2
-        H = _snap(H + 0.5, 1.0)
-    for path in short:
-        r = hard[path]
-        x0, y0, x1, y1 = r.rect
-        rows_in = len({s[1] for s in slots if s[3] == path})
-        bands = [(geo.y_top + k * geo.row_pitch, geo.y_top + k * geo.row_pitch + geo.block_h)
-                 for k in range(n_global + 2)]
-        near = [f"{a:.1f}–{b:.1f}" for a, b in bands if b > y0 - geo.row_pitch and a < y1 + geo.row_pitch]
-        raise FloorplanError(
-            f"{fplan.source}: '{path}' ({r.type}) não cabe na área {x1 - x0:g} x {y1 - y0:g} mm: "
-            f"precisa de ~{need[path] / 0.9:.0f} mm de fileira e a área oferece {have.get(path, 0):.0f} mm "
-            f"em {rows_in} fileira(s). Uma fileira só conta se a faixa inteira estiver dentro da área; "
-            f"perto dela as fileiras ocupam y = {', '.join(near)} mm. Aumente a largura ou a altura")
-    if free_short:
-        raise FloorplanError(
-            f"{fplan.source}: os módulos sem área declarada precisam de ~{need.get(None, 0) / 0.95:.0f} mm de "
-            f"fileira e a placa de {W:g} x {H:g} mm oferece {have.get('free', 0):.0f} mm livres: "
-            "aumente a placa ou remova 'board' para o tamanho automático")
+    lay = declared_layout(geo, fplan, need, sum(width), min(width))
+    problems = declared_problems(geo, fplan, lay, need)
+    if problems:
+        raise FloorplanError(problems[0])
+    slots, n_global, lx1, W, H, have = (lay[k] for k in ("slots", "n_global", "lx1", "W", "H", "have"))
 
     # trechos permitidos de cada bloco
     by_tag = {}
