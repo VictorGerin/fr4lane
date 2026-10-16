@@ -55,6 +55,9 @@ def main(argv=None):
     ap.add_argument("--out", help="diretório de saída (padrão: build/pcb/<top>)")
     ap.add_argument("--tb", help="testbench para simular gate-level e switch-level")
     ap.add_argument("--effort", type=float, default=1.0, help="esforço do placement")
+    ap.add_argument("--density", type=float, default=None,
+                    help="ocupação-alvo das fileiras fora das fences/regions, de 0 a 1 (padrão 0.8; "
+                         "1 = compacto); as fences/regions espalham o módulo pela área toda")
     ap.add_argument("--row-gap", type=float, help="canal entre fileiras de blocos (mm)")
     ap.add_argument("--part-gap", type=float, help="folga entre componentes no bloco (mm)")
     ap.add_argument("--module-weight", type=float, default=None,
@@ -69,6 +72,8 @@ def main(argv=None):
                     help="achata antes do mapeamento: o ABC otimiza entre módulos, "
                          "mas a placa perde o agrupamento por módulo")
     ap.add_argument("--synth-only", action="store_true", help="para após síntese/estatísticas")
+    ap.add_argument("--place-only", action="store_true",
+                    help="para após o placement (grava o placement.json, sem rotear nem gerar o KiCad)")
     ap.add_argument("--seed", type=int, default=1)
     args = ap.parse_args(argv)
 
@@ -164,6 +169,10 @@ def main(argv=None):
     what = "áreas declaradas" if fplan else "regiões (uma por módulo)"
     log(f"      {f'{reg} {what}, ' if reg else ''}{board.place_stats['rows']} fileiras, HPWL {board.place_stats['hpwl_mm']} mm, "
         f"placa {board.width:.0f} x {board.height:.0f} mm")
+    if args.place_only:
+        log(f"Placement para o editor de floorplan: {out / 'placement.json'}")
+        log(f"Concluído em {time.time() - t0:.1f} s")
+        return 0
 
     log("[4/6] Roteamento")
     route.route(board, args.route_iter, log=lambda m: log("    " + m))
@@ -192,6 +201,10 @@ def _place_params(args):
                                effort=args.effort, seed=args.seed, layers=args.layers)
     if args.module_weight is not None:
         params.module_weight = args.module_weight
+    if args.density is not None:
+        if not 0 < args.density <= 1:
+            raise SystemExit("--density deve ser de 0 (exclusive) a 1")
+        params.density = args.density
     return params
 
 

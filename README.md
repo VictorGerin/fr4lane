@@ -19,13 +19,14 @@ make pcb PCB_TOP=adder PCB_LIB=pcbflow/lib/rtl       # família RTL com BC548
 make pcb PCB_TOP=counter4 PCB_SRC=pcbflow/examples/counter4.v PCB_TB=pcbflow/examples/tb_counter4.v
 make pcb PCB_TOP=adder PCB_LIB=pcbflow/lib/rtl PCB_ARGS="--layers 2"   # placa de 2 camadas
 make pcb-stat PCB_TOP=ALU                            # só síntese + contagem
+make pcb-place PCB_TOP=basic_top                     # síntese + placement, sem rotear
 
 # direto
 PYTHONPATH=pcbflow python -m pcbflow --lib pcbflow/lib/rtl --top adder \
     --src rtl/RISC_V/ALU/adder.v --tb sim/testbenches/tb_adder.v
 ```
 
-Opções úteis: `--effort` (esforço do placement), `--row-gap`/`--part-gap` (densidade, em mm), `--route-iter`, `--max-parts`, `--seed`, `--floorplan arquivo.json` (veja [Floorplan](#floorplan-posição-dos-módulos-e-keepouts)), `--layers 2|4` (veja [Placa de 2 camadas](#placa-de-2-camadas)), `--flatten` e `--module-weight` (veja [Módulos na placa](#módulos-na-placa)).
+Opções úteis: `--effort` (esforço do placement), `--row-gap`/`--part-gap` (densidade, em mm), `--route-iter`, `--max-parts`, `--seed`, `--floorplan arquivo.json` (veja [Floorplan](#floorplan-posição-dos-módulos-e-keepouts)), `--layers 2|4` (veja [Placa de 2 camadas](#placa-de-2-camadas)), `--synth-only`/`--place-only` (param depois da síntese ou do placement), `--density` (ocupação das fileiras fora das fences/regions, veja [Densidade](#densidade)), `--flatten` e `--module-weight` (veja [Módulos na placa](#módulos-na-placa)).
 
 ## Bibliotecas de células
 
@@ -176,6 +177,25 @@ Os módulos são caminhos de instância (`u_fa`, `u0.u2`), os mesmos da seção 
 
 **Fileiras.** Os componentes ficam em fileiras de uma grade fixa, e uma área de fence/region só usa as fileiras que couberem **inteiras** dentro dela. O passo da grade depende da família e do número de camadas: o RTL usa 13,05 mm em 4 camadas e 15,55 mm em 2. A seção *Floorplan* do `report.md` lista a área de lógica e a faixa de y de cada fileira, e mostra quanto de fileira cada área usa e oferece. Se uma área não comportar o módulo, o fluxo para antes do roteamento e diz quanto falta e onde ficam as fileiras próximas.
 
+### Densidade
+
+**O tamanho da área é o controle.** Uma fence/region espalha o módulo por igual pela área toda: as fileiras recebem a mesma carga, e a sobra de cada fileira é repartida entre os blocos (os vãos viram canais para as trilhas verticais). A densidade da área é calculada, não digitada:
+
+> densidade = o que o módulo precisa ÷ o que a área oferece (em mm de fileira)
+
+Área maior = densidade menor = módulo mais espalhado; área menor = mais compacto (até ~90%, acima disso a verificação acusa que não cabe). O editor recalcula a densidade enquanto você arrasta ou redimensiona a área.
+
+Ajuste avançado: `"density"` numa fence/region fixa uma densidade **acima** da calculada. O módulo então se agrupa até essa ocupação onde a fiação o puxa, deixando o resto da área livre, como o *target density* das ferramentas de chip (`global_placement -density` no OpenROAD). `"density": 1` reproduz o comportamento antigo: blocos encostados à esquerda e nas primeiras fileiras. O editor mostra quando uma área tem densidade fixa e oferece um botão para voltar a calculá-la.
+
+Fora das fences/regions, os módulos sem área se agrupam a 80% das fileiras livres (`--density` muda isso; 1 = compacto). Sem floorplan, as regiões automáticas já saem justas (8% de folga), e a densidade só reparte essa folga dentro das fileiras.
+
+No `basic_top` em CMOS (floorplan do repositório), as duas formas saem 100% roteadas:
+
+| | HPWL | Trilhas / vias |
+|---|---:|---:|
+| densidade calculada (padrão) | 5171 mm | 1302 / 398 |
+| `"density": 1` em todas as áreas e `--density 1` (comportamento antigo) | 4686 mm | 1361 / 373 |
+
 **Verificação.** O passo 5/6 confere por conta própria que todo componente de um módulo está na sua fence/region, que nenhum de fora invadiu uma fence e que nada caiu num keepout.
 
 **No KiCad:** os keepouts viram *Rule Areas* (o DRC do KiCad passa a aplicá-los se você editar a placa). As áreas dos módulos são desenhadas em *User.Drawings*: fence com linha cheia, region tracejada, guide pontilhada (ou um círculo, para `near`).
@@ -183,22 +203,35 @@ Os módulos são caminhos de instância (`u_fa`, `u0.u2`), os mesmos da seção 
 ### Editor visual
 
 ```sh
-make fpedit PCB_TOP=basic_top
+make fpedit PCB_TOP=basic_top                        # abre o floorplan do basic_top
+make fpedit PCB_TOP=basic_top PCB_LIB=pcbflow/lib/rtl   # já com a família RTL no menu
 # ou
 PYTHONPATH=pcbflow python -m pcbflow.fpedit rtl/basic/basic_top.floorplan.json
+PYTHONPATH=pcbflow python -m pcbflow.fpedit          # sem arquivo: escolhe o top pelo Abrir…
 ```
 
 Abre um servidor local (só em `127.0.0.1`; `--host`/`--port` mudam isso) e o navegador padrão com o arquivo carregado. Se ele não existir, o editor começa vazio e o cria ao salvar; o `make fpedit` usa `<top>.floorplan.json` ao lado de `<top>.v`. Arraste as áreas para mover, os cantos para redimensionar; as setas movem 0,5 mm (Shift: 5 mm), Delete apaga, Ctrl+Z/Ctrl+Y desfazem/refazem e Ctrl+S salva. Os campos `_comment` do arquivo são preservados.
 
-Para desenhar as fileiras, o placement e a capacidade de cada área, o editor lê o `placement.json` que toda rodada grava em `build/pcb/<top>_*/`. Basta um `make pcb-stat` (só a síntese, bem mais rápido) ou um `make pcb`, com ou sem floorplan: a grade e o quanto cada módulo precisa vêm da síntese e não dependem do floorplan. Para um projeto novo:
+**Menu do fluxo.** A barra de cima roda o fluxo sem sair do navegador:
+
+- **Abrir…** navega pelas pastas do projeto, mostra os `.v`/`.sv` e, ao escolher um arquivo, os módulos declarados nele; o escolhido vira o top. O floorplan fica em `<top>.floorplan.json` ao lado do fonte (ou o que já existir em `rtl/`). Um top fora de `rtl/` ou em `.sv` entra no `make` por `PCB_SRC_EXTRA`.
+- **Família** e **Camadas** escolhem a rodada (`build/pcb/<top>_<família>[_2l]/`) que o editor desenha e que os botões geram.
+- **① Síntese** roda `make pcb-stat`: mede os módulos e a grade de fileiras.
+- **② Placement** roda `make pcb-place`: síntese + placement com o floorplan, sem rotear. É o ciclo rápido para ajustar as áreas vendo os componentes no lugar.
+- **③ Gerar PCB** roda `make pcb`: placa roteada e projeto KiCad; no fim, o link *report.md* abre o relatório.
+
+Antes de rodar, o editor salva o floorplan. O log aparece ao vivo no painel de baixo (clique para abrir), e uma execução por vez pode ser cancelada: o cancelamento derruba a árvore inteira de processos (`make`, `python`, `yosys`, `vvp`), e ela também morre se o editor for fechado. O comando é montado pelo servidor a partir de listas fechadas (alvo, família, camadas), nunca de texto vindo da página.
+
+Para desenhar as fileiras, o placement e a capacidade de cada área, o editor lê o `placement.json` que toda rodada grava. A grade e o quanto cada módulo precisa vêm da síntese e não dependem do floorplan, então basta a ① Síntese para começar; o placement por baixo aparece depois da ② ou da ③. Pelo terminal, o mesmo ciclo é:
 
 ```sh
-make pcb-stat PCB_TOP=basic_top PCB_LIB=pcbflow/lib/rtl   # síntese: mede os módulos
-make fpedit   PCB_TOP=basic_top                            # desenha vendo o tamanho mínimo
-make pcb      PCB_TOP=basic_top PCB_LIB=pcbflow/lib/rtl    # fluxo completo com o floorplan
+make pcb-stat  PCB_TOP=basic_top PCB_LIB=pcbflow/lib/rtl   # síntese: mede os módulos
+make fpedit    PCB_TOP=basic_top                            # desenha vendo o tamanho mínimo
+make pcb-place PCB_TOP=basic_top PCB_LIB=pcbflow/lib/rtl    # placement com o floorplan, sem rotear
+make pcb       PCB_TOP=basic_top PCB_LIB=pcbflow/lib/rtl    # fluxo completo com o floorplan
 ```
 
-O `pcb-stat` grava na mesma pasta do `make pcb` correspondente, então substitui o `placement.json` dele: o editor mostra as fileiras e a capacidade, mas não o placement por baixo até o próximo `make pcb`. Com várias rodadas (famílias ou camadas diferentes), a lista *Rodada* troca entre elas (`--run` escolhe pela linha de comando), e o editor avisa quando um fonte Verilog mudou depois da rodada. A verificação usa as mesmas funções do fluxo: o que o editor aprova o `make pcb` aceita. Sem rodada, ele só confere o formato.
+Os três alvos gravam na mesma pasta, então cada um substitui o `placement.json` do anterior; a rodada só de síntese mostra fileiras e capacidade, sem o placement por baixo. O editor avisa quando um fonte Verilog mudou depois da rodada. A verificação usa as mesmas funções do fluxo: o que o editor aprova o `make pcb` aceita. Sem rodada, ele só confere o formato.
 
 ## Placa de 2 camadas
 

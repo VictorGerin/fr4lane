@@ -22,10 +22,42 @@
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
-       display: grid; grid-template-rows: auto 1fr; }
+       display: grid; grid-template-rows: auto auto 1fr auto; }
 header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 12px;
          background: var(--panel); border-bottom: 1px solid var(--line); }
-header .file { font-weight: 600; margin-right: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40vw; }
+header.flow { padding: 6px 12px; }
+header .top { font-weight: 700; font-size: 14px; }
+header .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 4px; }
+header .file { color: var(--muted); margin-right: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40vw; }
+.step { display: inline-flex; align-items: center; gap: 5px; }
+.step b { display: inline-grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; font-size: 11px;
+          background: var(--line); color: var(--text); }
+#jobStatus { color: var(--muted); }
+#jobStatus.running { color: var(--accent); }
+#jobStatus.ok { color: var(--ok); }
+#jobStatus.fail, #jobStatus.cancelled { color: var(--bad); }
+#logPane { background: var(--panel); border-top: 1px solid var(--line); min-width: 0; }
+#logBar { display: flex; gap: 10px; align-items: center; padding: 4px 12px; cursor: pointer; user-select: none; }
+#logBar .last { flex: 1; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                font: 12px ui-monospace, Consolas, monospace; }
+#log { display: none; margin: 0; height: 30vh; overflow: auto; padding: 6px 12px; border-top: 1px solid var(--line);
+       font: 12px/1.45 ui-monospace, Consolas, monospace; white-space: pre-wrap; word-break: break-all; }
+#logPane.open #log { display: block; }
+#log .e { color: var(--bad); font-weight: 600; }
+#log .s { color: var(--accent); }
+#log .c { color: var(--muted); }
+dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 0;
+         width: min(720px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgb(0 0 0 / .35); }
+dialog .head { padding: 10px 14px; border-bottom: 1px solid var(--line); font-weight: 600; }
+dialog .crumbs { padding: 6px 14px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 2px; }
+dialog .crumbs a { color: var(--accent); cursor: pointer; }
+dialog .cols { display: grid; grid-template-columns: 1fr 1fr; height: 340px; }
+dialog .cols > div { overflow-y: auto; padding: 6px; }
+dialog .cols > div + div { border-left: 1px solid var(--line); }
+dialog .foot { display: flex; gap: 8px; justify-content: flex-end; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line); }
+dialog .foot .hint { flex: 1; }
+@media (max-width: 560px) { dialog .cols { grid-template-columns: 1fr; height: 60vh; } dialog .cols > div + div { border-left: 0; border-top: 1px solid var(--line); } }
 header .dirty { color: var(--guide); }
 header .sp { flex: 1; }
 button, select, input { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
@@ -53,8 +85,9 @@ aside h3:first-child { margin-top: 0; }
 .list .item.sel { outline: 1.5px solid var(--sel); }
 .swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; }
 .usage { margin: 6px 0; }
-.usage .bar { height: 7px; border-radius: 4px; background: var(--line); overflow: hidden; margin-top: 2px; }
+.usage .bar { position: relative; height: 7px; border-radius: 4px; background: var(--line); overflow: hidden; margin-top: 2px; }
 .usage .bar > div { height: 100%; }
+.usage .dens { font-size: 11px; color: var(--muted); margin-top: 1px; }
 .muted { color: var(--muted); }
 .hint { color: var(--muted); font-size: 12px; }
 #toast { position: absolute; left: 12px; bottom: 12px; background: var(--panel); border: 1px solid var(--line);
@@ -63,6 +96,20 @@ aside h3:first-child { margin-top: 0; }
 </style>
 </head>
 <body>
+<header class="flow">
+  <button id="openBtn" title="Escolher o arquivo .v/.sv e o módulo top">Abrir…</button>
+  <span class="top" id="topName">—</span>
+  <span class="muted" id="srcName"></span>
+  <span class="sep"></span>
+  <label class="muted">Família <select id="family"></select></label>
+  <label class="muted">Camadas <select id="layers"><option value="4">4</option><option value="2">2</option></select></label>
+  <span class="sep"></span>
+  <button data-job="stat" class="step" title="make pcb-stat: síntese, mede os módulos e a grade de fileiras"><b>1</b>Síntese</button>
+  <button data-job="place" class="step" title="make pcb-place: síntese + placement com o floorplan, sem rotear"><b>2</b>Placement</button>
+  <button data-job="pcb" class="step" title="make pcb: fluxo completo, placa roteada e projeto KiCad"><b>3</b>Gerar PCB</button>
+  <button id="cancelJob" disabled title="Interromper a execução">■ Cancelar</button>
+  <span id="jobStatus"></span>
+</header>
 <header>
   <span class="file" id="file"></span><span class="dirty" id="dirty"></span>
   <button data-add="fence" title="Membros dentro, ninguém de fora entra">+ Fence</button>
@@ -70,7 +117,7 @@ aside h3:first-child { margin-top: 0; }
   <button data-add="guide" title="Preferência: custo no placement">+ Guide</button>
   <button data-add="keepout" title="Área proibida para componentes e/ou trilhas">+ Keepout</button>
   <span class="sp"></span>
-  <label class="muted">Rodada <select id="run"></select></label>
+  <span class="muted" id="runName"></span>
   <label class="muted"><input type="checkbox" id="showParts" checked> placement</label>
   <button id="fit" title="Enquadrar (F)">Enquadrar</button>
   <button id="undo" title="Desfazer (Ctrl+Z)">↶</button>
@@ -110,6 +157,23 @@ aside h3:first-child { margin-top: 0; }
     <div id="mods" class="list"></div>
   </aside>
 </main>
+<section id="logPane">
+  <div id="logBar" title="Mostrar/ocultar o log">
+    <span id="logArrow">▸</span><b>Log</b><span class="last" id="logLast">nenhuma execução ainda</span>
+    <a id="reportLink" target="_blank" style="display: none" onclick="event.stopPropagation()">report.md</a>
+  </div>
+  <pre id="log"></pre>
+</section>
+<dialog id="openDlg">
+  <div class="head">Abrir top</div>
+  <div class="crumbs" id="crumbs"></div>
+  <div class="cols"><div id="fsList" class="list"></div><div id="modList" class="list"></div></div>
+  <div class="foot">
+    <span class="hint" id="openHint">Escolha um arquivo .v/.sv e o módulo top.</span>
+    <button id="openCancel">Cancelar</button>
+    <button id="openOk" class="primary" disabled>Abrir</button>
+  </div>
+</dialog>
 <datalist id="modPaths"></datalist>
 <script>
 "use strict";
@@ -122,6 +186,7 @@ const DASH = { fence: "", region: "1.2 0.8", guide: "0.3 0.6" };
 let state = null;            // /api/state
 let data = null;             // floorplan em edição (o próprio JSON, preserva _comment)
 let run = null;              // placement.json da rodada escolhida
+let runName = null;          // pasta dela em build/pcb/
 let result = null;           // /api/check
 let sel = null;              // {kind: "mod", key} | {kind: "ko", idx}
 let view = null;             // {x, y, w, h} em mm
@@ -183,6 +248,13 @@ function selected() {
   return k ? { ...sel, obj: k, type: "keepout" } : null;
 }
 function isSel(it) { return sel && sel.kind === it.kind && (it.kind === "mod" ? sel.key === it.key : sel.idx === it.idx); }
+// densidade de uma fence/region para os rótulos: "31%", ou "90% fixa"
+function densLabel(it) {
+  if (it.kind !== "mod" || it.type === "guide" || !result) return "";
+  const u = result.usage.find(x => x.path === it.key);
+  if (!u) return "";
+  return `${Math.round((it.obj.density != null ? it.obj.density : u.util) * 100)}%${it.obj.density != null ? " fixa" : ""}`;
+}
 function labelOf(it) {
   if (it.kind === "ko") return it.obj.name || `keepout${it.idx + 1}`;
   const t = run && run.module_types && run.module_types[it.key];
@@ -299,7 +371,8 @@ function renderAreas() {
     // rótulo acima da borda: dentro dela a barra da primeira fileira o cobriria
     const t = el("text", { x: x0 + (it.obj.near ? 2.5 : 0.3), y: y0 + (it.obj.near ? 0.8 : -0.7), "font-size": 2.2, fill: color,
                            "font-weight": 600, "pointer-events": "none" }, grp);
-    t.textContent = `${labelOf(it)} [${it.type}]`;
+    const dl = densLabel(it);
+    t.textContent = `${labelOf(it)} [${it.type}${dl ? " · " + dl : ""}]`;
     if (it.kind === "ko") {
       const what = (it.obj.what || ["place", "route"]).map(w => w === "place" ? "comp." : "trilhas").join(" + ");
       const layers = (it.obj.layers || ["F.Cu", "B.Cu"]).join(", ");
@@ -331,6 +404,20 @@ function numInput(value, onchange, step = 0.5) {
     const v = parseFloat(e.target.value); if (!isNaN(v)) onchange(v); else renderPanel(); } });
 }
 const fmtIn = v => String(Math.round(v * 1000) / 1000);
+// densidade de uma fence/region: calculada pelo tamanho da área (o módulo se
+// espalha por ela toda); "density" no arquivo é um ajuste avançado que agrupa
+function densityRow(key, m) {
+  const u = result && result.usage.find(x => x.path === key);
+  const pct = v => `${Math.round(v * 100)}%`;
+  if (m.density != null)
+    return h("div", {},
+      h("div", { class: "row" }, h("label", {}, "Densidade"), h("b", {}, pct(m.density)),
+        h("span", { class: "muted" }, "fixa no arquivo: agrupa o módulo")),
+      h("div", { class: "row" }, h("button", { onclick: () => edit(() => delete m.density) }, "Calcular pelo tamanho da área")));
+  return h("div", { class: "row", title: "O que o módulo precisa ÷ o que a área oferece. Aumente a área para espalhar, diminua para compactar." },
+    h("label", {}, "Densidade"), h("b", {}, u ? pct(u.util) : "—"),
+    h("span", { class: "muted" }, u ? `${fmt(u.need * 0.9)} de ${fmt(u.have)} mm de fileira` : "rode ① Síntese para calcular"));
+}
 
 function renderPanel() {
   // placa
@@ -360,6 +447,7 @@ function renderPanel() {
         h("div", { class: "row" }, h("button", { onclick: () => edit(() => { m.rect = [m.near[0] - 15, m.near[1] - 10, 30, 20].map(snap); delete m.near; }) }, "Usar retângulo")));
     } else {
       p.append(rectInputs(m));
+      if (m.type !== "guide") p.append(densityRow(it.key, m));
       if (m.type === "guide")
         p.append(h("div", { class: "row" }, h("button", { onclick: () => edit(() => { const b = boxOf(it); m.near = [snap((b[0] + b[2]) / 2), snap((b[1] + b[3]) / 2)]; delete m.rect; }) }, "Usar ponto (near)")));
     }
@@ -387,11 +475,12 @@ function renderPanel() {
 
   // verificação
   const c = $("checks"); c.innerHTML = "";
-  if (state && !state.runs.length)
-    c.append(h("div", { class: "msg warn" }, `Nenhuma rodada em build/pcb/${state.top}_*/. Rode make pcb-stat PCB_TOP=${state.top} (só a síntese) para ver fileiras e capacidade.`));
+  if (state && !state.top) { c.append(h("div", { class: "msg warn" }, "Nenhum top aberto: use o botão Abrir.")); return; }
   const ri = runInfo();
-  if (ri && ri.stale) c.append(h("div", { class: "msg warn" }, "Há Verilog mais novo que esta rodada: rode make pcb-stat de novo para atualizar fileiras e capacidade."));
-  if (ri && !ri.placed) c.append(h("div", { class: "msg ok" }, "Rodada só de síntese (make pcb-stat): fileiras e capacidade valem; o placement por baixo aparece depois de um make pcb."));
+  if (state && !ri)
+    c.append(h("div", { class: "msg warn" }, `Nenhuma rodada em build/pcb/${wantedRun()}/. Rode ① Síntese para ver fileiras e capacidade.`));
+  if (ri && ri.stale) c.append(h("div", { class: "msg warn" }, "Há Verilog mais novo que esta rodada: rode ① Síntese de novo para atualizar fileiras e capacidade."));
+  if (ri && !ri.placed) c.append(h("div", { class: "msg ok" }, "Rodada só de síntese: fileiras e capacidade valem; o placement por baixo aparece depois de ② Placement."));
   if (state && state.load_error) c.append(h("div", { class: "msg err" }, `O arquivo no disco não é JSON válido: ${state.load_error}. Salvar vai substituí-lo.`));
   if (result) {
     for (const e of result.errors) c.append(h("div", { class: "msg err" }, e.replace(/^[^:]+\.json: /, "")));
@@ -399,10 +488,14 @@ function renderPanel() {
     for (const u of result.usage) {
       const pct = u.have > 0 ? Math.min(100, u.need / u.have * 100) : 100;
       const color = u.ok ? "var(--ok)" : "var(--bad)";
+      const occ = Math.round(u.util * 100), dn = Math.round(u.density * 100);
+      const how = !u.path ? `livres, agrupados a ${dn}%` : u.fixed && u.density > u.util ? `fixa em ${dn}%: agrupa`
+                : "espalhado pela área";
       c.append(h("div", { class: "usage" },
         h("div", { class: "row", style: "justify-content: space-between; margin: 0" },
           h("span", {}, u.path || "módulos sem área"), h("span", { class: "muted" }, `precisa ${fmt(u.need)} / oferece ${fmt(u.have)} mm`)),
-        h("div", { class: "bar" }, h("div", { style: `width: ${pct}%; background: ${color}` }))));
+        h("div", { class: "bar" }, h("div", { style: `width: ${pct}%; background: ${color}` })),
+        h("div", { class: "dens" }, `densidade ${occ}% · ${how}`)));
     }
   }
 
@@ -413,7 +506,7 @@ function renderPanel() {
   for (const it2 of all)
     l.append(h("div", { class: "item" + (isSel(it2) ? " sel" : ""), onclick: () => select(it2) },
       h("span", { class: "swatch", style: `background: ${COLORS[it2.type]}` }), h("span", {}, labelOf(it2)),
-      h("span", { class: "muted" }, it2.type)));
+      h("span", { class: "muted" }, it2.type + (densLabel(it2) ? ` · ${densLabel(it2)}` : ""))));
 
   // módulos do projeto
   const md = $("mods"); md.innerHTML = "";
@@ -450,7 +543,14 @@ function moduleTree() {
   }
   return [...tot.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 }
-function runInfo() { const i = parseInt($("run").value); return state && !isNaN(i) ? state.runs[i] : null; }
+// rodada da família e das camadas do menu: a pasta padrão do fluxo, ou outra com os mesmos dados
+function wantedRun() { return `${state.top}_${$("family").value}${$("layers").value === "2" ? "_2l" : ""}`; }
+function pickRun() {
+  if (!state || !state.top) return null;
+  const fam = $("family").value, ly = parseInt($("layers").value);
+  return state.runs.find(r => r.name === wantedRun()) || state.runs.find(r => r.family === fam && r.layers === ly) || null;
+}
+function runInfo() { return state && runName ? state.runs.find(r => r.name === runName) || null : null; }
 
 // ---------------------------------------------------------------- edição
 function select(it) { sel = it ? (it.kind === "mod" ? { kind: "mod", key: it.key } : { kind: "ko", idx: it.idx }) : null; renderAreas(); renderHandles(); renderPanel(); }
@@ -544,6 +644,7 @@ window.addEventListener("mousemove", ev => {
     o.rect.splice(0, 4, x0, y0, x1 - x0, y1 - y0);
   }
   renderAreas(); renderHandles();
+  scheduleCheck();                      // densidade e capacidade ao vivo
 });
 window.addEventListener("mouseup", () => {
   if (!drag) return;
@@ -583,31 +684,193 @@ function scheduleCheck() { clearTimeout(checkTimer); checkTimer = setTimeout(run
 async function runCheck() {
   const seq = ++checkSeq;
   try {
-    const r = await api("/api/check", { data, run: run ? parseInt($("run").value) : null });
+    const r = await api("/api/check", { data, run: run ? runName : null });
     if (seq !== checkSeq) return;
     result = r;
   } catch (e) { result = { errors: [String(e.message || e)], usage: [], slots: [], bands: [] }; }
-  renderBoard(); renderRows(); renderPanel();
+  renderBoard(); renderRows(); renderAreas(); renderHandles(); renderPanel();
 }
 async function loadRun() {
-  const i = parseInt($("run").value);
-  run = isNaN(i) ? null : (await api("/api/run", { run: i })).run;
+  const ri = pickRun();
+  runName = ri ? ri.name : null;
+  run = runName ? (await api("/api/run", { run: runName })).run : null;
+  $("runName").textContent = ri ? `rodada ${ri.name} · ${ri.time}${ri.placed ? "" : " · só síntese"}${ri.stale ? " ⚠" : ""}`
+                                : state && state.top ? "sem rodada" : "";
+  $("runName").title = ri ? ri.dir : "";
   const dl = $("modPaths"); dl.innerHTML = "";
   if (run) for (const [p] of moduleTree()) dl.append(h("option", { value: p }));
   renderParts(); await runCheck(); renderAreas();
 }
+async function refreshRuns() { state.runs = (await api("/api/state")).runs; await loadRun(); }
+// devolve true se gravou
 async function save(force = false) {
+  if (!state || !state.top) { toast("Nenhum top aberto"); return false; }
   const clean = JSON.parse(JSON.stringify(data));
   if (!clean.keepouts.length) delete clean.keepouts;
   try {
     const r = await api("/api/save", { data: clean, mtime, force });
     if (r.conflict) {
       if (confirm("O arquivo mudou no disco depois que foi aberto. Sobrescrever com o que está no editor?")) return save(true);
-      return;
+      return false;
     }
-    mtime = r.mtime; setDirty(false);
+    mtime = r.mtime; state.exists = true; setDirty(false);
     toast(result && result.errors.length ? "Salvo — atenção: o fluxo ainda vai recusar (veja Verificação)" : "Salvo");
-  } catch (e) { toast("Não salvo: " + e.message.replace(/^[^:]+\.json: /, ""), 6000); }
+    return true;
+  } catch (e) { toast("Não salvo: " + e.message.replace(/^[^:]+\.json: /, ""), 6000); return false; }
+}
+
+// ---------------------------------------------------------------- top
+function applyState(s) {
+  state = s;
+  $("topName").textContent = s.top || "nenhum top";
+  $("srcName").textContent = s.src || ""; $("srcName").title = s.src || "";
+  $("file").textContent = s.file || ""; $("file").title = s.file || "";
+  document.title = s.top ? `${s.top} — floorplan` : "Editor de floorplan";
+  data = s.data; ensure(); mtime = s.mtime;
+  undoStack.length = 0; redoStack.length = 0; sel = null; result = null;
+  // densidade padrão no topo: gravada por uma versão anterior do editor, não existe mais
+  const legacy = "density" in data;
+  if (legacy) delete data.density;
+  setDirty(legacy); controls();
+  if (legacy) { toast("Removi a densidade padrão antiga do arquivo (agora é calculada por área): salve para gravar", 8000); return; }
+  if (s.load_error) toast("O floorplan no disco não é JSON válido; salvar vai substituí-lo", 6000);
+  else if (s.top && !s.exists) toast("Floorplan novo: será criado ao salvar", 4000);
+}
+
+let fsFile = null, fsTop = null, fsMods = [];
+async function openDialog() {
+  if (jobRunning) return;
+  fsFile = state.src; fsTop = state.top; fsMods = [];
+  const dir = state.src ? state.src.split("/").slice(0, -1).join("/") : "rtl";
+  await browse(dir).catch(() => browse(""));
+  if (fsFile) await pickFile(fsFile, fsTop); else renderMods();
+  $("openDlg").showModal();
+}
+async function browse(dir) {
+  const r = await api(`/api/fs?dir=${encodeURIComponent(dir)}`);
+  const parts = r.dir ? r.dir.split("/") : [];
+  const c = $("crumbs"); c.innerHTML = "";
+  c.append(h("a", { onclick: () => browse("") }, "projeto"));
+  parts.forEach((p, i) => c.append(h("span", { class: "muted" }, " / "), h("a", { onclick: () => browse(parts.slice(0, i + 1).join("/")) }, p)));
+  const l = $("fsList"); l.innerHTML = "";
+  if (r.dir) l.append(h("div", { class: "item", onclick: () => browse(parts.slice(0, -1).join("/")) }, h("span", { class: "muted" }, "↑ ..")));
+  for (const d of r.dirs) l.append(h("div", { class: "item", onclick: () => browse(r.dir ? `${r.dir}/${d}` : d) }, h("b", {}, d + "/")));
+  for (const f of r.files) {
+    const path = r.dir ? `${r.dir}/${f}` : f;
+    l.append(h("div", { class: "item" + (path === fsFile ? " sel" : ""), "data-path": path, onclick: () => pickFile(path) }, f));
+  }
+  if (!r.dirs.length && !r.files.length) l.append(h("div", { class: "hint" }, "Pasta sem .v/.sv."));
+}
+async function pickFile(path, top) {
+  fsFile = path;
+  $("fsList").querySelectorAll(".item").forEach(e => e.classList.toggle("sel", e.dataset.path === path));
+  try { fsMods = (await api("/api/modules", { file: path })).modules; }
+  catch (e) { fsMods = []; $("openHint").textContent = e.message; }
+  // padrão: o módulo com o nome do arquivo, ou o único do arquivo
+  const stem = path.split("/").pop().replace(/\.s?v$/, "");
+  fsTop = fsMods.includes(top) ? top : fsMods.includes(stem) ? stem : fsMods.length === 1 ? fsMods[0] : null;
+  renderMods();
+}
+function renderMods() {
+  const m = $("modList"); m.innerHTML = "";
+  if (!fsFile) m.append(h("div", { class: "hint" }, "Os módulos do arquivo escolhido aparecem aqui."));
+  else if (!fsMods.length) m.append(h("div", { class: "hint" }, "Nenhum módulo declarado neste arquivo."));
+  for (const name of fsMods)
+    m.append(h("div", { class: "item" + (name === fsTop ? " sel" : ""), title: "Duplo clique abre",
+                        onclick: () => { fsTop = name; renderMods(); }, ondblclick: () => { fsTop = name; confirmOpen(); } }, name));
+  $("openOk").disabled = !fsTop;
+  $("openHint").textContent = fsTop ? `top ${fsTop} — ${fsFile}` : fsFile ? "Escolha o módulo top." : "Escolha um arquivo .v/.sv e o módulo top.";
+}
+async function confirmOpen() {
+  if (!fsFile || !fsTop) return;
+  if (dirty) {
+    if (confirm(`Salvar as mudanças do floorplan de ${state.top} antes de trocar?`)) { if (!(await save())) return; }
+    else if (!confirm("Descartar as mudanças não salvas?")) return;
+  }
+  try {
+    const s = await api("/api/open", { file: fsFile, top: fsTop });
+    $("openDlg").close();
+    applyState(s); await loadRun(); fit(); renderAll();
+  } catch (e) { $("openHint").textContent = "Não abriu: " + e.message; }
+}
+
+// ---------------------------------------------------------------- execução do fluxo
+const JOB_NAMES = { stat: "Síntese", place: "Placement", pcb: "Gerar PCB" };
+const JOB_STATUS = { running: "rodando", ok: "concluído", fail: "falhou", cancelled: "cancelado" };
+let jobId = 0, jobSeen = 0, jobPolling = false, jobRunning = false;
+
+function controls() {
+  const noTop = !state || !state.top;
+  document.querySelectorAll("[data-job]").forEach(b => b.disabled = jobRunning || noTop);
+  $("openBtn").disabled = $("family").disabled = $("layers").disabled = jobRunning;
+  $("cancelJob").disabled = !jobRunning;
+}
+async function startJob(action) {
+  if (!state.top) { toast("Abra um top primeiro"); return; }
+  if (dirty && !(await save())) return;
+  if (action !== "stat" && run && result && result.errors.length &&
+      !confirm("A verificação acusa problemas neste floorplan e o fluxo deve parar com erro. Rodar mesmo assim?")) return;
+  try { await api("/api/job/start", { action, family: $("family").value, layers: parseInt($("layers").value) }); }
+  catch (e) { toast("Não iniciou: " + e.message, 6000); return; }
+  setLogOpen(true);
+  pollJob();
+}
+async function pollJob() {
+  if (jobPolling) return;
+  jobPolling = true;
+  try {
+    for (;;) {
+      const j = await api(`/api/job?id=${jobId}&since=${jobSeen}`);
+      if (j.id !== jobId) { $("log").textContent = ""; jobId = j.id; }
+      appendLog(j.lines); jobSeen = j.next;
+      const was = jobRunning;
+      renderJob(j);
+      if (j.status !== "running") { if (was) await jobDone(j); break; }
+      await new Promise(r => setTimeout(r, 400));
+    }
+  } catch (e) { toast("Sem resposta do servidor: " + e.message, 6000); }
+  finally { jobPolling = false; }
+}
+async function jobDone(j) {
+  if (j.status === "ok") toast(`${JOB_NAMES[j.action]} concluído`);
+  else if (j.status === "fail") { setLogOpen(true); toast(`${JOB_NAMES[j.action]} falhou: veja o log`, 6000); }
+  if (j.top === state.top) await refreshRuns();
+}
+function renderJob(j) {
+  jobRunning = j.status === "running";
+  controls();
+  const st = $("jobStatus");
+  st.className = j.status;
+  st.textContent = j.status === "idle" ? "" : `${JOB_NAMES[j.action]} (${j.run}): ${JOB_STATUS[j.status]} · ${fmtTime(j.elapsed)}`;
+  const rl = $("reportLink");
+  const show = j.action === "pcb" && (j.status === "ok" || j.status === "fail");
+  rl.style.display = show ? "" : "none";
+  if (show) rl.href = `/api/report?run=${encodeURIComponent(j.run)}`;
+}
+function fmtTime(s) { s = Math.round(s || 0); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; }
+const LOG_ERR = /\bERRO\b|ABORTADO|FALHOU|\berror\b|Error|\*\*\*/;
+function appendLog(lines) {
+  if (!lines.length) return;
+  const pre = $("log");
+  const atEnd = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20;
+  const frag = document.createDocumentFragment();
+  for (const line of lines) {
+    const cls = LOG_ERR.test(line) ? "e" : /^\[\d\/6\]|^Concluído/.test(line) ? "s" : /^\$ /.test(line) ? "c" : null;
+    const s = document.createElement("span");
+    if (cls) s.className = cls;
+    s.textContent = line + "\n";
+    frag.append(s);
+  }
+  pre.append(frag);
+  while (pre.childNodes.length > 5000) pre.firstChild.remove();
+  if (atEnd) pre.scrollTop = pre.scrollHeight;
+  const last = lines.filter(l => l.trim()).pop();
+  if (last) $("logLast").textContent = last.trim();
+}
+function setLogOpen(v) {
+  $("logPane").classList.toggle("open", v);
+  $("logArrow").textContent = v ? "▾" : "▸";
+  if (v) $("log").scrollTop = $("log").scrollHeight;
 }
 
 $("boardAuto").addEventListener("change", e => edit(() => {
@@ -617,25 +880,31 @@ $("boardAuto").addEventListener("change", e => edit(() => {
 for (const [id, k] of [["boardW", "width"], ["boardH", "height"]])
   $(id).addEventListener("change", e => { const v = parseFloat(e.target.value); if (v > 0 && data.board) edit(() => data.board[k] = v); else renderPanel(); });
 document.querySelectorAll("[data-add]").forEach(b => b.addEventListener("click", () => addArea(b.dataset.add)));
+document.querySelectorAll("[data-job]").forEach(b => b.addEventListener("click", () => startJob(b.dataset.job)));
 $("fit").onclick = fit; $("undo").onclick = undo; $("redo").onclick = redo; $("save").onclick = () => save();
 $("showParts").onchange = renderParts;
-$("run").onchange = loadRun;
+$("family").onchange = $("layers").onchange = () => loadRun();
+$("openBtn").onclick = () => openDialog().catch(e => toast("Erro: " + e.message, 6000));
+$("openCancel").onclick = () => $("openDlg").close();
+$("openOk").onclick = confirmOpen;
+$("cancelJob").onclick = () => api("/api/job/cancel", {}).catch(e => toast(e.message));
+$("logBar").onclick = () => setLogOpen(!$("logPane").classList.contains("open"));
 window.addEventListener("beforeunload", e => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
 window.addEventListener("resize", renderHandles);
 
 (async function init() {
-  state = await api("/api/state");
-  $("file").textContent = state.file; $("file").title = state.file;
-  document.title = `${state.top} — floorplan`;
-  data = state.data; ensure(); mtime = state.mtime;
-  if (!state.exists) toast("Arquivo novo: será criado ao salvar", 4000);
-  const rs = $("run"); rs.innerHTML = "";
-  if (!state.runs.length) rs.append(h("option", { value: "" }, "nenhuma"));
-  for (const r of state.runs) rs.append(h("option", { value: r.index, title: r.dir }, `${r.name} · ${r.time}${r.placed ? "" : " · só síntese"}${r.stale ? " ⚠" : ""}`));
+  const s = await api("/api/state");
+  const fam = $("family"); fam.innerHTML = "";
+  for (const f of s.families) fam.append(h("option", { value: f }, f));
+  fam.value = s.init.family || (s.families.includes("cmos") ? "cmos" : s.families[0]);
+  $("layers").value = String(s.init.layers || 4);
   view = { x: 0, y: 0, w: 100, h: 80 };
-  setDirty(false);
+  applyState(s);
   await loadRun();
   fit(); renderAll();
+  if (!s.make) toast("make não encontrado no PATH: os botões do fluxo não vão funcionar", 8000);
+  pollJob();                       // mostra a última execução, ou acompanha uma em andamento
+  if (!s.top) openDialog();
 })().catch(e => toast("Erro ao carregar: " + e.message, 10000));
 </script>
 </body>

@@ -24,6 +24,12 @@ Keepout: "place" proíbe componentes; "route" proíbe trilhas e vias nas camadas
 dadas. As restrições de módulo valem só para o posicionamento — fios de
 outros módulos podem atravessar uma fence; para impedir, use um keepout.
 
+Densidade: uma fence/region espalha o módulo pela área toda, e a densidade
+dela é calculada (o que o módulo precisa / o que a área oferece): o tamanho
+da área é o controle. "density" (0 a 1, só fence/region) é um ajuste
+avançado: com valor acima da calculada, o módulo se agrupa até essa ocupação
+onde a fiação o puxa; 1 encosta tudo à esquerda e em cima.
+
 Módulos são caminhos de instância (u_fa, u0.u2), os mesmos do report.md. Um
 caminho vale para todos os submódulos dele; se um submódulo também tiver
 regra, vale a mais específica.
@@ -47,6 +53,7 @@ class ModuleRule:
     path: str
     type: str
     rect: tuple            # (x0, y0, x1, y1) em mm
+    density: float = None  # ocupação-alvo das fileiras (None = calculada: espalha pela área)
 
 
 @dataclass
@@ -114,6 +121,12 @@ def _num(v, what, where):
         raise FloorplanError(f"{where}: '{what}' deve ser um número (mm)") from None
 
 
+def _density(v, where):
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 < v <= 1:
+        raise FloorplanError(f"{where}: 'density' deve ser um número de 0 (exclusive) a 1")
+    return float(v)
+
+
 def parse(data, path="floorplan"):
     """Valida um floorplan já lido do JSON (path só aparece nas mensagens)."""
     if not isinstance(data, dict):
@@ -143,7 +156,7 @@ def parse(data, path="floorplan"):
         where = f"{path}: módulo '{name}'"
         if not isinstance(m, dict):
             raise FloorplanError(f"{where}: esperado um objeto")
-        _keys(m, ("type", "rect", "near", "_comment"), where)
+        _keys(m, ("type", "rect", "near", "density", "_comment"), where)
         t = m.get("type")
         if t not in TYPES:
             raise FloorplanError(f"{where}: 'type' deve ser {', '.join(TYPES)}")
@@ -159,7 +172,12 @@ def parse(data, path="floorplan"):
             rect = _rect(m["rect"], where)
         else:
             raise FloorplanError(f"{where}: falta 'rect'")
-        fp.modules[name] = ModuleRule(name, t, rect)
+        density = None
+        if "density" in m:
+            if t == "guide":
+                raise FloorplanError(f"{where}: 'density' só vale para fence e region")
+            density = _density(m["density"], where)
+        fp.modules[name] = ModuleRule(name, t, rect, density)
 
     for i, k in enumerate(keepouts):
         name = k.get("name", f"keepout{i + 1}") if isinstance(k, dict) else ""

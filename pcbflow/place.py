@@ -49,6 +49,9 @@ class PlaceParams:
     module_weight: float = 2.0   # peso da net virtual que agrupa submódulos (0 = desliga)
     module_max_blocks: int = 400 # módulos maiores não ganham net virtual (custo do anelamento)
     guide_weight: float = 1.0    # 'guide': peso da distância de cada bloco até a área
+    density: float = 0.8         # ocupação-alvo das fileiras fora das fences/regions (1 = compacto,
+                                 # encostado à esquerda); elas espalham o módulo pela área toda
+    density_weight: float = 1.0  # força com que o anelamento respeita a ocupação-alvo
     seed: int = 1
 
 
@@ -214,13 +217,23 @@ def place(lib, design, params=None, rules=None, floorplan=None):
     py = [0.0] * n
     row_of = [0] * n
 
+    target, spread = fm["target"], fm["spread"]
+
     def layout_row(k):
+        # com ocupação-alvo < 1, a sobra da fileira é repartida entre os blocos
+        # (meio vão em cada ponta), em múltiplos da grade
         x, y = slots[k][0], slots[k][1]
+        gap = 0.0
+        if spread[k] and rows[k]:
+            free = slots[k][2] - sum(width[v] for v in rows[k])
+            if free > 0:
+                gap = math.floor(free / len(rows[k]) / g) * g
+                x += math.floor(gap / 2 / g) * g
         for v in rows[k]:
             px[v] = x + width[v] / 2
             py[v] = y
             row_of[v] = k
-            x += width[v]
+            x += width[v] + gap
 
     for k in range(n_rows):
         layout_row(k)
@@ -244,9 +257,13 @@ def place(lib, design, params=None, rules=None, floorplan=None):
 
     row_len = [sum(width[v] for v in row) for row in rows]
 
+    dw = params.density_weight
+
     def overflow(k):
         x = max(0.0, row_len[k] - slots[k][2])
-        return x * x * 2.0 + x * 10.0
+        # acima da ocupação-alvo: custo mais brando, que espalha sem forçar
+        t = max(0.0, row_len[k] - target[k]) if target[k] < slots[k][2] - 1e-6 else 0.0
+        return x * x * 2.0 + x * 10.0 + (t * t * 0.5 + t * 2.0) * dw
 
     net_cost = [hpwl(e) for e in range(len(members))]
     n_real = len(nets)
@@ -456,20 +473,29 @@ def place(lib, design, params=None, rules=None, floorplan=None):
 
 
 # ------------------------------------------------------- trechos: automático
-def _fill(order, ks, slots, width, rows, used=None):
-    """Preenche os trechos ks na ordem dada, em serpentina; devolve o que não coube."""
-    used = used if used is not None else {}
+def _fill(order, ks, room, width, rows, used):
+    """Preenche os trechos ks na ordem dada, cada um até room[k]; devolve o que não coube."""
     i = 0
     rest = []
     for v in order:
-        while i < len(ks) and used.get(ks[i], 0.0) + width[v] > slots[ks[i]][2]:
+        while i < len(ks) and used.get(ks[i], 0.0) + width[v] > room[ks[i]] + 1e-6:
             i += 1
         if i == len(ks):
             rest.append(v)
             continue
         rows[ks[i]].append(v)
         used[ks[i]] = used.get(ks[i], 0.0) + width[v]
-    for j in range(1, len(ks), 2):       # serpentina: vizinhos ficam próximos
+    return rest
+
+
+def _fill_area(order, ks, slots, target, width, rows, used):
+    """Distribuição inicial de uma área: as fileiras até a ocupação-alvo e o que
+    sobrar até a capacidade, em serpentina (vizinhos ficam próximos); devolve
+    o que não coube. O anelamento decide depois onde o módulo fica."""
+    cap = {k: slots[k][2] for k in ks}
+    rest = _fill(order, ks, target, width, rows, used)
+    rest = _fill(rest, ks, cap, width, rows, used)
+    for j in range(1, len(ks), 2):
         rows[ks[j]].reverse()
     return rest
 
@@ -552,14 +578,19 @@ def _auto_slots(blocks, width, geo):
     allowed = [reg_slots[region[v]] for v in range(n)]
     rows = [[] for _ in slots]
     order = _bfs_order(blocks)
+    # sem floorplan as regiões já saem justas (8% de folga): a meta é a capacidade,
+    # e a densidade só reparte essa folga dentro de cada fileira
+    target = [s[2] for s in slots]
+    used = {}
     for r in range(n_reg):
         ks = reg_slots[r]
-        rest = _fill([v for v in order if region[v] == r], ks, slots, width, rows)
+        rest = _fill_area([v for v in order if region[v] == r], ks, slots, target, width, rows, used)
         for v in rest:                      # não deve acontecer (8% de folga); vai pro último
             rows[ks[-1]].append(v)
     W_raw = geo.x0 + logic_w + geo.reserve_r
     H_raw = max(y0 + logic_h - geo.row_gap + params.margin, geo.min_h)
     return {"slots": slots, "allowed": allowed, "rows": rows, "owner": [names[region[v]] for v in range(n)],
+            "target": target, "spread": [params.density < 1.0] * len(slots),
             "W": _snap(W_raw + 0.5, 1.0), "H": _snap(H_raw + 0.5, 1.0), "y0": y0,
             "n_global": max(1, round(logic_h / geo.row_pitch)), "lx1": geo.x0 + logic_w,
             "n_regions": n_reg if n_reg > 1 else 0}
@@ -702,6 +733,27 @@ def declared_problems(geo, fplan, lay, need):
     return out
 
 
+def declared_density(geo, fplan, slots, need, default):
+    """Ocupação-alvo das fileiras por dono de trecho (fence/region ou "free"):
+    (densidade, ocupação real, meta em mm de cada trecho). Uma fence/region sem
+    "density" usa a ocupação real: espalha o módulo por igual pela área toda,
+    e o tamanho da área é o controle. Os trechos livres usam o padrão do fluxo.
+    A meta nunca fica abaixo da ocupação real, senão o módulo não caberia."""
+    have = {}
+    for s in slots:
+        have[s[3]] = have.get(s[3], 0.0) + s[2]
+    dens, util = {}, {}
+    for tag, h in have.items():
+        r = fplan.modules.get(tag) if tag != "free" else None
+        util[tag] = min(1.0, need.get(None if tag == "free" else tag, 0.0) / h) if h > 0 else 0.0
+        if r is None:
+            dens[tag] = default
+        else:
+            dens[tag] = r.density if r.density is not None else util[tag]
+    target = {k: s[2] * min(1.0, max(dens[s[3]], util[s[3]])) for k, s in enumerate(slots)}
+    return dens, util, target
+
+
 def _declared_slots(blocks, width, geo, fplan):
     n = len(blocks)
     modules = {b.module for b in blocks if b.module}
@@ -730,15 +782,18 @@ def _declared_slots(blocks, width, geo, fplan):
     shared.sort(key=lambda k: (slots[k][1], slots[k][0]))
     allowed = [by_tag.get(owner[v], []) if owner[v] else shared for v in range(n)]
 
+    dens, util, target = declared_density(geo, fplan, slots, need, geo.params.density)
+    spread = [dens[s[3]] < 1.0 for s in slots]
+
     rows = [[] for _ in slots]
     used = {}
     order = _bfs_order(blocks)
     for path in hard:
         ks = by_tag.get(path, [])
-        rest = _fill([v for v in order if owner[v] == path], ks, slots, width, rows, used)
+        rest = _fill_area([v for v in order if owner[v] == path], ks, slots, target, width, rows, used)
         for v in rest:
             rows[ks[-1]].append(v)
-    rest = _fill([v for v in order if owner[v] is None], shared, slots, width, rows, used)
+    rest = _fill_area([v for v in order if owner[v] is None], shared, slots, target, width, rows, used)
     for v in rest:                           # o anelamento acerta o excesso
         k = max(shared, key=lambda k: slots[k][2] - used.get(k, 0.0))
         rows[k].append(v)
@@ -753,7 +808,8 @@ def _declared_slots(blocks, width, geo, fplan):
     grid = (geo.y_top, geo.row_pitch, geo.block_h, n_global)
     usage = [(p, r.type, need.get(p, 0.0), have.get(p, 0.0)) for p, r in hard.items()]
     usage.append(("(sem área)", "", need.get(None, 0.0), have.get("free", 0.0)))
-    return {"slots": slots, "allowed": allowed, "rows": rows, "owner": owner, "W": W, "H": H, "y0": geo.y_top,
+    return {"slots": slots, "allowed": allowed, "rows": rows, "owner": owner, "target": target, "spread": spread,
+            "W": W, "H": H, "y0": geo.y_top,
             "n_global": n_global, "lx1": lx1, "guides": guides, "n_regions": len(hard), "usage": usage,
             "grid": grid}
 
