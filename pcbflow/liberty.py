@@ -242,6 +242,52 @@ def expr_vars(ast):
     return set().union(*(expr_vars(a) for a in ast[1:]))
 
 
+def eval_expr(ast, env):
+    k = ast[0]
+    if k == "var":
+        return env[ast[1]]
+    if k == "const":
+        return ast[1]
+    if k == "not":
+        return 1 - eval_expr(ast[1], env)
+    a, b = eval_expr(ast[1], env), eval_expr(ast[2], env)
+    return {"and": a & b, "or": a | b, "xor": a ^ b}[k]
+
+
+def same_function(a, pin_a, b, pin_b):
+    """As saídas pin_a de a e pin_b de b computam a mesma coisa? Combinacionais:
+    tabela-verdade. Flip-flops: o mesmo ff() e a mesma função do estado interno."""
+    ren_a, ren_b = {}, {}
+    if bool(a.ff) != bool(b.ff):
+        return False
+    if a.ff:
+        ren_a = {a.ff["iq"]: "$IQ", a.ff["iqn"]: "$IQN"}
+        ren_b = {b.ff["iq"]: "$IQ", b.ff["iqn"]: "$IQN"}
+        for key in ("clocked_on", "next_state", "clear", "preset"):
+            if (key in a.ff) != (key in b.ff):
+                return False
+            if key in a.ff and not _same_expr(a.ff[key], {}, b.ff[key], {}):
+                return False
+    return _same_expr(a.pins[pin_a]["function"], ren_a, b.pins[pin_b]["function"], ren_b)
+
+
+def _same_expr(fa, ren_a, fb, ren_b):
+    def renamed(ast, ren):
+        if ast[0] == "var":
+            return ("var", ren.get(ast[1], ast[1]))
+        if ast[0] == "const":
+            return ast
+        return (ast[0],) + tuple(renamed(x, ren) for x in ast[1:])
+    ea = renamed(parse_expr(fa), ren_a)
+    eb = renamed(parse_expr(fb), ren_b)
+    names = sorted(expr_vars(ea) | expr_vars(eb))
+    for k in range(2 ** len(names)):
+        env = {n: (k >> i) & 1 for i, n in enumerate(names)}
+        if eval_expr(ea, env) != eval_expr(eb, env):
+            return False
+    return True
+
+
 def to_verilog(ast, rename=lambda n: n):
     k = ast[0]
     if k == "var":

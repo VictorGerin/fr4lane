@@ -15,7 +15,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from . import cellcheck, check, drc, floorplan, kicad, netlist, place, route, synth
+from . import cellcheck, check, drc, drive, floorplan, kicad, netlist, place, route, sizing, synth
 from .layout import Rules
 from .library import Library, LibraryError
 
@@ -75,6 +75,8 @@ def main(argv=None):
     ap.add_argument("--place-only", action="store_true",
                     help="para após o placement (grava o placement.json, sem rotear nem gerar o KiCad)")
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--no-size", action="store_true",
+                    help="não troca as células pelas variantes de fan-out (fica o que o Yosys escolheu)")
     ap.add_argument("--no-drc", action="store_true",
                     help="não roda o DRC do KiCad (kicad-cli) sobre a placa gerada")
     args = ap.parse_args(argv)
@@ -109,6 +111,17 @@ def main(argv=None):
         for p in problems:
             log("  " + p)
         return 3
+    try:
+        el, drives = drive.library_drive(lib)
+        problems = drive.check_internal(lib, el, drives) if el else []
+        drive.reference_loads(lib, el, drives)
+    except ValueError as e:
+        problems = [str(e)]
+    if problems:
+        log("ERRO: drive em pior caso:")
+        for p in problems:
+            log("  " + p)
+        return 3
     liberty = out / "cells.lib"
     models = out / "cells_models.v"
     lib.write_liberty(liberty)
@@ -117,6 +130,11 @@ def main(argv=None):
     log(f"[1/6] Síntese Yosys de '{args.top}'")
     json_path, gates_v, stat, hier = synth.run_yosys(args.src, args.top, liberty, out, flatten=args.flatten)
     design = netlist.load_yosys_json(json_path, args.top, lib, hier)
+    sized = None
+    if lib.variants and not args.no_size:
+        sized = sizing.size_design(lib, design, el, drives)
+        log(f"      sizing: {len(sized.changed)} instâncias trocadas por variantes de fan-out"
+            + (f", {len(sized.unresolved)} sem variante que atenda" if sized.unresolved else ""))
     by_cell = Counter(c for c, _ in design.instances.values())
     kinds = Counter(lib.parts[p.model]["kind"] for p in design.parts)
     n_parts = len(design.parts)
@@ -126,9 +144,9 @@ def main(argv=None):
     mods = sorted({m for m in design.inst_module.values() if m})
     if mods:
         log(f"      {len(mods)} módulos: " + ", ".join(mods[:12]) + (" ..." if len(mods) > 12 else ""))
-    fanout = netlist.fanout_violations(lib, design)
+    fanout = [n for n in sizing.check_nets(lib, design, el, drives) if not n.ok]
     if fanout:
-        log(f"      AVISO: {len(fanout)} nets acima do max_fanout (veja report.md)")
+        log(f"      AVISO: {len(fanout)} nets com fan-out acima do que a saída aguenta (veja report.md)")
     if args.tb:
         log("[2/6] Simulação: netlist gate-level e de componentes")
         ok, text = run_sim(args.tb, [gates_v, models], out, "sim_gates")
@@ -209,7 +227,8 @@ def main(argv=None):
                 log(("      DRC do KiCad: " if i == 0 else "        ") + line)
         except RuntimeError as e:
             log(f"      DRC do KiCad: {e}")
-    _write_report(out / "report.md", args, design, board, by_cell, errors, unconnected, lib, fanout, drc_res)
+    _write_report(out / "report.md", args, design, board, by_cell, errors, unconnected, lib, fanout, drc_res,
+                  sized)
     log(f"Concluído em {time.time() - t0:.1f} s")
     return 0 if not errors and not unconnected and (drc_res is None or drc.ok(drc_res)) else 1
 
@@ -247,7 +266,8 @@ def _write_placement(path, args, lib, design, info, board=None, fplan=None):
     Path(path).write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
 
-def _write_report(path, args, design, board, by_cell, errors, unconnected, lib, fanout, drc_res=None):
+def _write_report(path, args, design, board, by_cell, errors, unconnected, lib, fanout, drc_res=None,
+                  sized=None):
     parts = Counter(fp.value for fp in board.footprints)
     L = [f"# Relatório pcbflow — `{design.top}`", "",
          f"- Fontes: {', '.join(args.src)}",
@@ -310,11 +330,25 @@ def _write_report(path, args, design, board, by_cell, errors, unconnected, lib, 
                  + ". Relatório completo em `drc.json`.")
         for line in drc.summary(drc_res, limit=50)[1:]:
             L.append(f"- {line}")
+    if sized:
+        L += ["", "## Dimensionamento por fan-out", ""]
+        if sized.changed:
+            L += ["| Instância | Yosys escolheu | Variante | Entradas alimentadas |", "|---|---|---|---:|"]
+            for inst, b, v, k in sized.changed:
+                L.append(f"| {inst} | {b} | {v} | {k} |")
+        else:
+            L.append("Nenhuma troca: as células escolhidas pelo Yosys já atendem às cargas.")
+        if sized.unresolved:
+            L.append("")
+            L.append("Sem variante que atenda (ficou a de maior folga): " + ", ".join(sized.unresolved))
     if fanout:
-        L += ["", "## Fan-out acima do limite", "", "| Net | Bloco que dirige | Célula | Cargas | Limite |",
-              "|---|---|---|---:|---:|"]
-        for net, blk, cell, k, lim in fanout:
-            L.append(f"| `{net}` | {blk} | {cell} | {k} | {lim} |")
+        L += ["", "## Fan-out acima do que a saída aguenta", "",
+              "| Net | Instância | Saída | Entradas | max_fanout | VOH pior caso | Ib / Ib necessária |",
+              "|---|---|---|---:|---:|---:|---:|"]
+        for n in fanout:
+            voh = f"{n.voh:.2f} V" if n.voh is not None else "—"
+            mg = f"{n.margin:.2f}" if n.margin is not None and n.margin != float("inf") else "—"
+            L.append(f"| `{n.net}` | {n.inst} | {n.cell}.{n.pin} | {n.sinks} | {n.limit or '—'} | {voh} | {mg} |")
     L += ["", "## Mapa de instâncias (Yosys -> placa)", "",
           "| Instância | Célula | Módulo | Nome no Yosys |", "|---|---|---|---|"]
     for inst, (cell, yname) in design.instances.items():

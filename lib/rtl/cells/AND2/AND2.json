@@ -1,0 +1,4 @@
+{
+  "description": "AND de 2 entradas RTL (NAND2 + inversor), fan-out 1–10",
+  "max_fanout": 10
+}

@@ -1,0 +1,9 @@
+/* NAND2 — NAND de 2 entradas RTL (NPNs em série) */
+library(rtl_NAND2) {
+  cell(NAND2) {
+    area : 5;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "!(A&B)"; }
+  }
+}

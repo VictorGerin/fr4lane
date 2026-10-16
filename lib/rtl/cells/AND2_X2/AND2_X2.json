@@ -1,0 +1,6 @@
+{
+  "description": "AND de 2 entradas com 2 saídas (NAND2 + 2 inversores), fan-out 10–20 (até 10 por saída)",
+  "variant_of": "AND2",
+  "outputs": {"Y": ["Y0", "Y1"]},
+  "max_fanout": 10
+}

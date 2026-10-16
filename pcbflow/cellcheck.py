@@ -10,23 +10,11 @@ from . import liberty
 from .netlist import Design, Port, expand, write_switch_level_verilog
 
 
-def _eval(ast, env):
-    k = ast[0]
-    if k == "var":
-        return env[ast[1]]
-    if k == "const":
-        return ast[1]
-    if k == "not":
-        return 1 - _eval(ast[1], env)
-    a, b = _eval(ast[1], env), _eval(ast[2], env)
-    return {"and": a & b, "or": a | b, "xor": a ^ b}[k]
-
-
 def _inactive_value(expr, pin):
     """Valor do pino que deixa clear/preset inativo (expressão de uma variável)."""
     ast = liberty.parse_expr(expr)
     for v in (0, 1):
-        if not _eval(ast, {pin: v}):
+        if not liberty.eval_expr(ast, {pin: v}):
             return v
     return 0
 

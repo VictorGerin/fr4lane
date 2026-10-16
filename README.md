@@ -65,6 +65,25 @@ Cada arquivo tem um papel, sem repetir informação dos outros:
 
 Uma subpasta sem `.lib` vira um subcircuito auxiliar: outras células podem usá-lo, mas o Yosys não o enxerga. `"dont_use": true` no JSON tira a célula da síntese sem impedir que ela seja usada dentro de outras.
 
+### Fan-out: drive em pior caso e variantes
+
+Cada saída aguenta um número finito de entradas. O fluxo controla isso em dois níveis:
+
+- **`max_fanout`** no `.json`: quantas entradas cada saída da célula pode alimentar (é a "faixa" da célula).
+- **Drive elétrico em pior caso**, para famílias que declaram `"electrical"` no `library.json` (hoje a RTL). Com a saída em 1, o pull-up (RL) alimenta as bases das cargas pelos resistores de base (RB). O `drive.py` calcula o nível alto com VDD mínimo, RL no máximo e RB no mínimo da tolerância, e confere se cada carga recebe corrente de base para saturar: `Ib ≥ folga · Ic / β mín.`. NPNs empilhados (NAND) entram com o Vce(sat) de cada um. β mín., Vbe e Vce(sat) ficam no NPN do `parts.json`; VDD, tolerância, folga e `voh_min` ficam em `"electrical"`. Nets internas das células também são conferidas: uma montagem subdimensionada é barrada antes da síntese.
+
+`python -m pcbflow.drive pcbflow/lib/rtl` mostra a capacidade de cada saída (em cargas de `reference_load`, ex.: `INV.A`), o `max_fanout` e a corrente estática.
+
+**Variantes.** Uma célula com `"variant_of": "<BASE>"` faz a mesma função da base com outra montagem, para outra faixa de fan-out. O Yosys só vê a base. Depois da síntese o fluxo troca cada instância pela variante **mais econômica** (menor corrente estática, depois menor área) em que todas as saídas passam nos dois critérios acima. Uma variante pode ter várias saídas no lugar de uma da base, cada uma com uma parte das cargas:
+
+```json
+{ "variant_of": "AND2", "outputs": {"Y": ["Y0", "Y1"]}, "max_fanout": 10 }
+```
+
+As entradas são divididas em fatias contíguas (por módulo e instância), de peso elétrico parecido. `Y0` fica com o nome da net original; as outras saídas ganham nets novas (`<net>.y1`...). A verificação confere que as saídas da variante fazem a mesma função que a da base, e a simulação de componentes (`--tb`) roda sobre a placa já dimensionada. O `report.md` lista as trocas e as nets que nem a variante mais forte atende. `--no-size` desliga as trocas.
+
+Atenção: o ABC escolhe células por função e área, sem saber de fan-out, e pode montar a lógica com outras portas (ex.: NAND2 + NOR2 em vez de AND2). Nesse caso a net que estoura é de uma célula sem variante, e o fluxo só avisa.
+
 ### Verificações automáticas da biblioteca
 
 A cada execução, antes da síntese:
@@ -81,7 +100,9 @@ A cada execução, antes da síntese:
 | Célula | CMOS (componentes) | RTL (componentes) |
 |---|---:|---:|
 | INV | 2 | 3 (1 NPN + 2 R) |
-| NAND2 / NAND3 | 4 / 6 | — |
+| NAND2 / NAND3 | 4 / 6 | 5 (NPNs em série) / — |
+| AND2 (NAND2 + INV, até 10 entradas) | — | 8 |
+| AND2_X2 (variante: NAND2 + 2 INV, até 2×10 entradas) | — | 11 |
 | NOR2 / NOR3 | 4 / 6 | 5 / 7 |
 | AOI21 / OAI21 | 6 | — |
 | BUF | 4 | 6 |
@@ -90,8 +111,8 @@ A cada execução, antes da síntese:
 
 Notas:
 - **CMOS sem portas de transmissão:** o diodo de corpo do MOSFET discreto impede que ele funcione como chave bidirecional.
-- **Por que só NOR e inversor no RTL:** a NOR é a porta natural dessa família, com transistores em paralelo. NAND em RTL exigiria NPNs empilhados, com margens ruins.
-- **Valores do RTL:** pull-up de 1 kΩ e resistor de base de 10 kΩ, a 5 V. Cada porta com saída em 0 consome cerca de 5 mA, e o fan-out fica limitado a 8 (`max_fanout`). O fluxo avisa no relatório as nets que passam do limite.
+- **NOR e NAND no RTL:** a NOR é a porta natural dessa família, com transistores em paralelo. A NAND2 empilha dois NPNs em série: a saída só vai a 0 com os dois saturados, e o nível baixo fica em ~2 Vce(sat) (~0,2–0,3 V), ainda abaixo do Vbe que liga a porta seguinte. Não há NAND3: com três NPNs empilhados a margem de ruído no 0 fica pequena demais.
+- **Valores do RTL:** pull-up de 1 kΩ e resistor de base de 10 kΩ, a 5 V. Cada porta com saída em 0 consome cerca de 5 mA, e o fan-out fica limitado a 8 (`max_fanout`); pelo cálculo de pior caso (β ≥ 110, folga 3×) o limite elétrico seria 15 cargas de inversor. O fluxo avisa no relatório as nets que passam do limite.
 
 ### Criar uma família nova
 

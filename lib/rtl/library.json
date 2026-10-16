@@ -16,6 +16,13 @@
     "capacitive_load_unit (1, pf);",
     "pulling_resistance_unit : \"1kohm\";"
   ],
+  "electrical": {
+    "vdd": [4.75, 5.25],
+    "resistor_tol": 0.05,
+    "overdrive": 3,
+    "voh_min": 1.5,
+    "reference_load": "INV.A"
+  },
   "decoupling": {
     "row": "CDEC",
     "bulk": "CBULK"

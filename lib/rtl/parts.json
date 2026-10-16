@@ -2,6 +2,9 @@
   "NPN": {
     "kind": "npn",
     "part": "BC548",
+    "beta_min": 110,
+    "vbe": 0.7,
+    "vce_sat": 0.2,
     "ref": "Q",
     "footprint": "Package_TO_SOT_THT:TO-92_Inline_Wide",
     "pins": {

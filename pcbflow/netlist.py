@@ -46,6 +46,7 @@ class Design:
     vdd: str
     gnd: str
     instances: dict = field(default_factory=dict)   # instância lógica -> (célula, nome yosys)
+    conns: dict = field(default_factory=dict)       # instância lógica -> {pino: net}
     inst_module: dict = field(default_factory=dict)  # instância lógica -> módulo (ex.: u_fa)
     modules: dict = field(default_factory=dict)      # módulo -> tipo Verilog (ex.: full_adder)
 
@@ -167,13 +168,20 @@ def load_yosys_json(path, top, lib, hier_path=None):
             counters["g"] += 1
             inst = f"U{counters['g']}"
         design.instances[inst] = (ctype, _clean(yname))
-        scope = _clean(scope_of(yname))
-        design.inst_module[inst] = scope
-        first = len(design.blocks)
-        expand(lib, design, ctype, inst, pins, inst, ctype)
-        for b in design.blocks[first:]:
-            b.module = scope
+        design.conns[inst] = pins
+        design.inst_module[inst] = _clean(scope_of(yname))
+    elaborate(lib, design)
     return design
+
+
+def elaborate(lib, design):
+    """(Re)expande as instâncias lógicas em blocos de componentes."""
+    design.blocks = []
+    for inst, (cell, _) in design.instances.items():
+        first = len(design.blocks)
+        expand(lib, design, cell, inst, design.conns[inst], inst, cell)
+        for b in design.blocks[first:]:
+            b.module = design.inst_module.get(inst, "")
 
 
 def expand(lib, design, subckt, inst, pinmap, group, group_cell):
@@ -208,27 +216,6 @@ def expand(lib, design, subckt, inst, pinmap, group, group_cell):
         child = lib.subckts[x.model]
         cmap = {cp: net(n) for cp, n in zip(child.pins, x.nodes)}
         expand(lib, design, x.model, f"{inst}.{x.name}", cmap, group, group_cell)
-
-
-def fanout_violations(lib, design):
-    """Nets cuja quantidade de cargas passa do max_fanout da célula que as dirige."""
-    driver = {}
-    for b in design.blocks:
-        for n in b.outputs:
-            driver[n] = b
-    loads = {}
-    for b in design.blocks:
-        for n in set(b.inputs):
-            loads[n] = loads.get(n, 0) + 1
-    out = []
-    for n, k in sorted(loads.items()):
-        b = driver.get(n)
-        if not b:
-            continue
-        limit = lib.meta_of(b.cell).get("max_fanout")
-        if limit and k > limit:
-            out.append((n, b.name, b.cell, k, limit))
-    return out
 
 
 # --------------------------------------------------------- simulação switch

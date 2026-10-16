@@ -1,0 +1,10 @@
+/* AND2_X2 — AND de 2 entradas com 2 saídas: NAND2 + 2 inversores (Y0 e Y1 fazem a mesma função) */
+library(rtl_AND2_X2) {
+  cell(AND2_X2) {
+    area : 11;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y0) { direction : output; function : "A&B"; }
+    pin(Y1) { direction : output; function : "A&B"; }
+  }
+}

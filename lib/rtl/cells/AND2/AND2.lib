@@ -1,0 +1,9 @@
+/* AND2 — AND de 2 entradas RTL (NAND2 + inversor) */
+library(rtl_AND2) {
+  cell(AND2) {
+    area : 8;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "A&B"; }
+  }
+}

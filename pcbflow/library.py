@@ -5,10 +5,17 @@
   cells/<CELULA>/
       <CELULA>.lib        o que a célula faz (Liberty) — é o que o Yosys vê
       <CELULA>.sp         como a célula é montada (.subckt SPICE)
-      <CELULA>.json       metadados (descrição, layout, max_fanout, dont_use...)
+      <CELULA>.json       metadados (descrição, layout, max_fanout, dont_use, variant_of...)
 
 Uma pasta sem .lib é um subcircuito auxiliar: pode ser usado por outras
 células (X...), mas não é oferecido ao Yosys.
+
+Variantes: uma célula com "variant_of": "<BASE>" faz a mesma função da base
+com outra montagem (resistores maiores, saídas duplicadas, buffers...). O
+Yosys só vê a base; depois da síntese o pcbflow troca cada instância pela
+variante mais econômica que ainda alimenta as suas cargas (sizing.py). Uma
+variante pode ter várias saídas para uma saída da base, cada uma com uma parte
+das cargas: "outputs": {"Y": ["Y0", "Y1"]}.
 """
 
 import json
@@ -69,6 +76,11 @@ class Library:
                     self.cells[c.name] = c
             for jf in sorted(d.glob("*.json")):
                 self.cell_meta[jf.stem] = json.loads(jf.read_text(encoding="utf-8"))
+        self.variants = {}        # base -> [base, variantes...]
+        for name in self.cells:
+            base = self.meta_of(name).get("variant_of")
+            if base:
+                self.variants.setdefault(base, []).append(name)
         problems = self.check()
         if problems:
             raise LibraryError("biblioteca inconsistente:\n  " + "\n  ".join(problems))
@@ -78,7 +90,17 @@ class Library:
         return self.cell_meta.get(cell, {})
 
     def usable(self, cell):
-        return not self.meta_of(cell).get("dont_use", False)
+        """A célula é oferecida ao Yosys? (variantes nunca: entram no sizing)"""
+        meta = self.meta_of(cell)
+        return not meta.get("dont_use", False) and not meta.get("variant_of")
+
+    def variant_group(self, base):
+        """A base e as suas variantes (as que podem substituí-la depois da síntese)."""
+        return [base] + self.variants.get(base, [])
+
+    def output_map(self, cell, base_pin):
+        """Saídas da célula (base ou variante) que fazem o papel da saída base_pin da base."""
+        return self.meta_of(cell).get("outputs", {}).get(base_pin, [base_pin])
 
     def part(self, element):
         return self.parts[element.model]
@@ -179,6 +201,35 @@ class Library:
                 extra = liberty.expr_vars(ast) - allowed
                 if extra:
                     p.append(f"{name}.lib: function de {pin} usa {sorted(extra)}")
+        for base, names in self.variants.items():
+            for v in names:
+                p += self._check_variant(base, v)
+        return p
+
+    def _check_variant(self, base, v):
+        if base not in self.cells:
+            return [f"{v}.json: variant_of '{base}', que não é uma célula com .lib"]
+        if self.meta_of(base).get("variant_of"):
+            return [f"{v}.json: variant_of '{base}', que já é variante de outra célula"]
+        b, c = self.cells[base], self.cells[v]
+        if set(b.inputs) != set(c.inputs):
+            return [f"{v}: entradas {sorted(c.inputs)} != entradas da base {base} {sorted(b.inputs)}"]
+        p = []
+        omap = self.meta_of(v).get("outputs", {})
+        for k in set(omap) - set(b.outputs):
+            p.append(f"{v}.json: outputs cita '{k}', que não é saída de {base}")
+        mapped = []
+        for bpin in b.outputs:
+            for vpin in self.output_map(v, bpin):
+                mapped.append(vpin)
+                if vpin not in c.pins or c.pins[vpin]["direction"] != "output":
+                    p.append(f"{v}: '{vpin}' (papel de {base}.{bpin}) não é saída de {v}")
+                elif not liberty.same_function(b, bpin, c, vpin):
+                    p.append(f"{v}.{vpin} não faz a mesma função que {base}.{bpin}")
+        for vpin in c.outputs:
+            if mapped.count(vpin) != 1:
+                p.append(f"{v}: a saída {vpin} deve fazer o papel de exatamente uma saída de {base} "
+                         f"(use \"outputs\" no {v}.json)")
         return p
 
     # ------------------------------------------------------------ geração
