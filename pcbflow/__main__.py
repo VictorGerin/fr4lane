@@ -15,7 +15,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from . import cellcheck, check, floorplan, kicad, netlist, place, route, synth
+from . import cellcheck, check, drc, floorplan, kicad, netlist, place, route, synth
 from .layout import Rules
 from .library import Library, LibraryError
 
@@ -75,6 +75,8 @@ def main(argv=None):
     ap.add_argument("--place-only", action="store_true",
                     help="para após o placement (grava o placement.json, sem rotear nem gerar o KiCad)")
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--no-drc", action="store_true",
+                    help="não roda o DRC do KiCad (kicad-cli) sobre a placa gerada")
     args = ap.parse_args(argv)
 
     # o nome da família (pasta da biblioteca) vai na pasta e nos arquivos do KiCad,
@@ -183,6 +185,8 @@ def main(argv=None):
     for e in errors[:10]:
         log("        " + e)
     log(f"      nets incompletas: {len(unconnected)}")
+    for n, c in sorted(unconnected.items())[:10]:
+        log(f"        {n}: {c} partes")
 
     log("[6/6] Projeto KiCad")
     name = tag
@@ -190,10 +194,24 @@ def main(argv=None):
     kicad.write_project(board, out / f"{name}.kicad_pro")
     kicad.write_bom(board, out / f"{name}_bom.csv")
     netlist.write_switch_level_verilog(lib, design, out / f"{args.top}_switch.v")
-    _write_report(out / "report.md", args, design, board, by_cell, errors, unconnected, lib, fanout)
     log(f"      {out / (name + '.kicad_pro')}")
+    # DRC do KiCad: a referência, porque lê o arquivo escrito com a geometria real
+    drc_res = None
+    cli = None if args.no_drc else drc.find_cli()
+    if args.no_drc:
+        log("      DRC do KiCad: pulado (--no-drc)")
+    elif not cli:
+        log("      DRC do KiCad: kicad-cli não encontrado (instale o KiCad 8+ ou defina PCBFLOW_KICAD_CLI)")
+    else:
+        try:
+            drc_res = drc.run(cli, out / f"{name}.kicad_pcb", out / "drc.json")
+            for i, line in enumerate(drc.summary(drc_res)):
+                log(("      DRC do KiCad: " if i == 0 else "        ") + line)
+        except RuntimeError as e:
+            log(f"      DRC do KiCad: {e}")
+    _write_report(out / "report.md", args, design, board, by_cell, errors, unconnected, lib, fanout, drc_res)
     log(f"Concluído em {time.time() - t0:.1f} s")
-    return 0 if not errors and not unconnected else 1
+    return 0 if not errors and not unconnected and (drc_res is None or drc.ok(drc_res)) else 1
 
 
 def _place_params(args):
@@ -229,7 +247,7 @@ def _write_placement(path, args, lib, design, info, board=None, fplan=None):
     Path(path).write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
 
-def _write_report(path, args, design, board, by_cell, errors, unconnected, lib, fanout):
+def _write_report(path, args, design, board, by_cell, errors, unconnected, lib, fanout, drc_res=None):
     parts = Counter(fp.value for fp in board.footprints)
     L = [f"# Relatório pcbflow — `{design.top}`", "",
          f"- Fontes: {', '.join(args.src)}",
@@ -284,6 +302,14 @@ def _write_report(path, args, design, board, by_cell, errors, unconnected, lib, 
         L.append(f"- net `{n}` em {c} partes")
     for e in errors[:50]:
         L.append(f"- {e}")
+    L += ["", "## DRC do KiCad", ""]
+    if drc_res is None:
+        L.append("Não rodou (kicad-cli não encontrado ou --no-drc).")
+    else:
+        L.append(("Aprovada: " if drc.ok(drc_res) else "**Reprovada**: ") + drc.summary(drc_res)[0]
+                 + ". Relatório completo em `drc.json`.")
+        for line in drc.summary(drc_res, limit=50)[1:]:
+            L.append(f"- {line}")
     if fanout:
         L += ["", "## Fan-out acima do limite", "", "| Net | Bloco que dirige | Célula | Cargas | Limite |",
               "|---|---|---|---:|---:|"]

@@ -13,24 +13,39 @@ def _rect_dist(a, b):
 
 
 class _Item:
-    __slots__ = ("kind", "net", "layers", "rect", "half", "ref")
+    __slots__ = ("kind", "net", "layers", "rect", "half", "ref", "obj")
 
-    def __init__(self, kind, net, layers, rect, half, ref):
+    def __init__(self, kind, net, layers, rect, half, ref, obj):
         self.kind, self.net, self.layers, self.rect, self.half, self.ref = kind, net, layers, rect, half, ref
+        self.obj = obj
 
 
 def _items(board):
     items = []
     for pad in board.pads():
         layers = ("F.Cu", "B.Cu") if pad.tht else ("F.Cu",)
-        items.append(_Item("pad", pad.net, layers, pad.bbox(), 0.0, f"{pad.fp.ref}.{pad.num}"))
+        items.append(_Item("pad", pad.net, layers, pad.bbox(), 0.0, f"{pad.fp.ref}.{pad.num}", pad))
     for t in board.tracks:
         r = (min(t.x1, t.x2), min(t.y1, t.y2), max(t.x1, t.x2), max(t.y1, t.y2))
-        items.append(_Item("track", t.net, (t.layer,), r, t.width / 2, f"trilha {t.layer} ({t.x1:.2f},{t.y1:.2f})"))
+        items.append(_Item("track", t.net, (t.layer,), r, t.width / 2,
+                           f"trilha {t.layer} ({t.x1:.2f},{t.y1:.2f})-({t.x2:.2f},{t.y2:.2f})", t))
     for v in board.vias:
         items.append(_Item("via", v.net, ("F.Cu", "B.Cu"), (v.x, v.y, v.x, v.y), v.size / 2,
-                           f"via ({v.x:.2f},{v.y:.2f})"))
+                           f"via ({v.x:.2f},{v.y:.2f})", v))
     return items
+
+
+def _gap(a, b):
+    """Folga entre dois itens de cobre (negativa = sobreposição). Pad contra
+    trilha ou via usa a forma real do pad; o resto, retângulos."""
+    if b.kind == "pad" and a.kind != "pad":
+        a, b = b, a
+    if a.kind == "pad" and b.kind == "track":
+        t = b.obj
+        return a.obj.seg_dist(t.x1, t.y1, t.x2, t.y2) - b.half
+    if a.kind == "pad" and b.kind == "via":
+        return a.obj.dist(b.obj.x, b.obj.y) - b.half
+    return _rect_dist(a.rect, b.rect) - a.half - b.half
 
 
 def _buckets(items, size=2.0):
@@ -74,7 +89,7 @@ def check_board(board):
                     continue
                 if a.kind == "pad" and b.kind == "pad" and a.ref.split(".")[0] == b.ref.split(".")[0]:
                     continue
-                gap = _rect_dist(a.rect, b.rect) - a.half - b.half
+                gap = _gap(a, b)
                 if a.net == b.net:
                     if gap <= 1e-6:
                         union(i, j)

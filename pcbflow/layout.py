@@ -1,5 +1,6 @@
 """Modelo físico da placa (footprints, pads, trilhas, vias) independente do KiCad."""
 
+import math
 import uuid
 from dataclasses import dataclass, field
 
@@ -32,6 +33,33 @@ class Pad:
 
     def bbox(self):
         return (self.x - self.w / 2, self.y - self.h / 2, self.x + self.w / 2, self.y + self.h / 2)
+
+    def corner_radius(self):
+        """Raio dos cantos do cobre: circle/oval arredondam o lado menor inteiro,
+        roundrect usa a mesma proporção (0,25) que o kicad.py escreve."""
+        m = min(self.w, self.h)
+        return {"circle": m / 2, "oval": m / 2, "roundrect": 0.25 * m}.get(self.shape, 0.0)
+
+    def dist(self, px, py):
+        """Distância de um ponto ao cobre do pad, pela forma real (0 dentro dele).
+        O retângulo envolvente não serve: no canto de um pad oval não há cobre."""
+        r = self.corner_radius()
+        dx = max(abs(px - self.x) - (self.w / 2 - r), 0.0)
+        dy = max(abs(py - self.y) - (self.h / 2 - r), 0.0)
+        return max(0.0, math.hypot(dx, dy) - r)
+
+    def seg_dist(self, x1, y1, x2, y2):
+        """Distância de um segmento (o eixo de uma trilha) ao cobre do pad. A
+        distância a um convexo é convexa ao longo da reta: busca ternária."""
+        f = lambda t: self.dist(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t)
+        a, b = 0.0, 1.0
+        for _ in range(40):
+            m1, m2 = a + (b - a) / 3, b - (b - a) / 3
+            if f(m1) <= f(m2):
+                b = m2
+            else:
+                a = m1
+        return min(f(0.0), f(1.0), f((a + b) / 2))
 
     @property
     def layers(self):

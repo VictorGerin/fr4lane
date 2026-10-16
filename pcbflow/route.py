@@ -111,9 +111,13 @@ class Router:
             layers = (0, 1) if pad.tht else (0,)
             term = set()
             for ix, iy, d in self._points_near(rect, track_r):
+                # chegada só onde há cobre: no canto do retângulo envolvente de um
+                # pad oval/redondo (os conectores ficam fora da grade) a trilha
+                # terminaria no vazio
+                inside = d <= 1e-9 and pad.dist(ix * g, iy * g) <= 1e-9
                 for layer in layers:
                     self._claim(self.static, self.node(layer, ix, iy), net)
-                    if d <= 1e-9:
+                    if inside:
                         term.add(self.node(layer, ix, iy))
             for ix, iy, d in self._points_near(rect, via_r):
                 self._claim(self.via_static, iy * self.nx + ix, net)
