@@ -21,8 +21,8 @@
     "bulk": "CBULK"
   },
   "placement": {
-    "part_gap": 0.6,
+    "part_gap": 1,
     "part_gap_2layer": 1.0,
-    "row_gap": 4.4
+    "row_gap": 7
   }
 }
