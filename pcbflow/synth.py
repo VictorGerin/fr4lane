@@ -1,9 +1,15 @@
 """Síntese com Yosys mapeando para a biblioteca de células discretas."""
 
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
+
+from .progress import Progress
+
+# "6. Executing ABC pass (...)" / "4.12. Executing OPT pass": passo do script e subpasso
+_STEP = re.compile(r"^(\d+)(?:\.(\d+))?\. Executing (.+?)(?: pass)?(?: \(.*)?\.?$")
 
 
 def find_yosys():
@@ -56,9 +62,25 @@ write_verilog -noattr -noexpr {v_out.as_posix()}
     tmp = (outdir / "tmp").resolve()
     tmp.mkdir(exist_ok=True)
     env = dict(os.environ, TMP=str(tmp), TEMP=str(tmp), TMPDIR=str(tmp))
-    with open(log, "w") as f:
-        r = subprocess.run([find_yosys(), "-q", "-s", str(ys)], stdout=f, stderr=subprocess.STDOUT, env=env)
-    if r.returncode != 0:
-        tail = log.read_text(errors="replace").splitlines()[-30:]
+    n_steps = sum(1 for l in script.splitlines() if l.strip())
+    # sem -q o Yosys numera cada comando do script: é por aí que se sabe o passo atual
+    with open(log, "w", encoding="utf-8") as f, Progress("síntese (Yosys)", tick=True) as pg:
+        proc = subprocess.Popen([find_yosys(), "-s", str(ys)], stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, env=env)
+        top = ""
+        for raw in proc.stdout:
+            line = raw.decode("utf-8", errors="replace")
+            f.write(line)
+            m = _STEP.match(line.strip())
+            if m:
+                name = m.group(3).split(":")[0].strip().rstrip(".")
+                if m.group(2) is None:
+                    top = name
+                    pg.update(info=f"passo {m.group(1)}/{n_steps}: {top}")
+                else:
+                    pg.update(info=f"passo {m.group(1)}/{n_steps}: {top} › {name}")
+        rc = proc.wait()
+    if rc != 0:
+        tail = log.read_text(encoding="utf-8", errors="replace").splitlines()[-30:]
         raise RuntimeError("Yosys falhou:\n" + "\n".join(tail))
     return json_out, v_out, stat_out, (None if flatten else hier_out)

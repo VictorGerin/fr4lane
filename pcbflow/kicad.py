@@ -93,7 +93,8 @@ def write_pcb(board, path, title=""):
         w(f"\t(gr_text {_q(title)} (at {_n(OX + 1)} {_n(OY - 1.5)} 0) (layer \"Cmts.User\") "
           f"(uuid {_q(new_uuid())}) (effects (font (size 1.5 1.5) (thickness 0.2)) (justify left)))")
 
-    # planos internos (In1 = GND, In2 = VDD), só na placa de 4 camadas. Preencher no KiCad com "B".
+    # planos internos (In1 = GND, In2 = VDD), só na placa de 4 camadas. Saem sem preenchimento;
+    # o DRC do fluxo (drc.py) os preenche e salva a placa. Com --no-drc, preencher no KiCad com "B".
     for layer, net in ((("In1.Cu", board.gnd), ("In2.Cu", board.vdd)) if board.layers >= 4 else ()):
         if net not in nid:
             continue

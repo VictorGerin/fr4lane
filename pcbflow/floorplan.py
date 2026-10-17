@@ -6,7 +6,7 @@ retângulos como [x, y, largura, altura]):
   {
     "board":   {"width": 160, "height": 120},              opcional
     "modules": {
-      "u_fa":   {"type": "fence",  "rect": [20, 10, 60, 40]},
+      "u_fa":   {"type": "fence",  "rect": [20, 10, 60, 40], "decoupling": true},
       "u_mux4": {"type": "region", "rect": [90, 10, 50, 40]},
       "u_dff":  {"type": "guide",  "near": [30, 90]}        ou "rect"
     },
@@ -29,6 +29,12 @@ dela é calculada (o que o módulo precisa / o que a área oferece): o tamanho
 da área é o controle. "density" (0 a 1, só fence/region) é um ajuste
 avançado: com valor acima da calculada, o módulo se agrupa até essa ocupação
 onde a fiação o puxa; 1 encosta tudo à esquerda e em cima.
+
+Desacoplamento: as fileiras livres (fora das áreas) levam um capacitor de
+desacoplamento cada, mesmo quando uma área as corta em vários trechos — o
+trilho de alimentação é o mesmo. Dentro de uma fence/region não há
+capacitor, a não ser com "decoupling": true (um no fim de cada trecho da
+área).
 
 Módulos são caminhos de instância (u_fa, u0.u2), os mesmos do report.md. Um
 caminho vale para todos os submódulos dele; se um submódulo também tiver
@@ -54,6 +60,7 @@ class ModuleRule:
     type: str
     rect: tuple            # (x0, y0, x1, y1) em mm
     density: float = None  # ocupação-alvo das fileiras (None = calculada: espalha pela área)
+    decoupling: bool = False  # capacitor de desacoplamento em cada trecho da área
 
 
 @dataclass
@@ -156,7 +163,7 @@ def parse(data, path="floorplan"):
         where = f"{path}: módulo '{name}'"
         if not isinstance(m, dict):
             raise FloorplanError(f"{where}: esperado um objeto")
-        _keys(m, ("type", "rect", "near", "density", "_comment"), where)
+        _keys(m, ("type", "rect", "near", "density", "decoupling", "_comment"), where)
         t = m.get("type")
         if t not in TYPES:
             raise FloorplanError(f"{where}: 'type' deve ser {', '.join(TYPES)}")
@@ -177,7 +184,12 @@ def parse(data, path="floorplan"):
             if t == "guide":
                 raise FloorplanError(f"{where}: 'density' só vale para fence e region")
             density = _density(m["density"], where)
-        fp.modules[name] = ModuleRule(name, t, rect, density)
+        decoupling = m.get("decoupling", False)
+        if not isinstance(decoupling, bool):
+            raise FloorplanError(f"{where}: 'decoupling' deve ser true ou false")
+        if decoupling and t == "guide":
+            raise FloorplanError(f"{where}: 'decoupling' só vale para fence e region")
+        fp.modules[name] = ModuleRule(name, t, rect, density, decoupling)
 
     for i, k in enumerate(keepouts):
         name = k.get("name", f"keepout{i + 1}") if isinstance(k, dict) else ""

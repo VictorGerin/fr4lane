@@ -257,6 +257,7 @@ class Job:
         self.dropped = 0
         self.status = "idle"            # idle | running | ok | fail | cancelled
         self.info = {}
+        self.progress = None            # último "@progress" da etapa em andamento
         self.winjob = None
 
     def running(self):
@@ -266,7 +267,8 @@ class Job:
         with self.lock:
             if self.running():
                 raise FloorplanError("já há uma execução em andamento")
-            env = dict(os.environ, PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8")
+            # PCBFLOW_PROGRESS: o fluxo manda o progresso em linhas "@progress {json}"
+            env = dict(os.environ, PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8", PCBFLOW_PROGRESS="1")
             kw = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
             try:
                 proc = subprocess.Popen(cmd, cwd=REPO, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -277,11 +279,21 @@ class Job:
             self.id += 1
             self.proc, self.lines, self.dropped, self.status = proc, ["$ " + " ".join(cmd[1:])], 0, "running"
             self.info = dict(info, t0=time.time(), t1=None, rc=None)
+            self.progress = None
         threading.Thread(target=self._pump, args=(proc, self.id), daemon=True).start()
 
     def _pump(self, proc, jid):
         for raw in proc.stdout:
             line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+            if line.startswith("@progress "):
+                # progresso não vai para o log: vira a barra da página
+                try:
+                    p = json.loads(line[len("@progress "):])
+                except ValueError:
+                    continue
+                with self.lock:
+                    self.progress = None if p.get("end") else p
+                continue
             with self.lock:
                 self.lines.append(line)
                 if len(self.lines) > self.MAX_LINES:
@@ -294,6 +306,7 @@ class Job:
                 return
             if self.status == "running":
                 self.status = "ok" if rc == 0 else "fail"
+            self.progress = None
             self.info.update(rc=rc, t1=time.time())
             self.proc = None
             if self.winjob:
@@ -329,6 +342,7 @@ class Job:
             t1 = info.get("t1") or time.time()
             return {"id": self.id, "status": self.status, "lines": self.lines[i:], "next": self.dropped + len(self.lines),
                     "elapsed": round(t1 - info["t0"], 1) if "t0" in info else None,
+                    "progress": self.progress,
                     **{k: info.get(k) for k in ("action", "top", "family", "layers", "run", "rc")}}
 
 
@@ -399,9 +413,10 @@ class Editor:
             self.path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
             return {"ok": True, "mtime": self.mtime()}
 
-    def start(self, action, family, layers):
+    def start(self, action, family, layers, sim=True):
         """Roda um alvo do make com o top, a família e as camadas do menu. O comando
-        é montado aqui, a partir de listas fechadas: a página não manda texto livre."""
+        é montado aqui, a partir de listas fechadas: a página não manda texto livre.
+        sim=False passa PCB_TB vazio: o fluxo pula a simulação com o testbench."""
         if not self.top:
             raise FloorplanError("nenhum top aberto")
         if action not in TARGETS:
@@ -410,6 +425,8 @@ class Editor:
             raise FloorplanError(f"família desconhecida: {family}")
         if layers not in (2, 4):
             raise FloorplanError("camadas: 2 ou 4")
+        if not isinstance(sim, bool):
+            raise FloorplanError("simulação: true ou false")
         make = find_make()
         if not make:
             raise FloorplanError("make não encontrado no PATH")
@@ -418,6 +435,8 @@ class Editor:
                f"PCB_ARGS=--layers {layers}"]
         if self.src and not default_source(self.src):
             cmd.append(f"PCB_SRC_EXTRA={rel(self.src)}")
+        if not sim:
+            cmd.append("PCB_TB=")
         name = f"{self.top}_{family}" + ("_2l" if layers == 2 else "")
         self.job.start(cmd, {"action": action, "top": self.top, "family": family, "layers": layers, "run": name})
         return {"ok": True}
@@ -500,7 +519,8 @@ def make_handler(ed, allowed_hosts):
                 elif u.path == "/api/open":
                     self._send(200, ed.open(req.get("file"), req.get("top")))
                 elif u.path == "/api/job/start":
-                    self._send(200, ed.start(req.get("action"), req.get("family"), req.get("layers")))
+                    self._send(200, ed.start(req.get("action"), req.get("family"), req.get("layers"),
+                                                  req.get("sim", True)))
                 elif u.path == "/api/job/cancel":
                     ed.job.cancel()
                     self._send(200, {"ok": True})

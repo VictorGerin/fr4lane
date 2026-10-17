@@ -20,6 +20,7 @@ import heapq
 import math
 
 from .layout import Track, Via
+from .progress import Progress
 
 FREE = -1
 BLOCK = -2
@@ -288,12 +289,22 @@ class Router:
         pres = 0.5
         todo = list(nets)
         conflicted = set()
+        prev = ""
         for it in range(max_iter):
             failed = []
-            for net in todo:
-                self._rip(net)
-                if not self._route_net(net, pres):
-                    failed.append(net)
+            # a 1ª iteração roteia todas as nets; as seguintes, só as em conflito.
+            # As nets vão da menor para a maior: o progresso pesa cada uma pelo
+            # tamanho (contar nets subestimaria o tempo das últimas)
+            w = [bbox_size(net) + 4 for net in todo]
+            total, acc = sum(w), 0
+            with Progress(f"roteamento: iteração {it + 1} (máx. {max_iter})", total=total,
+                          show_count=False) as pg:
+                for k, net in enumerate(todo):
+                    self._rip(net)
+                    if not self._route_net(net, pres):
+                        failed.append(net)
+                    acc += w[k]
+                    pg.update(acc, f"{k + 1}/{len(todo)} nets" + (f" · {prev}" if prev else ""))
             over = [i for i in range(self.n) if self.occ[i] > 1]
             for i in over:
                 self.hist[i] += 0.4
@@ -303,12 +314,23 @@ class Router:
                      f"nets em conflito={len(conflicted):4d}  falhas={len(failed)}")
             if not over and not failed:
                 break
+            prev = f"anterior: {len(conflicted)} nets em conflito"
             todo = sorted(conflicted | set(failed), key=bbox_size)
             pres *= 1.6
         # nets que continuam em conflito são descartadas (ficam no ratsnest)
         dropped = set(n for n in nets if n not in self.ok)
+        pg = Progress("roteamento: descartando nets que seguem em conflito", tick=True)
+        with pg:
+            self._drop_conflicts(nets, dropped, bbox_size, pg)
+        for key in nets:
+            for path in self.paths[key]:
+                self._emit_path(path, self.nets[self.jobs[key][0]])
+        return sorted(self._job_name(k) for k in dropped)
+
+    def _drop_conflicts(self, nets, dropped, bbox_size, pg):
         while True:
             over = [i for i in range(self.n) if self.occ[i] > 1]
+            pg.update(info=f"{len(over)} nós em conflito, {len(dropped)} nets descartadas")
             if not over:
                 break
             score = {}
@@ -322,10 +344,6 @@ class Router:
             self._rip(worst)
             self.paths[worst] = []
             dropped.add(worst)
-        for key in nets:
-            for path in self.paths[key]:
-                self._emit_path(path, self.nets[self.jobs[key][0]])
-        return sorted(self._job_name(k) for k in dropped)
 
     def _job_name(self, key):
         if isinstance(key, tuple):

@@ -26,7 +26,11 @@ PYTHONPATH=pcbflow python -m pcbflow --lib pcbflow/lib/rtl --top adder \
     --src rtl/RISC_V/ALU/adder.v --tb sim/testbenches/tb_adder.v
 ```
 
-Opções úteis: `--effort` (esforço do placement), `--row-gap`/`--part-gap` (densidade, em mm), `--route-iter`, `--max-parts`, `--seed`, `--floorplan arquivo.json` (veja [Floorplan](#floorplan-posição-dos-módulos-e-keepouts)), `--layers 2|4` (veja [Placa de 2 camadas](#placa-de-2-camadas)), `--synth-only`/`--place-only` (param depois da síntese ou do placement), `--density` (ocupação das fileiras fora das fences/regions, veja [Densidade](#densidade)), `--flatten` e `--module-weight` (veja [Módulos na placa](#módulos-na-placa)).
+Opções úteis: `--effort` (esforço do placement), `--row-gap`/`--part-gap` (densidade, em mm), `--route-iter`, `--max-parts`, `--seed`, `--floorplan arquivo.json` (veja [Floorplan](#floorplan-posição-dos-módulos-e-keepouts)), `--layers 2|4` (veja [Placa de 2 camadas](#placa-de-2-camadas)), `--synth-only`/`--place-only` (param depois da síntese ou do placement), `--density` (ocupação das fileiras fora das fences/regions, veja [Densidade](#densidade)), `--flatten` e `--module-weight` (veja [Módulos na placa](#módulos-na-placa)), `--fresh` (veja abaixo).
+
+**Placement reaproveitado.** Ao fim do placement o fluxo grava `place_cache.pkl` na pasta da rodada: o design sintetizado e dimensionado, a placa posicionada e as simulações que já rodaram. Na rodada seguinte (ex.: `make pcb-place` e depois `make pcb`), se nada que influencia esse resultado mudou, as etapas 0 a 3 são puladas e o fluxo vai direto ao roteamento: `[0-3/6] ... reaproveitados da rodada de <data>`. A impressão digital cobre o conteúdo dos fontes Verilog, os arquivos da família de células (e o `footprints.json`), o floorplan, as opções que mudam a placa (`--layers`, `--effort`, `--seed`, `--density`, `--row-gap`, `--part-gap`, `--module-weight`, `--flatten`, `--no-size`) e o código do pcbflow que roda até o placement; se algo mudou, o log diz o quê e o fluxo refaz tudo. Uma simulação que já rodou com o mesmo testbench não roda de novo. `--fresh` ignora o cache.
+
+**Progresso.** As etapas longas mostram o andamento: no terminal, uma linha reescrita no lugar; num arquivo ou pipe, uma linha a cada ~30 s. O anelamento do placement e cada iteração do roteamento têm porcentagem e estimativa do que falta (no roteamento, cada net pesa pelo tamanho, porque as maiores ficam por último); a síntese mostra o passo do Yosys (ex.: `passo 16/25: ABC`) e a simulação, a última linha do testbench. Cada etapa termina com o seu tempo (`etapa: 2 min 10 s`).
 
 ## Bibliotecas de células
 
@@ -206,6 +210,8 @@ Os módulos são caminhos de instância (`u_fa`, `u0.u2`), os mesmos da seção 
 
 Área maior = densidade menor = módulo mais espalhado; área menor = mais compacto (até ~90%, acima disso a verificação acusa que não cabe). O editor recalcula a densidade enquanto você arrasta ou redimensiona a área.
 
+**Desacoplamento:** cada fileira livre (fora das áreas) leva um capacitor de desacoplamento (`decoupling.row` do `library.json`), mesmo quando uma fence/region a corta em vários trechos: o trilho de alimentação é o mesmo. Dentro de uma fence/region não há capacitor por padrão. `"decoupling": true` na área põe um no fim de cada trecho dela, e o espaço dele é reservado. No editor é a caixa *Desacoplamento* da área.
+
 Ajuste avançado: `"density"` numa fence/region fixa uma densidade **acima** da calculada. O módulo então se agrupa até essa ocupação onde a fiação o puxa, deixando o resto da área livre, como o *target density* das ferramentas de chip (`global_placement -density` no OpenROAD). `"density": 1` reproduz o comportamento antigo: blocos encostados à esquerda e nas primeiras fileiras. O editor mostra quando uma área tem densidade fixa e oferece um botão para voltar a calculá-la.
 
 Fora das fences/regions, os módulos sem área se agrupam a 80% das fileiras livres (`--density` muda isso; 1 = compacto). Sem floorplan, as regiões automáticas já saem justas (8% de folga), e a densidade só reparte essa folga dentro das fileiras.
@@ -237,11 +243,12 @@ Abre um servidor local (só em `127.0.0.1`; `--host`/`--port` mudam isso) e o na
 
 - **Abrir…** navega pelas pastas do projeto, mostra os `.v`/`.sv` e, ao escolher um arquivo, os módulos declarados nele; o escolhido vira o top. O floorplan fica em `<top>.floorplan.json` ao lado do fonte (ou o que já existir em `rtl/`). Um top fora de `rtl/` ou em `.sv` entra no `make` por `PCB_SRC_EXTRA`.
 - **Família** e **Camadas** escolhem a rodada (`build/pcb/<top>_<família>[_2l]/`) que o editor desenha e que os botões geram.
+- **Simulação** (marcada por padrão) roda o testbench `tb_<top>.v`, se existir; desmarcada, o editor passa `PCB_TB=` ao `make` e a etapa é pulada.
 - **① Síntese** roda `make pcb-stat`: mede os módulos e a grade de fileiras.
 - **② Placement** roda `make pcb-place`: síntese + placement com o floorplan, sem rotear. É o ciclo rápido para ajustar as áreas vendo os componentes no lugar.
 - **③ Gerar PCB** roda `make pcb`: placa roteada e projeto KiCad; no fim, o link *report.md* abre o relatório.
 
-Antes de rodar, o editor salva o floorplan. O log aparece ao vivo no painel de baixo (clique para abrir), e uma execução por vez pode ser cancelada: o cancelamento derruba a árvore inteira de processos (`make`, `python`, `yosys`, `vvp`), e ela também morre se o editor for fechado. O comando é montado pelo servidor a partir de listas fechadas (alvo, família, camadas), nunca de texto vindo da página.
+Antes de rodar, o editor salva o floorplan. Ao lado do estado da execução, uma barra mostra a etapa em andamento, com porcentagem e estimativa quando a etapa as tem. Depois de um ② Placement, o ③ Gerar PCB reaproveita o placement se o floorplan e o resto não mudaram. O log aparece ao vivo no painel de baixo (clique para abrir), e uma execução por vez pode ser cancelada: o cancelamento derruba a árvore inteira de processos (`make`, `python`, `yosys`, `vvp`), e ela também morre se o editor for fechado. O comando é montado pelo servidor a partir de listas fechadas (alvo, família, camadas), nunca de texto vindo da página.
 
 Para desenhar as fileiras, o placement e a capacidade de cada área, o editor lê o `placement.json` que toda rodada grava. A grade e o quanto cada módulo precisa vêm da síntese e não dependem do floorplan, então basta a ① Síntese para começar; o placement por baixo aparece depois da ② ou da ③. Pelo terminal, o mesmo ciclo é:
 

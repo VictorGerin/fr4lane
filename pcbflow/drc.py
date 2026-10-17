@@ -6,8 +6,10 @@ Uso:
 
 É a verificação de referência: lê o .kicad_pcb que foi escrito (não o modelo
 interno do pcbflow) e usa a geometria real dos pads, então pega também erros
-da exportação. Os planos internos são preenchidos antes (--refill-zones), sem
-salvar a placa. Avisos esperados dos footprints aproximados (footprint
+da exportação. Os planos internos são preenchidos antes (--refill-zones) e a
+placa é salva já preenchida (--save-board): sem isso, ao abrir no KiCad, os
+planos de VDD/GND aparecem vazios e todo pad de alimentação fica pendente até
+alguém preencher as zonas (tecla B). Avisos esperados dos footprints aproximados (footprint
 diferente da biblioteca, texto, serigrafia) são contados mas não reprovam a
 placa; reprovam os itens desconectados e as violações de severidade erro.
 """
@@ -42,8 +44,12 @@ def run(cli, board, out_json):
     """Roda o DRC e devolve o resumo:
     {"unconnected": [texto], "errors": [texto], "warnings": Counter(tipo)}."""
     out_json = Path(out_json)
-    r = subprocess.run([cli, "pcb", "drc", "--format", "json", "--severity-all", "--refill-zones",
-                        "-o", str(out_json), str(board)], capture_output=True, text=True)
+    base = [cli, "pcb", "drc", "--format", "json", "--severity-all", "--refill-zones"]
+    tail = ["-o", str(out_json), str(board)]
+    r = subprocess.run(base + ["--save-board"] + tail, capture_output=True, text=True)
+    if r.returncode != 0 and "save-board" in (r.stderr + r.stdout):
+        # kicad-cli anterior ao --save-board (KiCad 8): o DRC roda, a placa fica sem preencher
+        r = subprocess.run(base + tail, capture_output=True, text=True)
     if r.returncode != 0 or not out_json.is_file():
         raise RuntimeError(f"kicad-cli falhou ({r.returncode}): {(r.stderr or r.stdout).strip()[-500:]}")
     d = json.loads(out_json.read_text(encoding="utf-8"))

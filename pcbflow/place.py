@@ -31,6 +31,7 @@ from types import SimpleNamespace
 
 from .floorplan import FloorplanError, contains, overlap
 from .layout import Board, Rules, Track, Via, footprint_from_library, pin_header
+from .progress import Progress
 
 
 @dataclass
@@ -328,18 +329,21 @@ def place(lib, design, params=None, rules=None, floorplan=None):
         temp = (sum(samples) / len(samples) or 1.0) * 2
         steps = 60
         per_step = max(1, moves // steps)
-        for _ in range(steps):
-            for _ in range(per_step):
-                u = try_move()
-                rs = {u[1], u[3]}
-                d, nc = evaluate(rs)
-                if d <= 0 or rng.random() < math.exp(-d / temp):
-                    for e, c in nc.items():
-                        net_cost[e] = c
-                else:
-                    undo_move(u)
-                    evaluate(rs)
-            temp *= 0.9
+        # cada passo faz o mesmo número de movimentos: a fração de passos é o progresso
+        with Progress(f"placement: anelamento de {n} blocos", total=steps) as pg:
+            for step in range(steps):
+                for _ in range(per_step):
+                    u = try_move()
+                    rs = {u[1], u[3]}
+                    d, nc = evaluate(rs)
+                    if d <= 0 or rng.random() < math.exp(-d / temp):
+                        for e, c in nc.items():
+                            net_cost[e] = c
+                    else:
+                        undo_move(u)
+                        evaluate(rs)
+                temp *= 0.9
+                pg.update(step + 1, f"HPWL {sum(net_cost[:n_real]):.0f} mm")
     owner = fm["owner"]
     # legalização: o anelamento só penaliza o excesso; aqui os blocos que
     # sobram numa fileira cheia vão para o trecho permitido mais próximo com espaço
@@ -368,7 +372,7 @@ def place(lib, design, params=None, rules=None, floorplan=None):
                             return True
         return False
 
-    for k in sorted(range(n_rows), key=lambda k: row_len[k] - slots[k][2], reverse=True):
+    def legalize_row(k):
         while row_len[k] - slots[k][2] > 0.01:
             best = None
             for v in rows[k]:
@@ -384,6 +388,13 @@ def place(lib, design, params=None, rules=None, floorplan=None):
                 move(best[1], k, best[2])
             elif not evict_guest(slots[k][3], k):
                 break
+
+    full = [k for k in sorted(range(n_rows), key=lambda k: row_len[k] - slots[k][2], reverse=True)
+            if row_len[k] - slots[k][2] > 0.01]
+    with Progress("placement: legalização das fileiras cheias", total=len(full)) as pg:
+        for i, k in enumerate(full):
+            legalize_row(k)
+            pg.update(i + 1)
     net_cost = [hpwl(e) for e in range(len(members))]
     over = [(k, row_len[k] - slots[k][2]) for k in range(n_rows) if row_len[k] - slots[k][2] > 0.01]
     if over and floorplan is not None:
@@ -430,9 +441,10 @@ def place(lib, design, params=None, rules=None, floorplan=None):
         fp.pad(dev["pins"]["2"]).net = design.gnd
         footprints.append(fp)
 
-    if dec_row:                          # um desacoplamento no fim de cada trecho
-        for sx, sy, cp, _ in slots:
-            decap(dec["row"], sx + cp + params.cell_gap, sy + block_h / 2)
+    if dec_row:                          # desacoplamento no fim dos trechos marcados
+        for sx, sy, cp, _, here in slots:
+            if here:
+                decap(dec["row"], sx + cp + params.cell_gap, sy + block_h / 2)
     if dec.get("bulk"):
         decap(dec["bulk"], left_x - 1.0, params.margin + 1.27 + len(left) * 2.54 + 4.0)
 
@@ -574,7 +586,7 @@ def _auto_slots(blocks, width, geo):
         nr, cp, _, _ = reg_size[r]
         for k in range(nr):
             reg_slots[r].append(len(slots))
-            slots.append((geo.x0 + reg_xy[r][0], y0 + reg_xy[r][1] + k * geo.row_pitch, cp, names[r]))
+            slots.append((geo.x0 + reg_xy[r][0], y0 + reg_xy[r][1] + k * geo.row_pitch, cp, names[r], True))
     allowed = [reg_slots[region[v]] for v in range(n)]
     rows = [[] for _ in slots]
     order = _bfs_order(blocks)
@@ -600,7 +612,10 @@ def _auto_slots(blocks, width, geo):
 def declared_rows(geo, fplan, W, H, min_width):
     """Fileiras de uma placa W x H cortadas pelas áreas do floorplan: devolve
     (trechos, n_fileiras, x final da lógica). Cada trecho é (x, y, capacidade,
-    dono), com dono = caminho da fence/region ou "free". geo é um _Geo ou
+    dono, desacoplamento), com dono = caminho da fence/region ou "free".
+    Desacoplamento: um capacitor por fileira nos trechos livres (no último que
+    comporta um bloco e o capacitor: o trilho é o mesmo para a fileira toda) e
+    um por trecho das áreas com "decoupling": true; só esses reservam o espaço. geo é um _Geo ou
     qualquer objeto com os mesmos atributos (o fpedit usa o do placement.json)."""
     hard = {r.path: r for r in fplan.modules.values() if r.type in ("fence", "region")}
     lx0, lx1 = geo.x0, W - geo.reserve_r
@@ -645,15 +660,18 @@ def declared_rows(geo, fplan, W, H, min_width):
                 pieces[-1][1] = b
             else:
                 pieces.append([a, b, tag])
-        for a, b, tag in pieces:
-            if tag is None:
-                continue
-            # folga nas pontas: o arredondamento para a grade não encosta o
-            # bloco (ou o desacoplador) na borda de uma área ou keepout
-            a, b = a + 0.5, b - 0.5
-            cap = (b - a) - geo.cell_gap - geo.dec_w
+        # folga nas pontas: o arredondamento para a grade não encosta o
+        # bloco (ou o desacoplador) na borda de uma área ou keepout
+        pieces = [(a + 0.5, b - 0.5, tag) for a, b, tag in pieces if tag is not None]
+        free_dec = None
+        for i, (a, b, tag) in enumerate(pieces):
+            if tag == "free" and (b - a) - geo.cell_gap - geo.dec_w >= min_width - 1e-6:
+                free_dec = i
+        for i, (a, b, tag) in enumerate(pieces):
+            dec = i == free_dec if tag == "free" else hard[tag].decoupling
+            cap = (b - a) - geo.cell_gap - (geo.dec_w if dec else 0.0)
             if cap >= min_width - 1e-6:
-                slots.append((_snap(a, 0.5), y, cap, tag))
+                slots.append((_snap(a, 0.5), y, cap, tag, dec))
         k += 1
     return slots, k, lx1
 

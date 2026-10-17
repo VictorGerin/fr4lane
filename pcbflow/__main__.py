@@ -15,7 +15,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from . import cellcheck, check, drc, drive, floorplan, kicad, netlist, place, route, sizing, synth
+from . import cache, cellcheck, check, drc, drive, floorplan, kicad, netlist, place, progress, route, sizing, synth
 from .layout import Rules
 from .library import Library, LibraryError
 
@@ -25,22 +25,39 @@ FAIL_RE = re.compile(r"\[ERRO|(?<![A-Za-z])(ERROR|FAILED|FALHOU)(?![A-Za-z])")
 
 
 def log(msg=""):
+    progress.clear_line()
     print(msg, flush=True)
 
 
-def run_sim(tb, dut_files, outdir, name):
+def _run_watched(cmd, pg, what, cwd=None):
+    """Roda um processo externo mostrando a última linha que ele imprimiu."""
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=cwd)
+    out = []
+    for raw in proc.stdout:
+        line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+        out.append(line)
+        if line.strip():
+            pg.update(info=f"{what}: {line.strip()[:80]}")
+    return proc.wait(), "\n".join(out) + "\n"
+
+
+def run_sim(tb, dut_files, outdir, name, label="simulação"):
     iverilog = shutil.which("iverilog") or "C:/msys64/ucrt64/bin/iverilog.exe"
     vvp = shutil.which("vvp") or "C:/msys64/ucrt64/bin/vvp.exe"
     out = (outdir / f"{name}.vvp").resolve()
-    r = subprocess.run([iverilog, "-g2012", "-o", str(out), str(tb)] + [str(f) for f in dut_files],
-                       capture_output=True, text=True)
-    if r.returncode != 0:
-        return False, r.stdout + r.stderr
-    r = subprocess.run([vvp, "-n", str(out)], capture_output=True, text=True, cwd=outdir)
-    text = r.stdout + r.stderr
+    with progress.Progress(label, tick=True) as pg:
+        pg.update(info="compilando (iverilog)")
+        rc, text = _run_watched([iverilog, "-g2012", "-o", str(out), str(tb)] + [str(f) for f in dut_files],
+                                pg, "compilando")
+        if rc != 0:
+            if not text.strip():
+                text = f"iverilog terminou com código {rc} sem mensagem (ex.: travou na compilação)\n"
+            return False, text
+        pg.update(info="rodando o testbench")
+        rc, text = _run_watched([vvp, "-n", str(out)], pg, "testbench", cwd=outdir)
     # o vvp não propaga o argumento de $finish como código de saída; procura os
     # marcadores de falha usados pelos testbenches do projeto
-    ok = r.returncode == 0 and not FAIL_RE.search(text)
+    ok = rc == 0 and not FAIL_RE.search(text)
     return ok, text
 
 
@@ -63,7 +80,7 @@ def main(argv=None):
     ap.add_argument("--module-weight", type=float, default=None,
                     help="força que mantém cada módulo agrupado no placement (0 = desliga)")
     ap.add_argument("--route-iter", type=int, default=40)
-    ap.add_argument("--max-parts", type=int, default=8000,
+    ap.add_argument("--max-parts", type=int, default=20000,
                     help="aborta antes do P&R se o projeto for maior que isso")
     ap.add_argument("--layers", type=int, choices=(2, 4), default=4,
                     help="4: VDD/GND em planos internos (padrão); 2: trilhos de alimentação")
@@ -77,6 +94,8 @@ def main(argv=None):
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--no-size", action="store_true",
                     help="não troca as células pelas variantes de fan-out (fica o que o Yosys escolheu)")
+    ap.add_argument("--fresh", action="store_true",
+                    help="ignora o placement salvo da rodada anterior (refaz síntese e placement)")
     ap.add_argument("--no-drc", action="store_true",
                     help="não roda o DRC do KiCad (kicad-cli) sobre a placa gerada")
     args = ap.parse_args(argv)
@@ -88,6 +107,7 @@ def main(argv=None):
     out = Path(args.out or f"build/pcb/{tag}")
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
+    clock = _Clock()
 
     try:
         lib = Library(args.lib)
@@ -104,101 +124,115 @@ def main(argv=None):
         except floorplan.FloorplanError as e:
             log(f"ERRO: {e}")
             return 3
-    log(f"[0/6] Biblioteca '{lib.name}' ({len(lib.cells)} células): verificando montagem x Liberty")
-    problems = cellcheck.check_cells(lib, out)
-    if problems:
-        log("ERRO: a montagem (.sp) de alguma célula não faz o que o .lib declara:")
-        for p in problems:
-            log("  " + p)
-        return 3
-    try:
-        el, drives = drive.library_drive(lib)
-        problems = drive.check_internal(lib, el, drives) if el else []
-        drive.reference_loads(lib, el, drives)
-    except ValueError as e:
-        problems = [str(e)]
-    if problems:
-        log("ERRO: drive em pior caso:")
-        for p in problems:
-            log("  " + p)
-        return 3
-    liberty = out / "cells.lib"
+
+    # placement salvo de uma rodada anterior com as mesmas entradas (cache.py)
+    key = cache.fingerprint(args)
+    saved, why = (None, None) if args.fresh or args.synth_only else cache.load(out, key)
+    gates_v = out / f"{args.top}_gates.v"
     models = out / "cells_models.v"
-    lib.write_liberty(liberty)
-    lib.write_verilog_models(models)
+    if saved and not gates_v.is_file():
+        saved, why = None, f"falta {gates_v.name} da rodada anterior"
+    if why:
+        log(f"Placement salvo não reaproveitado ({why}): refazendo síntese e placement")
 
-    log(f"[1/6] Síntese Yosys de '{args.top}'")
-    json_path, gates_v, stat, hier = synth.run_yosys(args.src, args.top, liberty, out, flatten=args.flatten)
-    design = netlist.load_yosys_json(json_path, args.top, lib, hier)
-    sized = None
-    if lib.variants and not args.no_size:
-        sized = sizing.size_design(lib, design, el, drives)
-        log(f"      sizing: {len(sized.changed)} instâncias trocadas por variantes de fan-out"
-            + (f", {len(sized.unresolved)} sem variante que atenda" if sized.unresolved else ""))
-    by_cell = Counter(c for c, _ in design.instances.values())
-    kinds = Counter(lib.parts[p.model]["kind"] for p in design.parts)
-    n_parts = len(design.parts)
-    log("      células: " + ", ".join(f"{k}={v}" for k, v in sorted(by_cell.items())))
-    log(f"      {len(design.blocks)} blocos, {n_parts} componentes ("
-        + ", ".join(f"{k}={v}" for k, v in sorted(kinds.items())) + ")")
-    mods = sorted({m for m in design.inst_module.values() if m})
-    if mods:
-        log(f"      {len(mods)} módulos: " + ", ".join(mods[:12]) + (" ..." if len(mods) > 12 else ""))
-    fanout = [n for n in sizing.check_nets(lib, design, el, drives) if not n.ok]
-    if fanout:
-        log(f"      AVISO: {len(fanout)} nets com fan-out acima do que a saída aguenta (veja report.md)")
-    if args.tb:
-        log("[2/6] Simulação: netlist gate-level e de componentes")
-        ok, text = run_sim(args.tb, [gates_v, models], out, "sim_gates")
-        log(f"      gate-level:       {'OK' if ok else 'FALHOU'}")
-        (out / "sim_gates.log").write_text(text)
-        sw = out / f"{args.top}_switch.v"
-        netlist.write_switch_level_verilog(lib, design, sw)
-        ok2, text2 = run_sim(args.tb, [sw], out, "sim_switch")
-        log(f"      componentes:      {'OK' if ok2 else 'FALHOU'}")
-        (out / "sim_switch.log").write_text(text2)
-        if not (ok and ok2):
-            log("      veja sim_gates.log / sim_switch.log")
+    if saved:
+        when = time.strftime("%d/%m %H:%M", time.localtime(saved["time"]))
+        clock.stage(f"[0-3/6] Biblioteca, síntese e placement: reaproveitados da rodada de {when} "
+                    "(mesmas entradas; --fresh refaz)")
+        design, board, fanout, sized = saved["design"], saved["board"], saved["fanout"], saved["sized"]
+        stat_text, sims = saved["stat"], dict(saved.get("sims", {}))
+        _summary(lib, design, sized, fanout, args)
+        lib.write_verilog_models(models)
+        _simulate(args, lib, design, out, gates_v, models, sims, clock)
+        if sims != saved.get("sims", {}):
+            cache.save(out, key, **dict(saved, sims=sims))
     else:
-        log("[2/6] Simulação: pulada (use --tb)")
+        clock.stage(f"[0/6] Biblioteca '{lib.name}' ({len(lib.cells)} células): verificando montagem x Liberty")
+        with progress.Progress("verificação das células (simulação de cada .sp)", tick=True):
+            problems = cellcheck.check_cells(lib, out)
+        if problems:
+            log("ERRO: a montagem (.sp) de alguma célula não faz o que o .lib declara:")
+            for p in problems:
+                log("  " + p)
+            return 3
+        try:
+            el, drives = drive.library_drive(lib)
+            problems = drive.check_internal(lib, el, drives) if el else []
+            drive.reference_loads(lib, el, drives)
+        except ValueError as e:
+            problems = [str(e)]
+        if problems:
+            log("ERRO: drive em pior caso:")
+            for p in problems:
+                log("  " + p)
+            return 3
+        liberty = out / "cells.lib"
+        lib.write_liberty(liberty)
+        lib.write_verilog_models(models)
 
-    if args.synth_only:
-        log(stat.read_text())
-        info = place.measure(lib, design, _place_params(args), Rules())
-        _write_placement(out / "placement.json", args, lib, design, info)
-        log(f"Medidas para o editor de floorplan: {out / 'placement.json'}")
-        return 0
-    if n_parts > args.max_parts:
-        log(f"ABORTADO: {n_parts} componentes > --max-parts {args.max_parts}. "
-            "Divida o projeto ou aumente o limite.")
-        return 2
+        clock.stage(f"[1/6] Síntese Yosys de '{args.top}'")
+        json_path, gates_v, stat, hier = synth.run_yosys(args.src, args.top, liberty, out, flatten=args.flatten)
+        stat_text = stat.read_text()
+        with progress.Progress("leitura do netlist e expansão em componentes", tick=True):
+            design = netlist.load_yosys_json(json_path, args.top, lib, hier)
+        sized = None
+        if lib.variants and not args.no_size:
+            with progress.Progress("sizing por fan-out", tick=True):
+                sized = sizing.size_design(lib, design, el, drives)
+            log(f"      sizing: {len(sized.changed)} instâncias trocadas por variantes de fan-out"
+                + (f", {len(sized.unresolved)} sem variante que atenda" if sized.unresolved else ""))
+        fanout = [n for n in sizing.check_nets(lib, design, el, drives) if not n.ok]
+        _summary(lib, design, sized, fanout, args)
+        sims = {}
+        _simulate(args, lib, design, out, gates_v, models, sims, clock)
 
-    log("[3/6] Placement")
-    rules = Rules()
-    params = _place_params(args)
-    try:
-        board = place.place(lib, design, params, rules, fplan)
-    except floorplan.FloorplanError as e:
-        log(f"ERRO: {e}")
-        return 3
-    board.group_cells = {inst: cell for inst, (cell, _) in design.instances.items()}
-    board.group_modules = {inst: m for inst, m in design.inst_module.items() if m}
-    board.module_types = design.modules
+        if args.synth_only:
+            clock.done()
+            log(stat_text)
+            info = place.measure(lib, design, _place_params(args), Rules())
+            _write_placement(out / "placement.json", args, lib, design, info)
+            log(f"Medidas para o editor de floorplan: {out / 'placement.json'}")
+            return 0
+        n_parts = len(design.parts)
+        if n_parts > args.max_parts:
+            log(f"ABORTADO: {n_parts} componentes > --max-parts {args.max_parts}. "
+                "Divida o projeto ou aumente o limite.")
+            return 2
+
+        clock.stage("[3/6] Placement")
+        rules = Rules()
+        params = _place_params(args)
+        try:
+            board = place.place(lib, design, params, rules, fplan)
+        except floorplan.FloorplanError as e:
+            log(f"ERRO: {e}")
+            return 3
+        board.group_cells = {inst: cell for inst, (cell, _) in design.instances.items()}
+        board.group_modules = {inst: m for inst, m in design.inst_module.items() if m}
+        board.module_types = design.modules
+        with progress.Progress("gravando o placement para reaproveitar", tick=True):
+            cache.save(out, key, design=design, board=board, fanout=fanout, sized=sized,
+                       stat=stat_text, sims=sims)
+
+    by_cell = Counter(c for c, _ in design.instances.values())
+    n_parts = len(design.parts)
     _write_placement(out / "placement.json", args, lib, design, board.place_stats["editor"], board, fplan)
     reg = board.place_stats.get("regions")
     what = "áreas declaradas" if fplan else "regiões (uma por módulo)"
     log(f"      {f'{reg} {what}, ' if reg else ''}{board.place_stats['rows']} fileiras, HPWL {board.place_stats['hpwl_mm']} mm, "
         f"placa {board.width:.0f} x {board.height:.0f} mm")
     if args.place_only:
+        clock.done()
         log(f"Placement para o editor de floorplan: {out / 'placement.json'}")
-        log(f"Concluído em {time.time() - t0:.1f} s")
+        log(f"Concluído em {progress.fmt_time(time.time() - t0)}")
         return 0
 
-    log("[4/6] Roteamento")
+    clock.stage("[4/6] Roteamento")
     route.route(board, args.route_iter, log=lambda m: log("    " + m))
 
-    log("[5/6] Verificação (folgas + conectividade)")
-    errors, unconnected = check.check_board(board)
+    clock.stage("[5/6] Verificação (folgas + conectividade)")
+    with progress.Progress("verificação de folgas e conectividade", tick=True):
+        errors, unconnected = check.check_board(board)
     log(f"      violações de folga: {len(errors)}")
     for e in errors[:10]:
         log("        " + e)
@@ -206,31 +240,109 @@ def main(argv=None):
     for n, c in sorted(unconnected.items())[:10]:
         log(f"        {n}: {c} partes")
 
-    log("[6/6] Projeto KiCad")
+    clock.stage("[6/6] Projeto KiCad")
     name = tag
-    kicad.write_pcb(board, out / f"{name}.kicad_pcb", title=f"{name} — {lib.name}, {n_parts} componentes")
-    kicad.write_project(board, out / f"{name}.kicad_pro")
-    kicad.write_bom(board, out / f"{name}_bom.csv")
-    netlist.write_switch_level_verilog(lib, design, out / f"{args.top}_switch.v")
+    with progress.Progress("gravando o projeto KiCad", tick=True):
+        kicad.write_pcb(board, out / f"{name}.kicad_pcb", title=f"{name} — {lib.name}, {n_parts} componentes")
+        kicad.write_project(board, out / f"{name}.kicad_pro")
+        kicad.write_bom(board, out / f"{name}_bom.csv")
+        netlist.write_switch_level_verilog(lib, design, out / f"{args.top}_switch.v")
     log(f"      {out / (name + '.kicad_pro')}")
     # DRC do KiCad: a referência, porque lê o arquivo escrito com a geometria real
     drc_res = None
     cli = None if args.no_drc else drc.find_cli()
+    # o DRC também preenche e salva os planos de VDD/GND; sem ele, eles ficam vazios no arquivo
+    unfilled = (" — planos de VDD/GND sem preenchimento: no KiCad, aperte B (preencher zonas)"
+                if board.layers >= 4 else "")
     if args.no_drc:
-        log("      DRC do KiCad: pulado (--no-drc)")
+        log("      DRC do KiCad: pulado (--no-drc)" + unfilled)
     elif not cli:
-        log("      DRC do KiCad: kicad-cli não encontrado (instale o KiCad 8+ ou defina PCBFLOW_KICAD_CLI)")
+        log("      DRC do KiCad: kicad-cli não encontrado (instale o KiCad 8+ ou defina PCBFLOW_KICAD_CLI)"
+            + unfilled)
     else:
         try:
-            drc_res = drc.run(cli, out / f"{name}.kicad_pcb", out / "drc.json")
+            with progress.Progress("DRC do KiCad (kicad-cli)", tick=True):
+                drc_res = drc.run(cli, out / f"{name}.kicad_pcb", out / "drc.json")
             for i, line in enumerate(drc.summary(drc_res)):
                 log(("      DRC do KiCad: " if i == 0 else "        ") + line)
         except RuntimeError as e:
             log(f"      DRC do KiCad: {e}")
     _write_report(out / "report.md", args, design, board, by_cell, errors, unconnected, lib, fanout, drc_res,
                   sized)
-    log(f"Concluído em {time.time() - t0:.1f} s")
+    clock.done()
+    log(f"Concluído em {progress.fmt_time(time.time() - t0)}")
     return 0 if not errors and not unconnected and (drc_res is None or drc.ok(drc_res)) else 1
+
+
+class _Clock:
+    """Tempo de cada etapa: impresso quando a próxima começa (ou no fim)."""
+
+    def __init__(self):
+        self.t = None
+
+    def stage(self, title):
+        self.done()
+        log(title)
+        self.t = time.time()
+
+    def done(self):
+        if self.t is not None and time.time() - self.t >= 1:
+            log(f"      etapa: {progress.fmt_time(time.time() - self.t)}")
+        self.t = None
+
+
+def _summary(lib, design, sized, fanout, args):
+    by_cell = Counter(c for c, _ in design.instances.values())
+    kinds = Counter(lib.parts[p.model]["kind"] for p in design.parts)
+    log("      células: " + ", ".join(f"{k}={v}" for k, v in sorted(by_cell.items())))
+    log(f"      {len(design.blocks)} blocos, {len(design.parts)} componentes ("
+        + ", ".join(f"{k}={v}" for k, v in sorted(kinds.items())) + ")")
+    mods = sorted({m for m in design.inst_module.values() if m})
+    if mods:
+        log(f"      {len(mods)} módulos: " + ", ".join(mods[:12]) + (" ..." if len(mods) > 12 else ""))
+    if not fanout:
+        return
+    # o report.md só sai no fluxo completo: sem ele, a lista vai para o log
+    full = not (args.synth_only or args.place_only)
+    log(f"      AVISO: {len(fanout)} nets com fan-out acima do que a saída aguenta"
+        + (" (veja report.md)" if full else ":"))
+    if not full:
+        for n in fanout[:15]:
+            why = [f"max_fanout {n.limit}"] if n.limit else []
+            if n.margin is not None and n.margin != float("inf"):
+                why.append(f"folga de Ib {n.margin:.2f}")
+            log(f"        {n.net}: {n.inst} {n.cell}.{n.pin} → {n.sinks} entradas"
+                + (f" ({', '.join(why)})" if why else ""))
+        if len(fanout) > 15:
+            log(f"        ... e mais {len(fanout) - 15}")
+
+
+def _simulate(args, lib, design, out, gates_v, models, sims, clock):
+    """Simulação com o testbench (gate-level e de componentes). sims guarda o
+    resultado por testbench: com o placement reaproveitado, um testbench que já
+    rodou nesta mesma entrada não roda de novo."""
+    if not args.tb:
+        clock.stage("[2/6] Simulação: pulada (use --tb)")
+        return
+    th = cache.file_hash(args.tb)
+    if th in sims:
+        ok, ok2 = sims[th]
+        clock.stage("[2/6] Simulação: já feita com este testbench e estas mesmas entradas")
+        log(f"      gate-level:       {'OK' if ok else 'FALHOU'}")
+        log(f"      componentes:      {'OK' if ok2 else 'FALHOU'}")
+        return
+    clock.stage("[2/6] Simulação: netlist gate-level e de componentes")
+    ok, text = run_sim(args.tb, [gates_v, models], out, "sim_gates", "simulação gate-level")
+    log(f"      gate-level:       {'OK' if ok else 'FALHOU'}")
+    (out / "sim_gates.log").write_text(text)
+    sw = out / f"{args.top}_switch.v"
+    netlist.write_switch_level_verilog(lib, design, sw)
+    ok2, text2 = run_sim(args.tb, [sw], out, "sim_switch", "simulação de componentes")
+    log(f"      componentes:      {'OK' if ok2 else 'FALHOU'}")
+    (out / "sim_switch.log").write_text(text2)
+    if not (ok and ok2):
+        log("      veja sim_gates.log / sim_switch.log")
+    sims[th] = (ok, ok2)
 
 
 def _place_params(args):
