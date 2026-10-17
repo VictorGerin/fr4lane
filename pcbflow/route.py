@@ -14,17 +14,179 @@ Estratégia:
 
 A grade só usa movimentos ortogonais. Com grade <= menor dimensão de pad,
 verificar a folga nos nós da grade garante a folga ao longo das trilhas.
+
+Desempenho: o estado da grade fica em arrays numpy e a busca A* de cada
+ligação (_astar_kernel) é compilada pelo numba quando ele está instalado; sem
+ele, a mesma função roda como Python puro (bem mais devagar). As duas dão o
+mesmo resultado: mesma ordem de expansão e mesmo desempate.
 """
 
 import heapq
 import math
 
+import numpy as np
+
 from .layout import Track, Via
 from .progress import Progress
 
+try:
+    from numba import njit
+    COMPILED = True
+except ImportError:                      # sem numba: a busca roda em Python puro
+    COMPILED = False
+
+    def njit(*args, **kwargs):
+        if args and callable(args[0]):
+            return args[0]
+        return lambda f: f
+
+# inteiro dos nós na fila do A*: np.int64 fixa o tipo para o numba; em Python
+# puro, int comum (aritmética com escalares numpy é lenta)
+_I = np.int64 if COMPILED else int
 FREE = -1
 BLOCK = -2
 LAYERS = ("F.Cu", "B.Cu")
+MAX_EXPAND = 400000                      # nós expandidos por busca antes de desistir
+VIA_COST = 8.0
+
+
+@njit(cache=True)
+def _via_ok(static, via_static, p, net, nx, ny, nxy):
+    """Cabe uma via da net no ponto p (folga do furo e das trilhas vizinhas)?"""
+    vs = via_static[p]
+    if vs != FREE and vs != net:
+        return False
+    for layer in range(2):
+        sv = static[layer * nxy + p]
+        if sv != FREE and sv != net:
+            return False
+    iy = p // nx
+    ix = p - iy * nx
+    for k in range(4):
+        jx, jy = ix, iy
+        if k == 0:
+            jx = ix + 1
+        elif k == 1:
+            jx = ix - 1
+        elif k == 2:
+            jy = iy + 1
+        else:
+            jy = iy - 1
+        if jx < 0 or jx >= nx or jy < 0 or jy >= ny:
+            continue
+        q = jy * nx + jx
+        for layer in range(2):
+            sv = static[layer * nxy + q]
+            if sv != FREE and sv != net and sv != BLOCK:
+                return False
+    return True
+
+
+@njit(cache=True)
+def _astar_kernel(static, via_static, occ, hist, nx, ny, net, sources, targets,
+                  best, prev, seen, tmark, stamp, bx0, bx1, by0, by1, pres):
+    """A* da árvore 'sources' até qualquer nó de 'targets'. best/prev/seen/tmark
+    são do tamanho da grade e reaproveitados entre buscas: um nó só vale nesta
+    busca se seen (ou tmark) == stamp, o que evita limpar os arrays a cada vez.
+    Devolve o caminho (array de nós) ou um array vazio."""
+    nxy = nx * ny
+    for t in targets:
+        tmark[t] = stamp
+    heap = [(0.0, 0.0, _I(0))]
+    heap.pop()
+    for s in sources:
+        best[s] = 0.0
+        prev[s] = -1
+        seen[s] = stamp
+        heapq.heappush(heap, (0.0, 0.0, _I(s)))
+    expanded = 0
+    while len(heap) > 0:
+        f, gcost, u = heapq.heappop(heap)
+        bu = best[u] if seen[u] == stamp else np.inf
+        if gcost > bu:
+            continue
+        if tmark[u] == stamp:
+            n = 0
+            v = u
+            while v != -1:
+                n += 1
+                v = prev[v]
+            path = np.empty(n, np.int64)
+            v = u
+            i = n - 1
+            while v != -1:
+                path[i] = v
+                i -= 1
+                v = prev[v]
+            return path
+        expanded += 1
+        if expanded > MAX_EXPAND:
+            return np.empty(0, np.int64)
+        layer = u // nxy
+        p = u - layer * nxy
+        iy = p // nx
+        ix = p - iy * nx
+        # F.Cu prefere horizontal e B.Cu vertical: a direção "errada" custa o dobro
+        for k in range(5):
+            if k == 0:
+                if ix + 1 >= nx:
+                    continue
+                v = u + 1
+                c0 = 2.0 if layer == 1 else 1.0
+            elif k == 1:
+                if ix <= 0:
+                    continue
+                v = u - 1
+                c0 = 2.0 if layer == 1 else 1.0
+            elif k == 2:
+                if iy + 1 >= ny:
+                    continue
+                v = u + nx
+                c0 = 2.0 if layer == 0 else 1.0
+            elif k == 3:
+                if iy <= 0:
+                    continue
+                v = u - nx
+                c0 = 2.0 if layer == 0 else 1.0
+            else:
+                v = (1 - layer) * nxy + p          # troca de camada (via)
+            sv = static[v]
+            if sv != FREE and sv != net:
+                continue
+            if k < 4:
+                c = c0 * (1.0 + hist[v]) * (1.0 + pres * occ[v])
+            else:
+                if not _via_ok(static, via_static, p, net, nx, ny, nxy):
+                    continue
+                load = occ[p] + occ[nxy + p]
+                h = hist[p] + hist[nxy + p]
+                for kk in range(4):
+                    jx, jy = ix, iy
+                    if kk == 0:
+                        jx = ix + 1
+                    elif kk == 1:
+                        jx = ix - 1
+                    elif kk == 2:
+                        jy = iy + 1
+                    else:
+                        jy = iy - 1
+                    if jx < 0 or jx >= nx or jy < 0 or jy >= ny:
+                        continue
+                    q = jy * nx + jx
+                    load += occ[q] + occ[nxy + q]
+                c = VIA_COST * (1.0 + h) * (1.0 + pres * load)
+            gnew = gcost + c
+            bv = best[v] if seen[v] == stamp else np.inf
+            if gnew < bv:
+                best[v] = gnew
+                seen[v] = stamp
+                prev[v] = u
+                pv = v % nxy
+                vy = pv // nx
+                vx = pv - vy * nx
+                hh = max(bx0 - vx, 0, vx - bx1) + max(by0 - vy, 0, vy - by1)
+                heapq.heappush(heap, (gnew + hh, gnew, _I(v)))
+    return np.empty(0, np.int64)
 
 
 def _dist_point_rect(px, py, r):
@@ -48,8 +210,8 @@ class Router:
         self.nets = board.nets()
         self.net_id = {name: i for i, name in enumerate(self.nets)}
         self.power = {self.net_id[n] for n in (board.vdd, board.gnd) if n in self.net_id}
-        self.static = [FREE] * self.n
-        self.via_static = [FREE] * self.nxy
+        self.static = np.full(self.n, FREE, np.int32)
+        self.via_static = np.full(self.nxy, FREE, np.int32)
         self.terminals = {}            # net -> [set(nós) por pad]
         self.power_pads = []           # 4 camadas: pads SMD que precisam de fanout
         self.planes = getattr(board, "layers", 4) >= 4
@@ -281,8 +443,20 @@ class Router:
             return (max(xs) - min(xs)) + (max(ys) - min(ys))
 
         nets.sort(key=bbox_size)
-        self.occ = [0] * self.n
-        self.hist = [0.0] * self.n
+        self.occ = np.zeros(self.n, np.int32)
+        self.hist = np.zeros(self.n, np.float64)
+        # memória da busca, reaproveitada entre as chamadas (ver _astar_kernel)
+        self._best = np.zeros(self.n, np.float64)
+        self._prev = np.zeros(self.n, np.int64)
+        self._seen = np.zeros(self.n, np.int32)
+        self._tmark = np.zeros(self.n, np.int32)
+        self._stamp = 0
+        # o que a busca recebe: os próprios arrays (numba) ou, em Python puro,
+        # memoryviews deles, cuja leitura elemento a elemento é bem mais rápida
+        # (mesma memória: as somas vetorizadas em occ/hist continuam valendo)
+        grid = (self.static, self.via_static, self.occ, self.hist,
+                self._best, self._prev, self._seen, self._tmark)
+        self._grid = grid if COMPILED else tuple(memoryview(a) for a in grid)
         self.usage = {n: set() for n in nets}
         self.paths = {n: [] for n in nets}
         self.ok = set()
@@ -305,14 +479,13 @@ class Router:
                         failed.append(net)
                     acc += w[k]
                     pg.update(acc, f"{k + 1}/{len(todo)} nets" + (f" · {prev}" if prev else ""))
-            over = [i for i in range(self.n) if self.occ[i] > 1]
-            for i in over:
-                self.hist[i] += 0.4
-            over_set = set(over)
+            over = np.flatnonzero(self.occ > 1)
+            self.hist[over] += 0.4
+            over_set = set(over.tolist())
             conflicted = {n for n in nets if self.usage[n] & over_set}
             self.log(f"  iteração {it + 1:2d}: nós em conflito={len(over):5d}  "
                      f"nets em conflito={len(conflicted):4d}  falhas={len(failed)}")
-            if not over and not failed:
+            if not len(over) and not failed:
                 break
             prev = f"anterior: {len(conflicted)} nets em conflito"
             todo = sorted(conflicted | set(failed), key=bbox_size)
@@ -329,12 +502,12 @@ class Router:
 
     def _drop_conflicts(self, nets, dropped, bbox_size, pg):
         while True:
-            over = [i for i in range(self.n) if self.occ[i] > 1]
+            over = np.flatnonzero(self.occ > 1)
             pg.update(info=f"{len(over)} nós em conflito, {len(dropped)} nets descartadas")
-            if not over:
+            if not len(over):
                 break
             score = {}
-            over_set = set(over)
+            over_set = set(over.tolist())
             for n in nets:
                 if n not in dropped:
                     c = len(self.usage[n] & over_set)
@@ -351,9 +524,12 @@ class Router:
             return f"(alim) {pad.fp.ref}.{pad.num} ({self.nets[net]})"
         return self.nets[key]
 
+    def _occ_add(self, nodes, delta):
+        if nodes:
+            self.occ[np.fromiter(nodes, np.int64, len(nodes))] += delta
+
     def _rip(self, net):
-        for i in self.usage[net]:
-            self.occ[i] -= 1
+        self._occ_add(self.usage[net], -1)
         self.usage[net] = set()
         self.paths[net] = []
         self.ok.discard(net)
@@ -369,8 +545,7 @@ class Router:
             if path is None:
                 return False
             self.usage[key] = self._footprint_of(path)
-            for i in self.usage[key]:
-                self.occ[i] += 1
+            self._occ_add(self.usage[key], 1)
             self.paths[key] = [path]
             self.ok.add(key)
             return True
@@ -393,14 +568,12 @@ class Router:
             box = (min(xs), max(xs), min(ys), max(ys))
             path = self._astar(net, tree, target, box, pres)
             if path is None:
-                for i in used:
-                    self.occ[i] -= 1
+                self._occ_add(used, -1)
                 return False
             paths.append(path)
             tree.update(path)
             new = self._footprint_of(path)
-            for i in new - used:
-                self.occ[i] += 1
+            self._occ_add(new - used, 1)
             used |= new
         self.usage[key] = used
         self.paths[key] = paths
@@ -420,64 +593,16 @@ class Router:
         return new
 
     def _astar(self, net, sources, target, box, pres):
-        nx, nxy = self.nx, self.nxy
-        static, occ, hist = self.static, self.occ, self.hist
+        """Caminho de menor custo da árvore 'sources' até um nó de 'target' (ou None)."""
+        self._stamp += 1
         bx0, bx1, by0, by1 = box
-        via_cost = 8.0
-        best = {}
-        prev = {}
-        heap = []
-        for s in sources:
-            best[s] = 0.0
-            prev[s] = None
-            heapq.heappush(heap, (0.0, 0.0, s))
-        expanded = 0
-        while heap:
-            f, gcost, u = heapq.heappop(heap)
-            if gcost > best.get(u, math.inf):
-                continue
-            if u in target:
-                path = [u]
-                while prev[path[-1]] is not None:
-                    path.append(prev[path[-1]])
-                return list(reversed(path))
-            expanded += 1
-            if expanded > 400000:
-                return None
-            layer, p = divmod(u, nxy)
-            iy, ix = divmod(p, nx)
-            moves = []
-            if ix + 1 < nx: moves.append((u + 1, layer == 1))
-            if ix > 0: moves.append((u - 1, layer == 1))
-            if iy + 1 < self.ny: moves.append((u + nx, layer == 0))
-            if iy > 0: moves.append((u - nx, layer == 0))
-            for v, wrong_dir in moves:
-                sv = static[v]
-                if sv != FREE and sv != net:
-                    continue
-                c = (2.0 if wrong_dir else 1.0) * (1.0 + hist[v]) * (1.0 + pres * occ[v])
-                self._relax(u, v, gcost + c, best, prev, heap, bx0, bx1, by0, by1)
-            # troca de camada (via)
-            v = (1 - layer) * nxy + p
-            sv = static[v]
-            if sv == FREE or sv == net:
-                if self._via_static_ok(p, net):
-                    load = occ[p] + occ[nxy + p]
-                    h = hist[p] + hist[nxy + p]
-                    for q in self._halo(p):
-                        load += occ[q] + occ[nxy + q]
-                    c = via_cost * (1.0 + h) * (1.0 + pres * load)
-                    self._relax(u, v, gcost + c, best, prev, heap, bx0, bx1, by0, by1)
-        return None
-
-    def _relax(self, u, v, gnew, best, prev, heap, bx0, bx1, by0, by1):
-        if gnew < best.get(v, math.inf):
-            best[v] = gnew
-            prev[v] = u
-            p = v % self.nxy
-            iy, ix = divmod(p, self.nx)
-            h = max(bx0 - ix, 0, ix - bx1) + max(by0 - iy, 0, iy - by1)
-            heapq.heappush(heap, (gnew + h, gnew, v))
+        static, via_static, occ, hist, best, prev, seen, tmark = self._grid
+        if COMPILED:
+            sources = np.fromiter(sources, np.int64, len(sources))
+            target = np.fromiter(target, np.int64, len(target))
+        path = _astar_kernel(static, via_static, occ, hist, self.nx, self.ny, net, sources, target,
+                             best, prev, seen, tmark, self._stamp, bx0, bx1, by0, by1, float(pres))
+        return path.tolist() if len(path) else None
 
     # ------------------------------------------------------------- geometria
     def _emit_path(self, path, net_name):
@@ -513,6 +638,8 @@ class Router:
 
 
 def route(board, max_iter=40, log=print):
+    log("  busca A*: " + ("compilada (numba)" if COMPILED else
+                          "Python puro (instale o numba para rotear dezenas de vezes mais rápido)"))
     rt = Router(board, log)
     if rt.planes:
         log(f"  grade {rt.nx}x{rt.ny}x2 ({rt.g} mm), {len(rt.terminals)} nets de sinal, "

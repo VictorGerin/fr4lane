@@ -167,7 +167,8 @@ Para ver cada módulo isolado na placa, instancie-os num topo sem fios em comum,
   - grade de 0,5 mm em F.Cu (horizontal) e B.Cu (vertical), com vias para trocar de camada;
   - VDD e GND são planos internos, sem trilha: pads SMD de alimentação ganham uma via curta até o plano, e pads com furo ligam-se a ele direto;
   - os sinais são roteados por negociação (PathFinder): as nets podem disputar espaço no início, e o custo dos pontos disputados sobe a cada iteração até ninguém mais compartilhar;
-  - trilha de 0,25 mm, folga de 0,2 mm e via de 0,6/0,3 mm.
+  - trilha de 0,25 mm, folga de 0,2 mm e via de 0,6/0,3 mm;
+  - a busca A* de cada ligação é compilada pelo [numba](https://numba.pydata.org/) (já incluso no Anaconda), com a grade em arrays numpy: de 10 a 20 vezes mais rápido que em Python puro, com as mesmas trilhas. Sem o numba, a mesma busca roda em Python puro, e o log avisa (`busca A*: Python puro`). A primeira rodada depois de mudar o `route.py` compila a busca (alguns segundos); depois ela fica em cache em `__pycache__`.
 
 ## Floorplan: posição dos módulos e keepouts
 
