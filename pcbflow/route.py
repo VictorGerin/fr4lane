@@ -26,19 +26,9 @@ import math
 
 import numpy as np
 
+from .jit import COMPILED, njit, views
 from .layout import Track, Via
 from .progress import Progress
-
-try:
-    from numba import njit
-    COMPILED = True
-except ImportError:                      # sem numba: a busca roda em Python puro
-    COMPILED = False
-
-    def njit(*args, **kwargs):
-        if args and callable(args[0]):
-            return args[0]
-        return lambda f: f
 
 # inteiro dos nós na fila do A*: np.int64 fixa o tipo para o numba; em Python
 # puro, int comum (aritmética com escalares numpy é lenta)
@@ -456,7 +446,7 @@ class Router:
         # (mesma memória: as somas vetorizadas em occ/hist continuam valendo)
         grid = (self.static, self.via_static, self.occ, self.hist,
                 self._best, self._prev, self._seen, self._tmark)
-        self._grid = grid if COMPILED else tuple(memoryview(a) for a in grid)
+        self._grid = views(grid)
         self.usage = {n: set() for n in nets}
         self.paths = {n: [] for n in nets}
         self.ok = set()

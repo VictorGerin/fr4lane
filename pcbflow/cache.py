@@ -24,7 +24,7 @@ VERSION = 1
 CODE_DIR = Path(__file__).resolve().parent
 # código que roda até o fim do placement (e as classes que vão no pickle)
 PLACE_CODE = ("library.py", "liberty.py", "spice.py", "netlist.py", "synth.py", "drive.py",
-              "sizing.py", "place.py", "layout.py", "floorplan.py", "cache.py")
+              "sizing.py", "place.py", "anneal.py", "jit.py", "layout.py", "floorplan.py", "cache.py")
 # opções do argparse que mudam a síntese ou o placement
 PLACE_ARGS = ("top", "layers", "effort", "seed", "density", "row_gap", "part_gap",
               "module_weight", "flatten", "no_size")

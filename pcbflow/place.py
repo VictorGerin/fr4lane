@@ -25,11 +25,12 @@ O roteador liga cada pad de alimentação ao trilho mais próximo.
 """
 
 import math
-import random
 from dataclasses import dataclass
 from types import SimpleNamespace
 
 from .floorplan import FloorplanError, contains, overlap
+from . import anneal
+from .jit import COMPILED
 from .layout import Board, Rules, Track, Via, footprint_from_library, pin_header
 from .progress import Progress
 
@@ -150,7 +151,6 @@ def place(lib, design, params=None, rules=None, floorplan=None):
     m = _measure(lib, design, params, rules)
     two, layouts, width, block_h = m.two, m.layouts, m.width, m.block_h
     left, right, geo, dec, dec_row = m.left, m.right, m.geo, m.dec, m.dec_row
-    rng = random.Random(params.seed)
     blocks = design.blocks
     n = len(blocks)
     power = {design.vdd, design.gnd}
@@ -177,9 +177,11 @@ def place(lib, design, params=None, rules=None, floorplan=None):
         for k, (net, _) in enumerate(entries):
             if net not in power:
                 fixed.setdefault(net, []).append((x, params.margin + 1.27 + k * 2.54))
-    nets = list(set(net_blocks) | set(fixed))
+    # ordem fixa (um set de nomes muda de ordem a cada processo, e a ordem das
+    # somas de custo mudaria o anelamento): o placement é reprodutível
+    nets = sorted(set(net_blocks) | set(fixed))
     net_index = {net: k for k, net in enumerate(nets)}
-    nets_of_block = [[net_index[nt] for nt in set(b.pins.values()) - power] for b in blocks]
+    nets_of_block = [sorted(net_index[nt] for nt in set(b.pins.values()) - power) for b in blocks]
     members = [list(net_blocks.get(net, ())) for net in nets]
     weight = [1.0] * len(nets)
     fixed_box = []
@@ -258,92 +260,30 @@ def place(lib, design, params=None, rules=None, floorplan=None):
 
     row_len = [sum(width[v] for v in row) for row in rows]
 
+    # peso do custo de ocupação acima da meta (o custo das fileiras está em anneal._overflow)
     dw = params.density_weight
-
-    def overflow(k):
-        x = max(0.0, row_len[k] - slots[k][2])
-        # acima da ocupação-alvo: custo mais brando, que espalha sem forçar
-        t = max(0.0, row_len[k] - target[k]) if target[k] < slots[k][2] - 1e-6 else 0.0
-        return x * x * 2.0 + x * 10.0 + (t * t * 0.5 + t * 2.0) * dw
 
     net_cost = [hpwl(e) for e in range(len(members))]
     n_real = len(nets)
 
-    def affected(row_ids):
-        es = set()
-        for k in row_ids:
-            for v in rows[k]:
-                es.update(nets_of_block[v])
-        return es
-
-    # blocos com a mesma lista de trechos permitidos podem trocar de lugar
-    classes = {}
-    for v in range(n):
-        classes.setdefault(id(allowed[v]), []).append(v)
-    mates = [classes[id(allowed[v])] for v in range(n)]
-
-    def try_move():
-        a = rng.randrange(n)
-        ra = row_of[a]
-        if rng.random() < 0.5 and len(mates[a]) > 1:
-            b = rng.choice(mates[a])
-            rb = row_of[b]
-            ia, ib = rows[ra].index(a), rows[rb].index(b)
-            rows[ra][ia], rows[rb][ib] = b, a
-            return ("swap", ra, ia, rb, ib)
-        rb = rng.choice(allowed[a])
-        ia = rows[ra].index(a)
-        rows[ra].pop(ia)
-        ib = rng.randrange(len(rows[rb]) + 1)
-        rows[rb].insert(ib, a)
-        return ("move", ra, ia, rb, ib)
-
-    def undo_move(u):
-        kind, ra, ia, rb, ib = u
-        if kind == "swap":
-            rows[ra][ia], rows[rb][ib] = rows[rb][ib], rows[ra][ia]
-        else:
-            a = rows[rb].pop(ib)
-            rows[ra].insert(ia, a)
-
-    def evaluate(rs):
-        es = affected(rs)
-        old = sum(net_cost[e] for e in es) + sum(overflow(k) for k in rs)
-        for k in rs:
-            layout_row(k)
-            row_len[k] = sum(width[v] for v in rows[k])
-        new_costs = {e: hpwl(e) for e in es}
-        new = sum(new_costs.values()) + sum(overflow(k) for k in rs)
-        return new - old, new_costs
-
     if n > 1:
+        # o anelamento roda compilado (anneal.py; Python puro sem o numba) sobre
+        # cópias em array destas estruturas, e o resultado volta para elas no fim
+        ann = anneal.Annealer(params.seed, rows, slots, width, allowed, nets_of_block, members,
+                              fixed_box, weight, net_cost, target, spread, g, dw)
         moves = int(max(2000, 150 * n) * params.effort)
-        samples = []
-        for _ in range(min(200, moves)):
-            u = try_move()
-            rs = {u[1], u[3]}
-            d, _ = evaluate(rs)
-            samples.append(abs(d))
-            undo_move(u)
-            evaluate(rs)
-        temp = (sum(samples) / len(samples) or 1.0) * 2
+        n_samples = min(200, moves)
+        temp = (ann.moves(n_samples, sample=True) / n_samples or 1.0) * 2
         steps = 60
         per_step = max(1, moves // steps)
         # cada passo faz o mesmo número de movimentos: a fração de passos é o progresso
-        with Progress(f"placement: anelamento de {n} blocos", total=steps) as pg:
+        label = f"placement: anelamento de {n} blocos" + ("" if COMPILED else " (Python puro: instale o numba)")
+        with Progress(label, total=steps) as pg:
             for step in range(steps):
-                for _ in range(per_step):
-                    u = try_move()
-                    rs = {u[1], u[3]}
-                    d, nc = evaluate(rs)
-                    if d <= 0 or rng.random() < math.exp(-d / temp):
-                        for e, c in nc.items():
-                            net_cost[e] = c
-                    else:
-                        undo_move(u)
-                        evaluate(rs)
+                ann.moves(per_step, temp)
                 temp *= 0.9
-                pg.update(step + 1, f"HPWL {sum(net_cost[:n_real]):.0f} mm")
+                pg.update(step + 1, f"HPWL {ann.hpwl(n_real):.0f} mm")
+        ann.write_back(rows, px, py, row_of, row_len, net_cost)
     owner = fm["owner"]
     # legalização: o anelamento só penaliza o excesso; aqui os blocos que
     # sobram numa fileira cheia vão para o trecho permitido mais próximo com espaço

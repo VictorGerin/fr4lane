@@ -162,7 +162,7 @@ Para ver cada módulo isolado na placa, instancie-os num topo sem fios em comum,
 ## Como a placa é montada
 
 - **Simulação em nível de componente:** MOSFETs e BJTs viram as primitivas `nmos`/`pmos` do Verilog, e resistores viram `rtran`, uma ligação resistiva: um transistor conduzindo vence o pull-up. Cada saída de bloco tem um atraso de transporte de 10 ps; com atraso inercial, o Icarus prende glitches como X.
-- **Placement:** cada instância de subcircuito vira um bloco desenhado conforme o layout do JSON. Os blocos são distribuídos em fileiras (dentro da região do seu módulo, quando há mais de um), e um anelamento simulado minimiza o comprimento de fio (HPWL). Os conectores de 2,54 mm ficam nas bordas: entradas e alimentação à esquerda, saídas à direita. Há um capacitor de desacoplamento no fim de cada fileira e um de bulk.
+- **Placement:** cada instância de subcircuito vira um bloco desenhado conforme o layout do JSON. Os blocos são distribuídos em fileiras (dentro da região do seu módulo, quando há mais de um), e um anelamento simulado minimiza o comprimento de fio (HPWL); ele roda compilado pelo numba (`anneal.py`, de 15 a 20 vezes mais rápido que em Python puro) e é reprodutível: a mesma semente (`--seed`) dá o mesmo placement, com ou sem numba. Os conectores de 2,54 mm ficam nas bordas: entradas e alimentação à esquerda, saídas à direita. Há um capacitor de desacoplamento por fileira (veja [Floorplan](#floorplan-posição-dos-módulos-e-keepouts) para as áreas) e um de bulk.
 - **Roteamento (`route.py`):**
   - grade de 0,5 mm em F.Cu (horizontal) e B.Cu (vertical), com vias para trocar de camada;
   - VDD e GND são planos internos, sem trilha: pads SMD de alimentação ganham uma via curta até o plano, e pads com furo ligam-se a ele direto;
