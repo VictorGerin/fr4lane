@@ -15,7 +15,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from . import cache, cellcheck, check, drc, drive, floorplan, kicad, netlist, place, progress, route, sizing, synth
+from . import cache, cellcheck, check, drc, drive, floorplan, hier, kicad, netlist, place, progress, route, sizing, synth
 from .layout import Rules
 from .library import Library, LibraryError
 
@@ -94,8 +94,15 @@ def main(argv=None):
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--no-size", action="store_true",
                     help="não troca as células pelas variantes de fan-out (fica o que o Yosys escolheu)")
+    ap.add_argument("--macro", action="append", default=[], metavar="TIPO",
+                    help="tipo de módulo implementado como macro (posicionado e roteado uma vez por "
+                         "estrutura e copiado em cada instância); repita para vários. Também pode vir "
+                         "em \"macros\" no floorplan")
+    ap.add_argument("--keep-placement", action="store_true",
+                    help="reaproveita o placement salvo mesmo se o código do pcbflow mudou (ex.: um ajuste "
+                         "no roteador); fontes, biblioteca, floorplan e opções ainda têm de ser os mesmos")
     ap.add_argument("--fresh", action="store_true",
-                    help="ignora o placement salvo da rodada anterior (refaz síntese e placement)")
+                    help="ignora o placement e o roteamento salvos da rodada anterior (refaz tudo)")
     ap.add_argument("--no-drc", action="store_true",
                     help="não roda o DRC do KiCad (kicad-cli) sobre a placa gerada")
     args = ap.parse_args(argv)
@@ -127,7 +134,8 @@ def main(argv=None):
 
     # placement salvo de uma rodada anterior com as mesmas entradas (cache.py)
     key = cache.fingerprint(args)
-    saved, why = (None, None) if args.fresh or args.synth_only else cache.load(out, key)
+    saved, why = (None, None) if args.fresh or args.synth_only else \
+        cache.load(out, key, ignore=("code",) if args.keep_placement else ())
     gates_v = out / f"{args.top}_gates.v"
     models = out / "cells_models.v"
     if saved and not gates_v.is_file():
@@ -145,7 +153,7 @@ def main(argv=None):
         lib.write_verilog_models(models)
         _simulate(args, lib, design, out, gates_v, models, sims, clock)
         if sims != saved.get("sims", {}):
-            cache.save(out, key, **dict(saved, sims=sims))
+            cache.save(out, key, **{k: v for k, v in dict(saved, sims=sims).items() if k not in ("key", "version")})
     else:
         clock.stage(f"[0/6] Biblioteca '{lib.name}' ({len(lib.cells)} células): verificando montagem x Liberty")
         with progress.Progress("verificação das células (simulação de cada .sp)", tick=True):
@@ -171,10 +179,10 @@ def main(argv=None):
         lib.write_verilog_models(models)
 
         clock.stage(f"[1/6] Síntese Yosys de '{args.top}'")
-        json_path, gates_v, stat, hier = synth.run_yosys(args.src, args.top, liberty, out, flatten=args.flatten)
+        json_path, gates_v, stat, hier_json = synth.run_yosys(args.src, args.top, liberty, out, flatten=args.flatten)
         stat_text = stat.read_text()
         with progress.Progress("leitura do netlist e expansão em componentes", tick=True):
-            design = netlist.load_yosys_json(json_path, args.top, lib, hier)
+            design = netlist.load_yosys_json(json_path, args.top, lib, hier_json)
         sized = None
         if lib.variants and not args.no_size:
             with progress.Progress("sizing por fan-out", tick=True):
@@ -199,12 +207,21 @@ def main(argv=None):
                 "Divida o projeto ou aumente o limite.")
             return 2
 
-        clock.stage("[3/6] Placement")
+        macros = sorted(set(args.macro) | set(fplan.macros if fplan else ()))
+        clock.stage("[3/6] Placement" + (f" hierárquico (macros: {', '.join(macros)})" if macros else ""))
         rules = Rules()
         params = _place_params(args)
         try:
-            board = place.place(lib, design, params, rules, fplan)
-        except floorplan.FloorplanError as e:
+            if macros:
+                board, summary = hier.place_hier(lib, design, params, rules, fplan, macros, args.route_iter, log)
+                for typ, path, w, h, cells, n_copies, unrouted, secs in summary:
+                    log(f"      macro {typ} (molde {path}): {w:g} x {h:g} mm, {cells} portas, "
+                        f"{n_copies} cópia(s), {progress.fmt_time(secs)}"
+                        + (f" — {len(unrouted)} ligação(ões) sem rotear por dentro: {', '.join(unrouted[:5])}"
+                           if unrouted else ""))
+            else:
+                board = place.place(lib, design, params, rules, fplan)
+        except (floorplan.FloorplanError, hier.HierError) as e:
             log(f"ERRO: {e}")
             return 3
         board.group_cells = {inst: cell for inst, (cell, _) in design.instances.items()}
@@ -228,7 +245,12 @@ def main(argv=None):
         return 0
 
     clock.stage("[4/6] Roteamento")
-    route.route(board, args.route_iter, log=lambda m: log("    " + m))
+    # ponto de controle: parar e rodar de novo retoma o roteamento desta mesma
+    # placa da última iteração completa (--fresh começa do zero)
+    ckpt = out / "route_state.pkl"
+    if args.fresh and ckpt.exists():
+        ckpt.unlink()
+    route.route(board, args.route_iter, log=lambda m: log("    " + m), checkpoint=ckpt)
 
     clock.stage("[5/6] Verificação (folgas + conectividade)")
     with progress.Progress("verificação de folgas e conectividade", tick=True):
@@ -428,8 +450,10 @@ def _write_report(path, args, design, board, by_cell, errors, unconnected, lib, 
     L += ["", "## Pendências", ""]
     if not errors and not unconnected and not board.unrouted:
         L.append("Nenhuma: todas as nets roteadas e sem violações de folga.")
+    blocked = set(getattr(board, "unrouted_blocked", ()))
     for n in board.unrouted:
-        L.append(f"- não roteada: `{n}`")
+        L.append(f"- não roteada: `{n}`" + (" (bloqueio físico: sem caminho nem com a placa vazia; "
+                                             "veja os pads/pinos dela e o floorplan)" if n in blocked else ""))
     for n, c in sorted(unconnected.items()):
         L.append(f"- net `{n}` em {c} partes")
     for e in errors[:50]:

@@ -1,0 +1,4 @@
+{
+  "description": "flip-flop D, borda de subida: mestre (transparente com C=0) e escravo (com C=1), cada um com um relé de seleção e um relé autotravado",
+  "max_fanout": 8
+}

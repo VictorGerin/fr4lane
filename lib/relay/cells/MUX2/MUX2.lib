@@ -1,0 +1,10 @@
+/* MUX2 — multiplexador: o contato de S comuta a saída entre A (solto) e B (energizado) */
+library(relay_MUX2) {
+  cell(MUX2) {
+    area : 2;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(S) { direction : input; }
+    pin(Y) { direction : output; function : "(S&B)|(!S&A)"; }
+  }
+}

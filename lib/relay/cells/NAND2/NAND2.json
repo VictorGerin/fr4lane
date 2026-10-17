@@ -1,0 +1,4 @@
+{
+  "description": "NAND: K1 gera !A; K2 passa !A (B energizado) ou põe VDD",
+  "max_fanout": 8
+}

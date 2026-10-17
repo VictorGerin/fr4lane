@@ -1,0 +1,4 @@
+{
+  "description": "XNOR: K1 gera !A; K2 escolhe A (B energizado) ou !A",
+  "max_fanout": 8
+}

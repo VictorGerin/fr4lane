@@ -1,0 +1,4 @@
+{
+  "description": "NOR: K1 gera !A; K2 põe GND (B energizado) ou passa !A",
+  "max_fanout": 8
+}

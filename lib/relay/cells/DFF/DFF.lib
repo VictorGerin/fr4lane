@@ -1,0 +1,13 @@
+/* DFF — flip-flop D, borda de subida: mestre (transparente com C=0) e escravo (com C=1), cada um com um relé de seleção e um relé autotravado */
+library(relay_DFF) {
+  cell(DFF) {
+    area : 7;
+    ff(IQ, IQN) {
+      clocked_on : "C";
+      next_state : "D";
+    }
+    pin(D) { direction : input; }
+    pin(C) { direction : input; clock : true; }
+    pin(Q) { direction : output; function : "IQ"; }
+  }
+}

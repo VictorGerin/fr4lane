@@ -24,10 +24,11 @@ VERSION = 1
 CODE_DIR = Path(__file__).resolve().parent
 # código que roda até o fim do placement (e as classes que vão no pickle)
 PLACE_CODE = ("library.py", "liberty.py", "spice.py", "netlist.py", "synth.py", "drive.py",
-              "sizing.py", "place.py", "anneal.py", "jit.py", "layout.py", "floorplan.py", "cache.py")
+              "sizing.py", "place.py", "anneal.py", "jit.py", "layout.py", "floorplan.py", "cache.py",
+              "hier.py", "route.py")       # com macros, o roteamento deles acontece no placement
 # opções do argparse que mudam a síntese ou o placement
 PLACE_ARGS = ("top", "layers", "effort", "seed", "density", "row_gap", "part_gap",
-              "module_weight", "flatten", "no_size")
+              "module_weight", "flatten", "no_size", "macro", "route_iter")
 NAMES = {"src": "fontes Verilog", "lib": "biblioteca de células", "floorplan": "floorplan",
          "args": "opções do fluxo", "code": "código do pcbflow"}
 
@@ -67,9 +68,10 @@ def fingerprint(args):
     }
 
 
-def load(out, key):
+def load(out, key, ignore=()):
     """(dados, motivo): dados do placement salvo se a impressão bate; senão None
-    e o motivo em texto (ou None se não há placement salvo)."""
+    e o motivo em texto (ou None se não há placement salvo). ignore: partes da
+    impressão que não contam (--keep-placement ignora o código do pcbflow)."""
     path = Path(out) / FILE
     if not path.is_file():
         return None, None
@@ -80,7 +82,7 @@ def load(out, key):
         return None, f"placement salvo ilegível ({type(e).__name__})"
     if data.get("version") != VERSION:
         return None, "placement salvo de outra versão do cache"
-    changed = [NAMES[k] for k in NAMES if data.get("key", {}).get(k) != key.get(k)]
+    changed = [NAMES[k] for k in NAMES if k not in ignore and data.get("key", {}).get(k) != key.get(k)]
     if changed:
         return None, "mudou: " + ", ".join(changed)
     return data, None

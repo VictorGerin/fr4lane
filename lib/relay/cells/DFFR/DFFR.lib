@@ -1,0 +1,15 @@
+/* DFFR — flip-flop D, borda de subida, clear assíncrono ativo baixo: como o DFF, com K5/K6 cortando as bobinas do mestre e do escravo enquanto R = 0 */
+library(relay_DFFR) {
+  cell(DFFR) {
+    area : 10;
+    ff(IQ, IQN) {
+      clocked_on : "C";
+      next_state : "D";
+      clear : "!R";
+    }
+    pin(D) { direction : input; }
+    pin(C) { direction : input; clock : true; }
+    pin(R) { direction : input; }
+    pin(Q) { direction : output; function : "IQ"; }
+  }
+}

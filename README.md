@@ -30,6 +30,8 @@ Opções úteis: `--effort` (esforço do placement), `--row-gap`/`--part-gap` (d
 
 **Placement reaproveitado.** Ao fim do placement o fluxo grava `place_cache.pkl` na pasta da rodada: o design sintetizado e dimensionado, a placa posicionada e as simulações que já rodaram. Na rodada seguinte (ex.: `make pcb-place` e depois `make pcb`), se nada que influencia esse resultado mudou, as etapas 0 a 3 são puladas e o fluxo vai direto ao roteamento: `[0-3/6] ... reaproveitados da rodada de <data>`. A impressão digital cobre o conteúdo dos fontes Verilog, os arquivos da família de células (e o `footprints.json`), o floorplan, as opções que mudam a placa (`--layers`, `--effort`, `--seed`, `--density`, `--row-gap`, `--part-gap`, `--module-weight`, `--flatten`, `--no-size`) e o código do pcbflow que roda até o placement; se algo mudou, o log diz o quê e o fluxo refaz tudo. Uma simulação que já rodou com o mesmo testbench não roda de novo. `--fresh` ignora o cache.
 
+**Roteamento retomável.** Ao fim de cada iteração o roteador grava um ponto de controle (`route_state.pkl`: os caminhos de cada net e o histórico de disputa). Se a rodada for interrompida (Ctrl+C, o *Cancelar* do editor, queda), rodar de novo com as mesmas entradas reaproveita o placement e **continua da última iteração completa** (`retomado do ponto de controle: 3 iteração(ões) já feita(s)`), com o mesmo resultado de uma rodada sem interrupção. Com o roteamento já concluído (ex.: o DRC falhou depois), a rodada seguinte o reaproveita inteiro. O ponto de controle só vale para a mesma placa e a mesma versão do roteador; `--fresh` começa do zero. A retomada é entre iterações: uma iteração interrompida no meio é refeita.
+
 **Progresso.** As etapas longas mostram o andamento: no terminal, uma linha reescrita no lugar; num arquivo ou pipe, uma linha a cada ~30 s. O anelamento do placement e cada iteração do roteamento têm porcentagem e estimativa do que falta (no roteamento, cada net pesa pelo tamanho, porque as maiores ficam por último); a síntese mostra o passo do Yosys (ex.: `passo 16/25: ABC`) e a simulação, a última linha do testbench. Cada etapa termina com o seu tempo (`etapa: 2 min 10 s`).
 
 ## Bibliotecas de células
@@ -159,6 +161,26 @@ A hierarquia do Verilog é mantida até a placa:
 
 Para ver cada módulo isolado na placa, instancie-os num topo sem fios em comum, como em `rtl/basic/basic_top.v`.
 
+### Macros (fluxo hierárquico)
+
+Para circuitos grandes, módulos podem ser implementados à parte e copiados, no padrão da indústria: **o topo decide onde cada bloco fica (top-down) e cada bloco é feito de baixo para cima (bottom-up)**.
+
+```sh
+make pcb PCB_TOP=adder_32bit PCB_LIB=pcbflow/lib/rtl PCB_ARGS="--macro adder --macro adder_16bit"
+```
+
+ou, no floorplan, `"macros": ["adder", "adder_16bit"]`. Um macro é um **tipo** de módulo (o nome do Verilog):
+
+1. **Moldes:** as instâncias do tipo com a mesma estrutura (mesmas portas ligadas do mesmo jeito) compartilham um molde; uma instância diferente (ex.: o sizing trocou uma célula dela) ganha molde próprio. Cada molde é posicionado e roteado **uma vez**, sozinho, num retângulo com margem de 1,5 mm.
+2. **Pinos:** cada net que sai do macro ganha um pino na borda: o lado mais perto dos terminais da net e, nele, o ponto livre mais perto (F.Cu nas laterais, B.Cu em cima e embaixo; pinos a 1 mm um do outro).
+3. **Hierarquia e paralelismo:** um macro pode conter outros (o `adder_16bit` acima é feito de 4 `adder` prontos); os moldes do mesmo nível rodam em processos separados, em paralelo.
+4. **Montagem:** cada instância recebe uma cópia do seu molde (componentes, trilhas e vias, com nets e instâncias renomeadas), num retângulo reservado com um canal livre de 1,5 mm em volta para chegar aos pinos. O resto do circuito ("cola") é posicionado normalmente, puxado pelos pinos dos macros, e o roteamento de cima só liga os pinos e os pads da cola: muito menos nets e buscas menores.
+5. **Onde fica cada macro:** sem floorplan, os macros vão para o alto da placa, em prateleiras, e a cola vai para as fileiras de baixo. Com floorplan, uma fence/region com o caminho da instância (ex.: `add_comp_inst.main_adder`) diz onde ela fica (a área tem de comportar o macro mais o canal; o erro diz o tamanho necessário); sem isso, o macro vai para dentro da área do módulo que o contém (empacotado a partir do canto superior esquerdo) ou, se nenhum módulo acima dele tem área, para uma faixa abaixo das áreas declaradas. O log mostra o tamanho de cada molde para dimensionar as áreas.
+
+Instâncias do mesmo tipo podem ganhar moldes diferentes: no `fanout_test`, a `u_and2` alimenta 16 NOTs, o sizing a troca por `AND2_X2` e ela fica com molde próprio, maior. O cobre de um macro pronto é obstáculo para as rotas de fora (até da própria net, que só entra pelo pino), mas o espaço livre dentro dele continua disponível para elas.
+
+A simulação de componentes, a verificação de conectividade e o DRC continuam sobre a placa inteira, então um erro de montagem aparece. Limites: só placas de 4 camadas (VDD/GND nos planos internos); o editor de floorplan ainda mede as áreas pelos blocos soltos, sem saber o tamanho dos macros; e os pinos são escolhidos só pelo lado de dentro do macro (o topo não opina).
+
 ## Como a placa é montada
 
 - **Simulação em nível de componente:** MOSFETs e BJTs viram as primitivas `nmos`/`pmos` do Verilog, e resistores viram `rtran`, uma ligação resistiva: um transistor conduzindo vence o pull-up. Cada saída de bloco tem um atraso de transporte de 10 ps; com atraso inercial, o Icarus prende glitches como X.
@@ -166,7 +188,9 @@ Para ver cada módulo isolado na placa, instancie-os num topo sem fios em comum,
 - **Roteamento (`route.py`):**
   - grade de 0,5 mm em F.Cu (horizontal) e B.Cu (vertical), com vias para trocar de camada;
   - VDD e GND são planos internos, sem trilha: pads SMD de alimentação ganham uma via curta até o plano, e pads com furo ligam-se a ele direto;
-  - os sinais são roteados por negociação (PathFinder): as nets podem disputar espaço no início, e o custo dos pontos disputados sobe a cada iteração até ninguém mais compartilhar;
+  - os sinais são roteados por negociação (PathFinder): as nets podem disputar espaço no início, e o custo dos pontos disputados sobe a cada iteração (1,6× por iteração, com teto de 300 vezes o custo de um passo; o histórico de disputa segue acumulando) até ninguém mais compartilhar;
+  - o limite de pontos que a busca de uma net explora acompanha o tamanho dela (20 vezes a área do retângulo da net, entre 400 mil e 8 milhões); se mesmo assim ela não acha caminho, tenta de novo sem custo de disputa, de modo que toda net entra na negociação e só fica sem caminho o que é fisicamente impossível;
+  - depois da última iteração, as nets ainda em conflito são descartadas e cada uma tenta uma última vez contra a placa já roteada (sem cruzar ninguém); o que sobra vai para *Pendências* no `report.md`, marcado quando é bloqueio físico (sem caminho nem com a placa vazia: um pad ou pino cercado) — o resto é falta de espaço (`--row-gap`, floorplan);
   - trilha de 0,25 mm, folga de 0,2 mm e via de 0,6/0,3 mm;
   - a busca A* de cada ligação é compilada pelo [numba](https://numba.pydata.org/) (já incluso no Anaconda), com a grade em arrays numpy: de 10 a 20 vezes mais rápido que em Python puro, com as mesmas trilhas. Sem o numba, a mesma busca roda em Python puro, e o log avisa (`busca A*: Python puro`). A primeira rodada depois de mudar o `route.py` compila a busca (alguns segundos); depois ela fica em cache em `__pycache__`.
 

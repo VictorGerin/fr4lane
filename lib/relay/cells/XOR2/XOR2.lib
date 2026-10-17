@@ -1,0 +1,9 @@
+/* XOR2 — XOR: K1 gera !A; K2 escolhe !A (B energizado) ou A */
+library(relay_XOR2) {
+  cell(XOR2) {
+    area : 4;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "A^B"; }
+  }
+}

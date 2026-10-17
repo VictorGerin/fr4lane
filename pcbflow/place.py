@@ -55,10 +55,18 @@ class PlaceParams:
                                  # encostado à esquerda); elas espalham o módulo pela área toda
     density_weight: float = 1.0  # força com que o anelamento respeita a ocupação-alvo
     seed: int = 1
+    bare: bool = False           # interior de um macro (hier.py): sem conectores nem bulk, margem fina
 
 
 def _snap(v, g):
     return round(v / g) * g
+
+
+def _pin_pos(k):
+    """Posição (em passos de 2,54 mm) do k-ésimo pino da coluna de conectores:
+    as barras têm até 40 pinos e uma posição vazia entre elas, senão os
+    contornos de duas barras vizinhas se sobrepõem."""
+    return k + k // 40
 
 
 class _Geo:
@@ -75,8 +83,12 @@ class _Geo:
         # da borda direita da lógica até a borda da placa
         self.reserve_r = self.trunk_band + params.io_gap + 2.54 + params.margin
         self.y_top = _snap(params.margin + 2.0 + (0.5 if two else 0.0), g)
-        self.min_h = params.margin + 1.27 + max(n_left + 4, n_right) * 2.54 + params.margin + 4.0
-        self.io_h = max(n_left, n_right) * 2.54
+        self.min_h = params.margin + 1.27 + max(_pin_pos(n_left) + 4, _pin_pos(n_right)) * 2.54 + params.margin + 4.0
+        self.io_h = max(_pin_pos(n_left), _pin_pos(n_right)) * 2.54
+        if params.bare:                            # macro: só a margem em volta da lógica
+            self.x0 = self.y_top = _snap(params.margin, g)
+            self.reserve_r = params.margin
+            self.min_h = self.io_h = 0.0
         self.margin, self.cell_gap = params.margin, params.cell_gap
 
     def as_dict(self):
@@ -105,13 +117,15 @@ def _measure(lib, design, params, rules):
         if b.cell not in layouts:
             layouts[b.cell] = lib.block_layout(b.cell, part_gap)
     width = [layouts[b.cell][1] + params.cell_gap for b in blocks]
-    block_h = max(l[2] for l in layouts.values())
+    block_h = max((l[2] for l in layouts.values()), default=0.0)   # 0: só macros, sem blocos soltos
 
     # --- conectores de E/S --------------------------------------------------
     inputs = [p for p in design.ports if p.direction == "input"]
     outputs = [p for p in design.ports if p.direction != "input"]
     left = [(design.vdd, "VDD"), (design.gnd, "GND")] + [(p.net, p.name) for p in inputs]
     right = [(p.net, p.name) for p in outputs] + [(design.gnd, "GND")]
+    if params.bare:                    # macro: as ligações para fora são pinos na borda (hier.py)
+        left, right = [], []
 
     dec = lib.meta.get("decoupling", {})
     dec_row = lib.parts.get(dec.get("row", ""))
@@ -144,7 +158,10 @@ def measure(lib, design, params=None, rules=None):
     return info
 
 
-def place(lib, design, params=None, rules=None, floorplan=None):
+def place(lib, design, params=None, rules=None, floorplan=None, extra_fixed=None, _grow=0):
+    """extra_fixed: {net: [(x, y)]} pontos fixos que puxam os blocos ligados a eles
+    (os pinos dos macros já posicionados, no fluxo hierárquico). _grow: fileiras a
+    mais no tamanho automático (nova tentativa quando a legalização não fecha)."""
     params = params or PlaceParams()
     rules = rules or Rules()
     g = rules.grid
@@ -162,9 +179,9 @@ def place(lib, design, params=None, rules=None, floorplan=None):
             net_blocks.setdefault(net, set()).add(i)
 
     if floorplan is None:
-        fm = _auto_slots(blocks, width, geo)
+        fm = _auto_slots(blocks, width, geo, _grow)
     else:
-        fm = _declared_slots(blocks, width, geo, floorplan)
+        fm = _declared_slots(blocks, width, geo, floorplan, _grow)
     slots, allowed, rows = fm["slots"], fm["allowed"], fm["rows"]
     W, H, y0, n_global, lx1 = fm["W"], fm["H"], fm["y0"], fm["n_global"], fm["lx1"]
     x0 = geo.x0
@@ -176,9 +193,12 @@ def place(lib, design, params=None, rules=None, floorplan=None):
     for entries, x in ((left, left_x), (right, right_x)):
         for k, (net, _) in enumerate(entries):
             if net not in power:
-                fixed.setdefault(net, []).append((x, params.margin + 1.27 + k * 2.54))
+                fixed.setdefault(net, []).append((x, params.margin + 1.27 + _pin_pos(k) * 2.54))
     # ordem fixa (um set de nomes muda de ordem a cada processo, e a ordem das
     # somas de custo mudaria o anelamento): o placement é reprodutível
+    for net, pts in (extra_fixed or {}).items():
+        if net not in power:
+            fixed.setdefault(net, []).extend(pts)
     nets = sorted(set(net_blocks) | set(fixed))
     net_index = {net: k for k, net in enumerate(nets)}
     nets_of_block = [sorted(net_index[nt] for nt in set(b.pins.values()) - power) for b in blocks]
@@ -300,7 +320,10 @@ def place(lib, design, params=None, rules=None, floorplan=None):
 
     def evict_guest(tag, skip):
         """Abre espaço numa region tirando um bloco livre (intruso) de uma das
-        fileiras dela para um trecho livre."""
+        fileiras dela para um trecho livre. Numa fileira livre não há intruso:
+        mover blocos entre fileiras livres só os faria ir e voltar."""
+        if tag == "free":
+            return False
         for j in range(n_rows):
             if j == skip or slots[j][3] != tag:
                 continue
@@ -313,7 +336,9 @@ def place(lib, design, params=None, rules=None, floorplan=None):
         return False
 
     def legalize_row(k):
-        while row_len[k] - slots[k][2] > 0.01:
+        for _ in range(4 * n + 10):          # garantia: cada passo tira um bloco da fileira
+            if row_len[k] - slots[k][2] <= 0.01:
+                break
             best = None
             for v in rows[k]:
                 # quem não é dono do trecho (bloco livre numa region) sai primeiro
@@ -337,6 +362,10 @@ def place(lib, design, params=None, rules=None, floorplan=None):
             pg.update(i + 1)
     net_cost = [hpwl(e) for e in range(len(members))]
     over = [(k, row_len[k] - slots[k][2]) for k in range(n_rows) if row_len[k] - slots[k][2] > 0.01]
+    if over and (floorplan is None or floorplan.board is None) and _grow < 8:
+        # tamanho automático: a soma das larguras cabia, mas os blocos não se
+        # encaixaram nos trechos; tenta de novo com uma fileira a mais
+        return place(lib, design, params, rules, floorplan, extra_fixed, _grow + 1)
     if over and floorplan is not None:
         where = sorted({slots[k][3] for k, _ in over})
         raise FloorplanError(
@@ -381,12 +410,12 @@ def place(lib, design, params=None, rules=None, floorplan=None):
         fp.pad(dev["pins"]["2"]).net = design.gnd
         footprints.append(fp)
 
-    if dec_row:                          # desacoplamento no fim dos trechos marcados
+    if dec_row and n:                    # desacoplamento no fim dos trechos marcados
         for sx, sy, cp, _, here in slots:
             if here:
                 decap(dec["row"], sx + cp + params.cell_gap, sy + block_h / 2)
-    if dec.get("bulk"):
-        decap(dec["bulk"], left_x - 1.0, params.margin + 1.27 + len(left) * 2.54 + 4.0)
+    if dec.get("bulk") and not params.bare:
+        decap(dec["bulk"], left_x - 1.0, params.margin + 1.27 + _pin_pos(len(left)) * 2.54 + 4.0)
 
     # conectores (divididos em barras de no máximo 40 pinos)
     jn = 0
@@ -397,7 +426,7 @@ def place(lib, design, params=None, rules=None, floorplan=None):
             jn += 1
             hdr = pin_header(f"J{jn}", len(chunk), "IN" if side == "in" else "OUT")
             hdr.x = x
-            hdr.y = params.margin + 1.27 + start * 2.54
+            hdr.y = params.margin + 1.27 + _pin_pos(start) * 2.54
             for pad, (net, label) in zip(hdr.pads, chunk):
                 pad.net = net
                 pad.function = label
@@ -409,7 +438,7 @@ def place(lib, design, params=None, rules=None, floorplan=None):
     board.floorplan = floorplan
     board.keepouts = floorplan.keepouts if floorplan else []
     if two:
-        hdr_y = lambda k: params.margin + 1.27 + k * 2.54
+        hdr_y = lambda k: params.margin + 1.27 + _pin_pos(k) * 2.54
         _power_grid(board, params, rules, x0, lx1, y0, n_global, geo.row_pitch, block_h,
                     left_x, right_x, hdr_y(0), hdr_y(1), hdr_y(len(right) - 1), board.keepouts)
     for fp in footprints:
@@ -481,7 +510,7 @@ def _bfs_order(blocks):
     return order
 
 
-def _auto_slots(blocks, width, geo):
+def _auto_slots(blocks, width, geo, grow=0):
     params = geo.params
     n = len(blocks)
     region_of_key = {}
@@ -500,7 +529,8 @@ def _auto_slots(blocks, width, geo):
     for bl in reg_blocks:
         tot = sum(width[v] for v in bl)
         nr = max(1, round(math.sqrt(tot / geo.row_pitch)))
-        cp = max(tot / nr * 1.08 + params.cell_gap, max(width[v] for v in bl) + params.cell_gap)
+        # folga de 8%; a cada nova tentativa (blocos largos que não se encaixaram), +10%
+        cp = max(tot / nr * (1.08 + 0.10 * grow) + params.cell_gap, max(width[v] for v in bl) + params.cell_gap)
         reg_size.append((nr, cp, cp + params.cell_gap + geo.dec_w, nr * geo.row_pitch))
 
     # empacotamento em prateleiras (regiões mais altas primeiro); o espaço
@@ -637,10 +667,12 @@ def declared_capacity(fplan, slots, need):
     return have, short, need.get(None, 0.0) > spare * 0.95
 
 
-def declared_layout(geo, fplan, need, total_width, min_width):
+def declared_layout(geo, fplan, need, total_width, min_width, grow=0, max_width=0.0):
     """Tamanho da placa e trechos do floorplan declarado. Com 'board' a placa é
     fixa; sem ele, começa pela estimativa sem restrições e cresce a altura até
-    os blocos livres caberem, sempre contendo as áreas declaradas."""
+    os blocos livres caberem, sempre contendo as áreas declaradas. grow: fileiras
+    a mais (quando a soma das larguras cabe mas os blocos não se encaixam);
+    max_width: o bloco mais largo, que tem de caber inteiro numa fileira."""
     if fplan.board:
         W, H = fplan.board
         if H < geo.min_h:
@@ -651,10 +683,13 @@ def declared_layout(geo, fplan, need, total_width, min_width):
     else:
         nr = max(1, round(math.sqrt(total_width / geo.row_pitch)))
         logic_w = total_width / nr * 1.08 + 2 * geo.cell_gap + geo.dec_w
-        W = max(geo.x0 + logic_w + geo.reserve_r,
-                max((r.rect[2] for r in fplan.modules.values()), default=0) + geo.reserve_r)
+        # o bloco mais largo cabe numa fileira com o capacitor e as folgas das pontas
+        logic_w = max(logic_w, max_width + 2 * geo.cell_gap + geo.dec_w + 1.0)
+        # as áreas declaradas e os keepouts (onde ficam os macros) cabem na placa
+        rects = [r.rect for r in fplan.modules.values()] + [k.rect for k in fplan.keepouts]
+        W = max(geo.x0 + logic_w + geo.reserve_r, max((r[2] for r in rects), default=0) + geo.reserve_r)
         H = max(geo.y_top + nr * geo.row_pitch + geo.margin + (1.5 if geo.two else 0.0), geo.min_h,
-                max((r.rect[3] for r in fplan.modules.values()), default=0) + geo.margin)
+                max((r[3] for r in rects), default=0) + geo.margin)
         W, H = _snap(W + 0.5, 1.0), _snap(H + 0.5, 1.0)
         for _ in range(400):
             slots, n_global, lx1 = declared_rows(geo, fplan, W, H, min_width)
@@ -662,6 +697,10 @@ def declared_layout(geo, fplan, need, total_width, min_width):
             if short or not free_short:
                 break
             H += geo.row_pitch / 2
+        if grow:
+            H += grow * geo.row_pitch
+            slots, n_global, lx1 = declared_rows(geo, fplan, W, H, min_width)
+            have, short, free_short = declared_capacity(fplan, slots, need)
         H = _snap(H + 0.5, 1.0)
     return {"slots": slots, "n_global": n_global, "lx1": lx1, "W": W, "H": H, "have": have,
             "short": short, "free_short": free_short}
@@ -712,7 +751,7 @@ def declared_density(geo, fplan, slots, need, default):
     return dens, util, target
 
 
-def _declared_slots(blocks, width, geo, fplan):
+def _declared_slots(blocks, width, geo, fplan, min_grow=0):
     n = len(blocks)
     modules = {b.module for b in blocks if b.module}
     for path in fplan.modules:
@@ -726,11 +765,45 @@ def _declared_slots(blocks, width, geo, fplan):
     for v in range(n):
         need[owner[v]] = need.get(owner[v], 0.0) + width[v]
 
-    lay = declared_layout(geo, fplan, need, sum(width), min(width))
-    problems = declared_problems(geo, fplan, lay, need)
-    if problems:
-        raise FloorplanError(problems[0])
+    for grow in range(min_grow, min_grow + 41):
+        lay = declared_layout(geo, fplan, need, sum(width), min(width, default=geo.cell_gap), grow,
+                              max(width, default=0.0))
+        problems = declared_problems(geo, fplan, lay, need)
+        if problems:
+            raise FloorplanError(problems[0])
+        fill = _declared_fill(blocks, width, geo, fplan, hard, owner, need, lay)
+        # tamanho automático: se os blocos livres não se encaixaram, mais uma fileira
+        if fplan.board is not None or not fill[-1]:
+            break
     slots, n_global, lx1, W, H, have = (lay[k] for k in ("slots", "n_global", "lx1", "W", "H", "have"))
+    allowed, target, spread, rows, used, rest = fill
+    shared = sorted((k for k, s in enumerate(slots) if s[3] == "free" or
+                     (s[3] in hard and hard[s[3]].type == "region")), key=lambda k: (slots[k][1], slots[k][0]))
+    for v in rest:                           # o anelamento acerta o excesso
+        k = max(shared, key=lambda k: slots[k][2] - used.get(k, 0.0))
+        rows[k].append(v)
+        used[k] = used.get(k, 0.0) + width[v]
+
+    guides = []
+    for r in fplan.modules.values():
+        if r.type == "guide":
+            bl = [v for v in range(n) if rule[v] is r]
+            if bl:
+                guides.append((r, bl))
+    grid = (geo.y_top, geo.row_pitch, geo.block_h, n_global)
+    usage = [(p, r.type, need.get(p, 0.0), have.get(p, 0.0)) for p, r in hard.items()]
+    usage.append(("(sem área)", "", need.get(None, 0.0), have.get("free", 0.0)))
+    return {"slots": slots, "allowed": allowed, "rows": rows, "owner": owner, "target": target, "spread": spread,
+            "W": W, "H": H, "y0": geo.y_top,
+            "n_global": n_global, "lx1": lx1, "guides": guides, "n_regions": len(hard), "usage": usage,
+            "grid": grid}
+
+
+def _declared_fill(blocks, width, geo, fplan, hard, owner, need, lay):
+    """Distribuição inicial dos blocos nos trechos de 'lay': (permitidos, metas,
+    espalhar?, fileiras, ocupado, blocos livres que não couberam)."""
+    n = len(blocks)
+    slots = lay["slots"]
 
     # trechos permitidos de cada bloco
     by_tag = {}
@@ -752,24 +825,7 @@ def _declared_slots(blocks, width, geo, fplan):
         for v in rest:
             rows[ks[-1]].append(v)
     rest = _fill_area([v for v in order if owner[v] is None], shared, slots, target, width, rows, used)
-    for v in rest:                           # o anelamento acerta o excesso
-        k = max(shared, key=lambda k: slots[k][2] - used.get(k, 0.0))
-        rows[k].append(v)
-        used[k] = used.get(k, 0.0) + width[v]
-
-    guides = []
-    for r in fplan.modules.values():
-        if r.type == "guide":
-            bl = [v for v in range(n) if rule[v] is r]
-            if bl:
-                guides.append((r, bl))
-    grid = (geo.y_top, geo.row_pitch, geo.block_h, n_global)
-    usage = [(p, r.type, need.get(p, 0.0), have.get(p, 0.0)) for p, r in hard.items()]
-    usage.append(("(sem área)", "", need.get(None, 0.0), have.get("free", 0.0)))
-    return {"slots": slots, "allowed": allowed, "rows": rows, "owner": owner, "target": target, "spread": spread,
-            "W": W, "H": H, "y0": geo.y_top,
-            "n_global": n_global, "lx1": lx1, "guides": guides, "n_regions": len(hard), "usage": usage,
-            "grid": grid}
+    return allowed, target, spread, rows, used, rest
 
 
 # ------------------------------------------------- alimentação de 2 camadas

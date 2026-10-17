@@ -19,6 +19,12 @@ import threading
 import time
 
 MACHINE = os.environ.get("PCBFLOW_PROGRESS") == "1"
+QUIET = False             # processos auxiliares (macros em paralelo) não mostram progresso
+
+
+def silence():
+    global QUIET
+    QUIET = True
 _lock = threading.Lock()
 _active = None            # Progress na tela (terminal), para limpar a linha antes de outro log
 
@@ -86,7 +92,7 @@ class Progress:
             if self.tty and self.width:
                 sys.stdout.write("\r" + " " * self.width + "\r")
                 sys.stdout.flush()
-            if MACHINE:
+            if MACHINE and not QUIET:
                 print("@progress " + json.dumps({"label": self.label, "end": True}), flush=True)
             if _active is self:
                 _active = None
@@ -131,6 +137,8 @@ class Progress:
         return el * (self.total - self.done) / self.done
 
     def _emit(self, force=False):
+        if QUIET:
+            return
         now = time.time()
         if not force and now - self.last < self.every:
             return

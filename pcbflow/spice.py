@@ -5,6 +5,10 @@ Elementos aceitos dentro de um .subckt:
   Q<nome> coletor base emissor [subst] MODELO (BJT)
   R<nome> n1 n2 valor                         (resistor)
   C<nome> n1 n2 valor                         (capacitor)
+  D<nome> anodo catodo MODELO                 (diodo)
+  K<nome> c1 c2 com na nf MODELO              (relé SPDT: bobina c1/c2, contato comum,
+                                               normalmente aberto e normalmente fechado;
+                                               convenção do pcbflow, não é o K do SPICE)
   X<nome> nós... SUBCKT                       (instância de outro subcircuito)
 Parâmetros no formato chave=valor são ignorados. MODELO é uma chave do
 parts.json da família (ex.: NMOS, NPN).
@@ -88,10 +92,14 @@ def read_subckts(path):
                 el = Element(name, "Q", rest[0:3], model=rest[-1] if len(rest) in (4, 5) else rest[3])
             elif letter in ("R", "C"):
                 el = Element(name, letter, rest[0:2], model=letter, value=rest[2])
+            elif letter == "D":
+                el = Element(name, "D", rest[0:2], model=rest[2])
+            elif letter == "K":
+                el = Element(name, "K", rest[0:5], model=rest[5])
             elif letter == "X":
                 el = Element(name, "X", rest[:-1], model=rest[-1])
             else:
-                raise SpiceError(f"{path}: elemento '{name}' não suportado (use M, Q, R, C ou X)")
+                raise SpiceError(f"{path}: elemento '{name}' não suportado (use M, Q, R, C, D, K ou X)")
         except IndexError:
             raise SpiceError(f"{path}: linha incompleta: {line}") from None
         cur.elements.append(el)

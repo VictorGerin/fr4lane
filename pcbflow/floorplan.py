@@ -36,6 +36,13 @@ trilho de alimentação é o mesmo. Dentro de uma fence/region não há
 capacitor, a não ser com "decoupling": true (um no fim de cada trecho da
 área).
 
+Macros: "macros": ["adder", ...] lista tipos de módulo (os nomes do Verilog)
+implementados à parte, uma vez por estrutura, e copiados em cada instância
+(hier.py). Uma fence/region com o caminho de uma instância de macro diz onde
+ela fica; sem isso, o macro vai para dentro da área do módulo que o contém ou,
+sem nenhuma, para uma faixa abaixo das áreas declaradas (sem floorplan: o alto
+da placa).
+
 Módulos são caminhos de instância (u_fa, u0.u2), os mesmos do report.md. Um
 caminho vale para todos os submódulos dele; se um submódulo também tiver
 regra, vale a mais específica.
@@ -78,6 +85,7 @@ class Floorplan:
     board: tuple = None                        # (largura, altura) ou None (automático)
     modules: dict = field(default_factory=dict)   # caminho -> ModuleRule
     keepouts: list = field(default_factory=list)
+    macros: list = field(default_factory=list)    # tipos de módulo implementados como macro
 
     def rule_of(self, module_path):
         """Regra mais específica que vale para um caminho de módulo (ou None)."""
@@ -138,8 +146,12 @@ def parse(data, path="floorplan"):
     """Valida um floorplan já lido do JSON (path só aparece nas mensagens)."""
     if not isinstance(data, dict):
         raise FloorplanError(f"{path}: esperado um objeto JSON")
-    _keys(data, ("board", "modules", "keepouts", "_comment"), path)
+    _keys(data, ("board", "modules", "keepouts", "macros", "_comment"), path)
     fp = Floorplan(str(path))
+    macros = data.get("macros", [])
+    if not isinstance(macros, list) or not all(isinstance(m, str) and m for m in macros):
+        raise FloorplanError(f"{path}: 'macros' deve ser uma lista de tipos de módulo (ex.: [\"adder\"])")
+    fp.macros = list(macros)
 
     if "board" in data:
         b = data["board"]

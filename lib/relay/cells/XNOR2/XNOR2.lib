@@ -1,0 +1,9 @@
+/* XNOR2 — XNOR: K1 gera !A; K2 escolhe A (B energizado) ou !A */
+library(relay_XNOR2) {
+  cell(XNOR2) {
+    area : 4;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "!(A^B)"; }
+  }
+}

@@ -1,0 +1,4 @@
+{
+  "description": "multiplexador: o contato de S comuta a saída entre A (solto) e B (energizado)",
+  "max_fanout": 8
+}

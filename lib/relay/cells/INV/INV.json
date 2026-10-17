@@ -1,0 +1,4 @@
+{
+  "description": "inversor: o contato liga a saída ao GND (energizado) ou ao VDD",
+  "max_fanout": 8
+}

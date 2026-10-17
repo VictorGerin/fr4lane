@@ -1,0 +1,9 @@
+/* AND2 — AND: K1 gera A; K2 passa A (B energizado) ou põe GND */
+library(relay_AND2) {
+  cell(AND2) {
+    area : 4;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "A&B"; }
+  }
+}

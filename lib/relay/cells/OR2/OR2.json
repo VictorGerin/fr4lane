@@ -1,0 +1,4 @@
+{
+  "description": "OR: K1 gera A; K2 põe VDD (B energizado) ou passa A",
+  "max_fanout": 8
+}

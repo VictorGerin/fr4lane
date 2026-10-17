@@ -1,0 +1,9 @@
+/* NOR2 — NOR: K1 gera !A; K2 põe GND (B energizado) ou passa !A */
+library(relay_NOR2) {
+  cell(NOR2) {
+    area : 4;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "!(A|B)"; }
+  }
+}

@@ -22,6 +22,7 @@ class Pad:
     net: str = ""
     function: str = ""
     fp: "Footprint" = None
+    macro: bool = False  # pad de um macro já roteado: o roteador de cima o trata só como obstáculo
 
     @property
     def x(self):

@@ -95,7 +95,8 @@ def _module_types(hier_path, top):
 
     def walk(mod, prefix):
         for cname, c in mods[mod]["cells"].items():
-            if c["type"] in mods:
+            # as células da biblioteca também aparecem como módulos (caixas-pretas)
+            if c["type"] in mods and not mods[c["type"]].get("attributes", {}).get("blackbox"):
                 path = prefix + _clean(cname)
                 out[path] = short(c["type"])
                 walk(c["type"], path + ".")
@@ -282,7 +283,12 @@ def write_switch_level_verilog(lib, design, path, module_name=None):
                 lines.append(f"  {prim} {inst}({ident(pins[o])}, {ident(pins[i])}, {ident(pins[c])});")
             elif kind == "resistor":
                 lines.append(f"  rtran {inst}({ident(pins['1'])}, {ident(pins['2'])});")
-            # capacitores não afetam a lógica
+            elif kind == "relay":
+                # contato bidirecional comandado pela bobina: fecha COM-NO energizado, COM-NC solto
+                c = ident(pins["C1"])
+                lines.append(f"  tranif1 {ident(f'{b.name}.{p.name}.no')}({ident(pins['COM'])}, {ident(pins['NO'])}, {c});")
+                lines.append(f"  tranif0 {ident(f'{b.name}.{p.name}.nc')}({ident(pins['COM'])}, {ident(pins['NC'])}, {c});")
+            # capacitores e diodos (supressão da bobina) não afetam a lógica
     lines.append("endmodule")
     with open(path, "w") as f:
         f.write("\n".join(lines) + "\n")

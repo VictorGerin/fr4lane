@@ -31,10 +31,15 @@ KIND_ROLES = {
     "pnp": ("C", "B", "E"),
     "resistor": ("1", "2"),
     "capacitor": ("1", "2"),
+    # relé SPDT: bobina C1 (+) e C2 (no GND); contato comum, normalmente aberto, normalmente fechado
+    "relay": ("C1", "C2", "COM", "NO", "NC"),
+    "diode": ("A", "K"),
 }
-SPICE_LETTER = {"nmos": "M", "pmos": "M", "npn": "Q", "pnp": "Q", "resistor": "R", "capacitor": "C"}
-CONTROL_ROLES = {"G", "B"}
-KIND_ROW = {"pmos": 0, "pnp": 0, "resistor": 1, "capacitor": 1, "nmos": 2, "npn": 2}
+SPICE_LETTER = {"nmos": "M", "pmos": "M", "npn": "Q", "pnp": "Q", "resistor": "R", "capacitor": "C",
+                "relay": "K", "diode": "D"}
+CONTROL_ROLES = {"G", "B", "C1", "C2"}
+KIND_ROW = {"pmos": 0, "pnp": 0, "resistor": 1, "capacitor": 1, "diode": 1, "nmos": 2, "npn": 2, "relay": 2}
+PASSIVE_KINDS = ("resistor", "capacitor", "diode")   # não dirigem a saída de um bloco
 
 
 class LibraryError(Exception):
@@ -124,7 +129,7 @@ class Library:
             if pin in self.supplies():
                 continue
             for el in sub.devices:
-                if self.part(el)["kind"] in ("resistor", "capacitor"):
+                if self.part(el)["kind"] in PASSIVE_KINDS:
                     continue
                 if any(n == pin and r not in CONTROL_ROLES for r, n in self.element_roles(el).items()):
                     outs.append(pin)
@@ -170,6 +175,9 @@ class Library:
                     p.append(f"{name}: {el.name} usa o modelo '{el.model}', que não está no parts.json")
                 elif SPICE_LETTER.get(part["kind"]) != el.letter:
                     p.append(f"{name}: {el.name} é '{el.letter}' mas {el.model} é {part['kind']}")
+                elif part["kind"] == "relay" and el.nodes[1] not in (self.gnd, "0"):
+                    # a simulação liga o contato pela tensão de C1 (bobina do lado de C2 no GND)
+                    p.append(f"{name}: {el.name}: o lado C2 da bobina deve ir ao {self.gnd}")
             rows = self.meta_of(name).get("layout", {}).get("rows")
             if rows:
                 names = [n for row in rows for n in row]
