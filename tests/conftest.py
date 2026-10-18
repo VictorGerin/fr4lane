@@ -42,15 +42,25 @@ def _have_kicad():
     return drc.find_cli() is not None
 
 
+def chrome_binary():
+    """Chrome ou Chromium instalado (None: nenhum)."""
+    for p in ("C:/Program Files/Google/Chrome/Application/chrome.exe",
+              "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+              "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"):
+        if Path(p).is_file():
+            return p
+    for name in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "chrome"):
+        if shutil.which(name):
+            return shutil.which(name)
+    return None
+
+
 def _have_ui():
     try:
         import selenium  # noqa: F401
     except ImportError:
         return False
-    return any(Path(p).is_file() for p in (
-        "C:/Program Files/Google/Chrome/Application/chrome.exe",
-        "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe")) or bool(
-        shutil.which("google-chrome") or shutil.which("chromium") or shutil.which("chrome"))
+    return chrome_binary() is not None
 
 
 def pytest_collection_modifyitems(config, items):

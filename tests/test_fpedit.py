@@ -299,3 +299,58 @@ def test_api_rodada_e_check(server, hier_run):
     assert r["run"]["macros"]["types"] == ["add4", "fa"]
     code, c = api.req("/api/check", {"data": {"macros": ["add4"]}, "run": "hier8_rtl"})
     assert code == 200 and c["errors"] == [] and len(c["macros"]["instances"]) == 2
+
+
+# ------------------------------------------- execução de verdade pelo menu
+@pytest.fixture
+def hier_project(tmp_path, monkeypatch):
+    """Projeto com pcbflow.json e o hier8 (fonte, testbench)."""
+    import shutil
+    (tmp_path / "rtl").mkdir()
+    shutil.copy(data("hier8.v"), tmp_path / "rtl")
+    shutil.copy(data("tb_hier8.v"), tmp_path / "rtl")
+    (tmp_path / "pcbflow.json").write_text(json.dumps({"src": ["rtl/hier8.v"], "tb": "rtl/tb_{top}.v"}),
+                                          encoding="utf-8")
+    p = project.load(tmp_path / "pcbflow.json")
+    monkeypatch.setattr(fpedit, "PROJ", p)
+    ed = fpedit.Editor()
+    ed.set(tmp_path / "rtl" / "hier8.floorplan.json", None, tmp_path / "rtl" / "hier8.v")
+    return ed
+
+
+def wait_job(ed, timeout=600):
+    import time
+    t0 = time.time()
+    while ed.job.running() and time.time() - t0 < timeout:
+        time.sleep(0.2)
+    return ed.job.snapshot(ed.job.id, 0)
+
+
+@pytest.mark.slow
+def test_menu_roda_o_fluxo(hier_project):
+    ed = hier_project
+    ed.start("stat", "rtl", 4, sim=True)
+    j = wait_job(ed)
+    log = "\n".join(j["lines"])
+    assert j["status"] == "ok" and j["rc"] == 0, log[-2000:]
+    assert j["lines"][0].startswith("$ pcbflow --top hier8 --lib rtl")
+    assert "Testbench do projeto" in log and "gate-level:       OK" in log
+    assert (ed.path.parent.parent / "build" / "pcb" / "hier8_rtl" / "placement.json").is_file()
+    assert [r["name"] for r in ed.state()["runs"]] == ["hier8_rtl"]
+
+
+@pytest.mark.slow
+def test_menu_cancela_a_execucao(hier_project):
+    import time
+    ed = hier_project
+    ed.start("pcb", "rtl", 4, sim=True)
+    proc = ed.job.proc
+    time.sleep(3)                                   # já dentro da síntese ou da simulação
+    assert ed.job.running()
+    with pytest.raises(FloorplanError, match="já há uma execução"):
+        ed.start("stat", "rtl", 4)
+    ed.job.cancel()
+    j = wait_job(ed, timeout=60)
+    assert j["status"] == "cancelled"
+    proc.wait(timeout=30)                           # o processo do fluxo termina logo depois
+    assert proc.returncode is not None and proc.returncode != 0

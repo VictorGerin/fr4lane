@@ -2,6 +2,7 @@
 botões, com uma rodada de verdade do hier8 (add4 e fa como macros)."""
 
 import json
+import sys
 import threading
 import time
 from http.server import ThreadingHTTPServer
@@ -9,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from conftest import data, lib_path
+from conftest import chrome_binary, data, lib_path
 from pcbflow import fpedit, project
 
 pytestmark = [pytest.mark.ui, pytest.mark.slow]
@@ -30,6 +31,11 @@ def browser():
     opt.add_argument("--headless=new")
     opt.add_argument("--window-size=1500,950")
     opt.set_capability("goog:loggingPrefs", {"browser": "ALL"})
+    opt.binary_location = chrome_binary()
+    if sys.platform.startswith("linux"):
+        # num container (root, /dev/shm pequeno) o Chromium precisa disso para abrir
+        opt.add_argument("--no-sandbox")
+        opt.add_argument("--disable-dev-shm-usage")
     d = webdriver.Chrome(options=opt)
     yield d
     d.quit()
@@ -56,6 +62,10 @@ def page(tmp_path, monkeypatch, hier_run, browser):
         servers.append(srv)
         browser.get(f"http://127.0.0.1:{port}/")
         wait(lambda: js("return !!(result && result.usage && run)"))
+        # marca o fim de cada verificação, para settle() esperar a resposta e não um tempo fixo
+        js("""window.__checked = checkSeq;
+              const orig = runCheck;
+              runCheck = async function () { await orig(); window.__checked = checkSeq; };""")
         return fp
     servers = []
     js = browser.execute_script
@@ -69,7 +79,18 @@ def page(tmp_path, monkeypatch, hier_run, browser):
         raise AssertionError("a página não chegou ao estado esperado")
 
     def settle():
-        time.sleep(0.8)         # a verificação roda 200 ms depois da edição e responde em poucos ms
+        # a verificação roda 200 ms depois de uma edição: espera ela começar e terminar
+        # (sem edição que a dispare, segue depois de 1 s)
+        before = js("return checkSeq")
+        t0 = time.time()
+        while time.time() - t0 < 10:
+            seq, done = js("return [checkSeq, window.__checked]")
+            if seq > before and done == seq:
+                break
+            if seq == before and time.time() - t0 > 1.0:
+                break
+            time.sleep(0.05)
+        time.sleep(0.1)
 
     yield SimpleNamespace(open=open_with, js=js, d=browser, settle=settle, wait=wait)
     for s in servers:
