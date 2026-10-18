@@ -124,11 +124,11 @@ aside h3:first-child { margin-top: 0; }
   <span class="sep"></span>
   <label class="muted">Família <select id="family"></select></label>
   <label class="muted">Camadas <select id="layers"><option value="4">4</option><option value="2">2</option></select></label>
-  <label class="muted" title="Simula com o testbench tb_&lt;top&gt;.v (se existir). Desmarque para pular essa etapa."><input type="checkbox" id="sim" checked> Simulação</label>
+  <label class="muted" title="Simula com o testbench do top (&quot;tb&quot; do pcbflow.json), se existir. Desmarque para pular essa etapa."><input type="checkbox" id="sim" checked> Simulação</label>
   <span class="sep"></span>
-  <button data-job="stat" class="step" title="make pcb-stat: síntese, mede os módulos e a grade de fileiras"><b>1</b>Síntese</button>
-  <button data-job="place" class="step" title="make pcb-place: síntese + placement com o floorplan, sem rotear"><b>2</b>Placement</button>
-  <button data-job="pcb" class="step" title="make pcb: fluxo completo, placa roteada e projeto KiCad"><b>3</b>Gerar PCB</button>
+  <button data-job="stat" class="step" title="pcbflow --synth-only: síntese, mede os módulos e a grade de fileiras"><b>1</b>Síntese</button>
+  <button data-job="place" class="step" title="pcbflow --place-only: síntese + placement com o floorplan, sem rotear"><b>2</b>Placement</button>
+  <button data-job="pcb" class="step" title="pcbflow: fluxo completo, placa roteada e projeto KiCad"><b>3</b>Gerar PCB</button>
   <button id="cancelJob" disabled title="Interromper a execução">■ Cancelar</button>
   <span id="jobStatus"></span>
   <div id="jobProg" role="progressbar" aria-valuemin="0" aria-valuemax="100">
@@ -1104,7 +1104,6 @@ window.addEventListener("resize", renderHandles);
   applyState(s);
   await loadRun();
   fit(); renderAll();
-  if (!s.make) toast("make não encontrado no PATH: os botões do fluxo não vão funcionar", 8000);
   pollJob();                       // mostra a última execução, ou acompanha uma em andamento
   if (!s.top) openDialog();
 })().catch(e => toast("Erro ao carregar: " + e.message, 10000));

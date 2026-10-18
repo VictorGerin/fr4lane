@@ -52,8 +52,18 @@ def test_liberty_gerado_reler(family, tmp_path):
 
 
 def test_biblioteca_aponta_para_arquivo():
-    with pytest.raises(LibraryError):
+    with pytest.raises(LibraryError, match="aponte para a pasta"):
         Library(lib_path("cmos") / "library.json")
+
+
+def test_familia_pelo_nome_ou_pela_pasta(tmp_path):
+    assert Library("rtl").path == Library(lib_path("rtl")).path
+    with pytest.raises(LibraryError, match="família 'nada' não encontrada"):
+        Library("nada")
+    # família própria fora do pacote, pela pasta
+    shutil.copytree(lib_path("cmos"), tmp_path / "lib" / "minha")
+    shutil.copy(LIB / "footprints.json", tmp_path / "lib")
+    assert Library(tmp_path / "lib" / "minha").path == (tmp_path / "lib" / "minha").resolve()
 
 
 def test_spice_elementos(tmp_path):

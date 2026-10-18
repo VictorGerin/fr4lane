@@ -17,14 +17,16 @@ from pathlib import Path
 
 import pytest
 
-PCBFLOW = Path(__file__).resolve().parents[1]          # pasta pcbflow/ (pacote, lib, examples)
-REPO = PCBFLOW.parent
+PCBFLOW = Path(__file__).resolve().parents[1]          # raiz do repositório (pacote, examples, tests)
 DATA = Path(__file__).resolve().parent / "data"
-LIB = PCBFLOW / "lib"
-FAMILIES = sorted(p.name for p in LIB.iterdir() if (p / "library.json").is_file())
+LIB = PCBFLOW / "pcbflow" / "lib"                       # famílias incluídas no pacote
 
 if str(PCBFLOW) not in sys.path:
     sys.path.insert(0, str(PCBFLOW))
+
+from pcbflow.library import families  # noqa: E402
+
+FAMILIES = families()
 
 
 def _which(name, fallback):
@@ -71,7 +73,7 @@ class FlowRun:
     """Resultado de uma execução de python -m pcbflow."""
 
     def __init__(self, rc, log, out):
-        self.rc, self.log, self.out = rc, log, Path(out)
+        self.rc, self.log, self.out = rc, log, Path(out) if out else None
 
     def file(self, name):
         return self.out / name
@@ -84,11 +86,12 @@ class FlowRun:
         return f"FlowRun(rc={self.rc}, out={self.out})\n{self.log[-3000:]}"
 
 
-def run_flow(out, *args, timeout=900):
-    """Roda o fluxo como o usuário roda (outro processo, a partir da pasta pcbflow/)."""
+def run_flow(out, *args, timeout=900, cwd=None):
+    """Roda o fluxo como o usuário roda (outro processo). out=None: a pasta de
+    saída padrão (a do pcbflow.json do projeto em cwd)."""
     env = dict(os.environ, PYTHONPATH=str(PCBFLOW), PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
-    cmd = [sys.executable, "-m", "pcbflow", *map(str, args), "--out", str(out)]
-    r = subprocess.run(cmd, cwd=PCBFLOW, env=env, capture_output=True, text=True, encoding="utf-8",
+    cmd = [sys.executable, "-m", "pcbflow", *map(str, args)] + (["--out", str(out)] if out else [])
+    r = subprocess.run(cmd, cwd=cwd or PCBFLOW, env=env, capture_output=True, text=True, encoding="utf-8",
                        errors="replace", timeout=timeout)
     return FlowRun(r.returncode, r.stdout + r.stderr, out)
 

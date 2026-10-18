@@ -1,20 +1,22 @@
 """Editor de floorplan no navegador.
 
-Uso:
-  python -m pcbflow.fpedit rtl/basic/basic_top.floorplan.json
-  python -m pcbflow.fpedit "rtl/**/*.floorplan.json"        (padrão glob: precisa casar um arquivo só)
-  python -m pcbflow.fpedit                                   (escolhe o top pelo botão Abrir)
+Uso (na pasta do projeto, a do pcbflow.json):
+  pcbflow-fpedit rtl/basic/basic_top.floorplan.json
+  pcbflow-fpedit "rtl/**/*.floorplan.json"        (padrão glob: precisa casar um arquivo só)
+  pcbflow-fpedit                                   (escolhe o top pelo botão Abrir)
 
 Abre um servidor local (127.0.0.1 por padrão) e o navegador padrão com o
 arquivo carregado; se o arquivo não existir, começa vazio e é criado ao salvar.
 O botão Abrir troca de top: escolhe um .v/.sv do projeto e o módulo dentro dele;
 o floorplan fica em <top>.floorplan.json ao lado do fonte.
 
-Para desenhar as fileiras e conferir a capacidade de cada área, o editor lê o
-placement.json que o fluxo grava em build/pcb/<top>_<família>[_2l]/ (a família e
-as camadas escolhidas no menu definem a pasta). Os botões do menu rodam o fluxo
-pelo make: Síntese (make pcb-stat), Placement (make pcb-place, sem rotear) e
-Gerar PCB (make pcb). A validação usa as mesmas funções do fluxo.
+O projeto é a pasta do pcbflow.json (veja project.py) encontrado a partir do
+arquivo aberto ou da pasta atual; sem ele, a pasta atual. Para desenhar as
+fileiras e conferir a capacidade de cada área, o editor lê o placement.json que
+o fluxo grava em <out>/<top>_<família>[_2l]/ (a família e as camadas escolhidas
+no menu definem a pasta). Os botões do menu rodam o pcbflow: Síntese
+(--synth-only), Placement (--place-only, sem rotear) e Gerar PCB. A validação
+usa as mesmas funções do fluxo.
 """
 
 import argparse
@@ -23,7 +25,6 @@ import json
 import math
 import os
 import re
-import shutil
 import subprocess
 import sys
 import threading
@@ -34,23 +35,23 @@ from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
-from . import floorplan, hier, place
+from . import floorplan, hier, library, place, project
 from .floorplan import FloorplanError
 from .layout import Rules
 
 PKG = Path(__file__).resolve().parent
-REPO = PKG.parents[1]
-LIBS = REPO / "pcbflow" / "lib"
 SUFFIX = ".floorplan.json"
 HDL = (".v", ".sv")
-# alvos do Makefile que o menu pode rodar
-TARGETS = {"stat": "pcb-stat", "place": "pcb-place", "pcb": "pcb"}
+# o que cada botão do menu passa ao pcbflow
+ACTIONS = {"stat": ["--synth-only"], "place": ["--place-only"], "pcb": []}
+# projeto aberto (pcbflow.json); main() o define a partir do arquivo ou da pasta atual
+PROJ = project.Project(Path.cwd().resolve())
 
 
 def find_runs(top):
     """Rodadas do fluxo para o topo (mais recente primeiro)."""
     found = []
-    for base in {Path.cwd() / "build" / "pcb", REPO / "build" / "pcb"}:
+    for base in {PROJ.root / PROJ.out}:
         found += base.glob(f"{top}/placement.json")
         found += base.glob(f"{top}_*/placement.json")
     seen, runs = set(), []
@@ -77,7 +78,7 @@ def run_summary(run_file):
 
 
 def families():
-    return sorted(p.name for p in LIBS.iterdir() if (p / "library.json").is_file())
+    return library.families()
 
 
 def macro_boxes(run, top, mods_w, geo):
@@ -200,14 +201,14 @@ def drop_legacy(data):
 # ------------------------------------------------------------ fontes Verilog
 def rel(p):
     """Caminho relativo à raiz do projeto (absoluto, se ficar fora dela)."""
-    p = Path(p).resolve()
-    return p.relative_to(REPO).as_posix() if REPO in p.parents else p.as_posix()
+    return PROJ.rel(p)
 
 
-def in_repo(arg):
+def in_project(arg):
     """Caminho relativo à raiz do projeto, sem sair dela."""
-    p = (REPO / (arg or "")).resolve()
-    if p != REPO and REPO not in p.parents:
+    root = PROJ.root
+    p = (root / (arg or "")).resolve()
+    if p != root and root not in p.parents:
         raise FloorplanError(f"'{arg}' fica fora do projeto")
     return p
 
@@ -221,7 +222,7 @@ def modules_in(path):
 
 
 def list_dir(arg):
-    d = in_repo(arg)
+    d = in_project(arg)
     if not d.is_dir():
         raise FloorplanError(f"'{arg}' não é uma pasta")
     dirs, files = [], []
@@ -232,42 +233,48 @@ def list_dir(arg):
             dirs.append(p.name)
         elif p.suffix in HDL:
             files.append(p.name)
-    return {"dir": "" if d == REPO else rel(d), "dirs": dirs, "files": files}
+    return {"dir": "" if d == PROJ.root else rel(d), "dirs": dirs, "files": files}
 
 
 def source_of(fp_path, top):
     """O fonte do top de um floorplan aberto pela linha de comando: <top>.v/.sv
-    ao lado dele ou em qualquer lugar de rtl/."""
+    ao lado dele, entre os fontes do projeto ou em qualquer lugar dele."""
     for ext in HDL:
         p = fp_path.with_name(top + ext)
         if p.is_file():
             return p
+    for p in PROJ.sources():
+        if p.stem == top and p.suffix in HDL:
+            return p
     for ext in HDL:
-        hits = sorted((REPO / "rtl").rglob(top + ext))
+        hits = sorted(PROJ.root.rglob(top + ext))
         if hits:
             return hits[0]
     return None
 
 
 def floorplan_for(src, top):
-    """<top>.floorplan.json ao lado do fonte; se não houver, um já existente em rtl/
-    (o mesmo que o make pcb acharia); senão, o novo ao lado do fonte."""
+    """<top>.floorplan.json ao lado do fonte; se não houver, o que o pcbflow
+    acharia pelo pcbflow.json; senão, o novo ao lado do fonte."""
     beside = src.with_name(top + SUFFIX)
     if beside.exists():
         return beside
-    hits = sorted((REPO / "rtl").rglob(top + SUFFIX))
-    return hits[0] if hits else beside
+    return PROJ.find_floorplan(top) or beside
 
 
-def default_source(p):
-    """O PCB_SRC padrão do Makefile já inclui este fonte? (.v de rtl/, fora de sva/)"""
-    r = rel(p)
-    return r.startswith("rtl/") and r.endswith(".v") and "/sva/" not in r
+def flow_sources(src):
+    """Fontes a passar ao pcbflow para o top em src: nenhum (o pcbflow usa os do
+    pcbflow.json) se ele já os inclui; senão os do projeto mais ele; sem
+    pcbflow.json, os .v/.sv da pasta do top e das de baixo."""
+    known = PROJ.sources()
+    if src is None or Path(src).resolve() in known:
+        return []
+    if known:
+        return [rel(p) for p in known] + [rel(src)]
+    return sorted(rel(p) for ext in HDL for p in Path(src).parent.rglob("*" + ext))
 
 
-# ------------------------------------------------------------ execução do make
-def find_make():
-    return shutil.which("make") or next((m for m in ("C:/msys64/usr/bin/make.exe",) if Path(m).is_file()), None)
+# --------------------------------------------------------- execução do fluxo
 
 
 if os.name == "nt":
@@ -292,7 +299,7 @@ if os.name == "nt":
                     ("PeakProcessMemoryUsed", ctypes.c_size_t), ("PeakJobMemoryUsed", ctypes.c_size_t)]
 
     def _job_object(proc):
-        """Põe o make num Job Object: os filhos (sh, python, yosys, vvp) herdam o job,
+        """Põe o fluxo num Job Object: os filhos (python, yosys, iverilog, vvp) herdam o job,
         então cancelar derruba a árvore inteira, e ela morre junto se o editor fechar.
         O taskkill /T não basta: os processos do MSYS escapam dele."""
         h = _k32.CreateJobObjectW(None, None)
@@ -307,7 +314,7 @@ if os.name == "nt":
 
 
 class Job:
-    """Uma execução do make por vez; o log fica em memória para a página acompanhar."""
+    """Uma execução do fluxo por vez; o log fica em memória para a página acompanhar."""
 
     MAX_LINES = 20000
 
@@ -333,13 +340,14 @@ class Job:
             env = dict(os.environ, PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8", PCBFLOW_PROGRESS="1")
             kw = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
             try:
-                proc = subprocess.Popen(cmd, cwd=REPO, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                        stdin=subprocess.DEVNULL, **kw)
+                proc = subprocess.Popen(cmd, cwd=PROJ.root, env=env, stdout=subprocess.PIPE,
+                                        stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, **kw)
             except OSError as e:
-                raise FloorplanError(f"não foi possível rodar o make: {e}")
+                raise FloorplanError(f"não foi possível rodar o pcbflow: {e}")
             self.winjob = _job_object(proc) if os.name == "nt" else None
             self.id += 1
-            self.proc, self.lines, self.dropped, self.status = proc, ["$ " + " ".join(cmd[1:])], 0, "running"
+            shown = "$ pcbflow " + " ".join(cmd[3:])          # cmd = [python, -m, pcbflow, ...]
+            self.proc, self.lines, self.dropped, self.status = proc, [shown], 0, "running"
             self.info = dict(info, t0=time.time(), t1=None, rc=None)
             self.progress = None
         threading.Thread(target=self._pump, args=(proc, self.id), daemon=True).start()
@@ -381,8 +389,8 @@ class Job:
             if not proc or not self.running():
                 return
             self.status = "cancelled"
-            # o make abre sh -> python -> yosys/iverilog: derruba a árvore inteira
-            # (sob o lock: o _pump fecha o handle do job quando o make termina)
+            # o fluxo abre yosys/iverilog/vvp e processos dos macros: derruba a árvore inteira
+            # (sob o lock: o _pump fecha o handle do job quando o fluxo termina)
             if self.winjob:
                 _k32.TerminateJobObject(self.winjob, 1)
                 return
@@ -437,7 +445,8 @@ class Editor:
         st = {"file": str(self.path) if self.path else None, "top": self.top,
               "src": rel(self.src) if self.src else None, "exists": bool(self.path and self.path.exists()),
               "mtime": self.mtime(), "data": None, "load_error": None, "runs": [],
-              "families": families(), "init": self.init, "make": bool(find_make())}
+              "families": families(), "init": self.init,
+              "project": {"root": str(PROJ.root), "config": str(PROJ.config) if PROJ.config else None}}
         if st["exists"]:
             try:
                 st["data"] = json.loads(self.path.read_text(encoding="utf-8"))
@@ -453,7 +462,7 @@ class Editor:
     def open(self, src_arg, top):
         if self.job.running():
             raise FloorplanError("espere a execução terminar para trocar de top")
-        src = in_repo(src_arg)
+        src = in_project(src_arg)
         if not src.is_file() or src.suffix not in HDL:
             raise FloorplanError(f"'{src_arg}' não é um arquivo .v/.sv")
         if top not in modules_in(src):
@@ -476,12 +485,12 @@ class Editor:
             return {"ok": True, "mtime": self.mtime()}
 
     def start(self, action, family, layers, sim=True):
-        """Roda um alvo do make com o top, a família e as camadas do menu. O comando
-        é montado aqui, a partir de listas fechadas: a página não manda texto livre.
-        sim=False passa PCB_TB vazio: o fluxo pula a simulação com o testbench."""
+        """Roda o pcbflow com o top, a família e as camadas do menu. O comando é
+        montado aqui, a partir de listas fechadas: a página não manda texto livre.
+        sim=False passa --no-tb: o fluxo pula a simulação com o testbench."""
         if not self.top:
             raise FloorplanError("nenhum top aberto")
-        if action not in TARGETS:
+        if action not in ACTIONS:
             raise FloorplanError(f"ação desconhecida: {action}")
         if family not in families():
             raise FloorplanError(f"família desconhecida: {family}")
@@ -489,16 +498,14 @@ class Editor:
             raise FloorplanError("camadas: 2 ou 4")
         if not isinstance(sim, bool):
             raise FloorplanError("simulação: true ou false")
-        make = find_make()
-        if not make:
-            raise FloorplanError("make não encontrado no PATH")
-        cmd = [make, TARGETS[action], f"PCB_TOP={self.top}", f"PCB_LIB=pcbflow/lib/{family}",
-               f"PCB_FLOORPLAN={rel(self.path) if self.path and self.path.exists() else ''}",
-               f"PCB_ARGS=--layers {layers}"]
-        if self.src and not default_source(self.src):
-            cmd.append(f"PCB_SRC_EXTRA={rel(self.src)}")
+        cmd = [sys.executable, "-m", "pcbflow", "--top", self.top, "--lib", family, "--layers", str(layers),
+               "--project", str(PROJ.root), *ACTIONS[action]]
+        cmd += ["--floorplan", rel(self.path)] if self.path and self.path.exists() else ["--no-floorplan"]
+        srcs = flow_sources(self.src)
+        if srcs:
+            cmd += ["--src", *srcs]
         if not sim:
-            cmd.append("PCB_TB=")
+            cmd.append("--no-tb")
         name = f"{self.top}_{family}" + ("_2l" if layers == 2 else "")
         self.job.start(cmd, {"action": action, "top": self.top, "family": family, "layers": layers, "run": name})
         return {"ok": True}
@@ -576,7 +583,7 @@ def make_handler(ed, allowed_hosts):
                 elif u.path == "/api/save":
                     self._send(200, ed.save(req.get("data"), req.get("mtime"), req.get("force", False)))
                 elif u.path == "/api/modules":
-                    p = in_repo(req.get("file"))
+                    p = in_project(req.get("file"))
                     self._send(200, {"modules": modules_in(p) if p.is_file() else []})
                 elif u.path == "/api/open":
                     self._send(200, ed.open(req.get("file"), req.get("top")))
@@ -610,20 +617,26 @@ def resolve_file(arg):
 def main(argv=None):
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    ap = argparse.ArgumentParser(prog="python -m pcbflow.fpedit", description=__doc__,
+    ap = argparse.ArgumentParser(prog="pcbflow-fpedit", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("file", nargs="?", help=f"<top>{SUFFIX} (criado ao salvar se não existir)")
-    ap.add_argument("--lib", help="família inicial do menu (pasta da biblioteca ou só o nome, ex.: rtl); "
-                                  "padrão: a da rodada mais recente")
+    ap.add_argument("--lib", help="família inicial do menu (ex.: rtl); padrão: a da rodada mais recente")
+    ap.add_argument("--project", help="pasta do projeto (padrão: a do pcbflow.json acima do arquivo "
+                                      "ou da pasta atual)")
     ap.add_argument("--layers", type=int, choices=(2, 4), help="camadas iniciais do menu")
     ap.add_argument("--host", default="127.0.0.1", help="endereço do servidor (padrão: 127.0.0.1)")
     ap.add_argument("--port", type=int, help="porta (padrão: 8765, ou uma livre se estiver ocupada)")
     ap.add_argument("--no-browser", action="store_true", help="não abre o navegador")
     args = ap.parse_args(argv)
 
+    global PROJ
+    path = resolve_file(args.file) if args.file else None
+    try:
+        PROJ = project.find(args.project or (path.parent if path else None))
+    except project.ProjectError as e:
+        raise SystemExit(str(e))
     ed = Editor()
-    if args.file:
-        path = resolve_file(args.file)
+    if path:
         ed.set(path, None, None)
         ed.src = source_of(path, ed.top)
     runs = ed.runs()
@@ -631,7 +644,7 @@ def main(argv=None):
     ed.init = {"family": Path(args.lib).name if args.lib else newest.get("family"),
                "layers": args.layers or newest.get("layers")}
     if ed.init["family"] and ed.init["family"] not in families():
-        raise SystemExit(f"família '{ed.init['family']}' não existe em {LIBS}")
+        raise SystemExit(f"família '{ed.init['family']}' não existe (famílias: {', '.join(families())})")
     try:
         srv = ThreadingHTTPServer((args.host, args.port or 8765), None)
     except OSError:
@@ -644,9 +657,10 @@ def main(argv=None):
     srv.RequestHandlerClass = make_handler(ed, allowed)
     url = f"http://{'127.0.0.1' if local else args.host}:{port}/"
 
+    print(f"Projeto:   {PROJ.root}" + (f" ({PROJ.config.name})" if PROJ.config else " (sem pcbflow.json)"))
     if ed.path:
         print(f"Floorplan: {ed.path}" + ("" if ed.path.exists() else " (novo, criado ao salvar)"))
-        print(f"Fonte:     {ed.src or 'não encontrado (o make procura <top>.v em rtl/)'}")
+        print(f"Fonte:     {ed.src or 'não encontrado (procurado ao lado do floorplan e no projeto)'}")
     else:
         print("Floorplan: nenhum; escolha o top pelo botão Abrir")
     if runs:

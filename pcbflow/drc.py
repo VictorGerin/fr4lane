@@ -1,8 +1,8 @@
 """DRC do KiCad sobre a placa gerada, pelo kicad-cli.
 
 Uso:
+  pcbflow-drc build/pcb/adder_cmos/adder_cmos.kicad_pcb
   python -m pcbflow.drc build/pcb/adder_cmos/adder_cmos.kicad_pcb
-  make pcb-drc PCB_TOP=adder
 
 É a verificação de referência: lê o .kicad_pcb que foi escrito (não o modelo
 interno do pcbflow) e usa a geometria real dos pads, então pega também erros
@@ -96,7 +96,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     board = Path(args.board)
     if not board.is_file():
-        raise SystemExit(f"{board} não existe (rode make pcb antes)")
+        raise SystemExit(f"{board} não existe (gere a placa com o pcbflow antes)")
     cli = find_cli()
     if not cli:
         raise SystemExit("kicad-cli não encontrado: instale o KiCad 8+ ou defina PCBFLOW_KICAD_CLI")

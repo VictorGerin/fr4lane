@@ -1,4 +1,4 @@
-"""Reaproveitamento do placement entre rodadas (make pcb-place -> make pcb).
+"""Reaproveitamento do placement entre rodadas (pcbflow --place-only -> pcbflow).
 
 Depois do placement o fluxo grava <saída>/place_cache.pkl: o design já
 sintetizado e dimensionado, a placa posicionada e o que foi apurado até ali
@@ -89,7 +89,7 @@ def load(out, key, ignore=()):
 
 
 def save(out, key, **data):
-    """Grava atomicamente (um make interrompido não deixa um cache pela metade)."""
+    """Grava atomicamente (uma rodada interrompida não deixa um cache pela metade)."""
     path = Path(out) / FILE
     tmp = path.with_suffix(".tmp")
     payload = dict(data, version=VERSION, key=key, time=data.get("time") or time.time())

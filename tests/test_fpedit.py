@@ -9,8 +9,8 @@ from http.server import ThreadingHTTPServer
 
 import pytest
 
-from conftest import REPO, data, lib_path
-from pcbflow import fpedit
+from conftest import data, lib_path
+from pcbflow import fpedit, project
 from pcbflow.floorplan import FloorplanError
 
 
@@ -110,11 +110,23 @@ def test_check_rodada_antiga(hier_run):
 
 
 # ------------------------------------------------------------ utilitários
-def test_in_repo_nao_sai_do_projeto():
-    assert fpedit.in_repo("rtl") == (REPO / "rtl").resolve()
+@pytest.fixture
+def proj(tmp_path, monkeypatch):
+    """Projeto temporário com pcbflow.json (fontes em rtl/, testbench em sim/)."""
+    (tmp_path / "rtl" / "sub").mkdir(parents=True)
+    (tmp_path / "rtl" / "a.v").write_text("module a; endmodule\n", encoding="utf-8")
+    (tmp_path / "rtl" / "sub" / "b.v").write_text("module b; endmodule\n", encoding="utf-8")
+    (tmp_path / "pcbflow.json").write_text(json.dumps({"src": ["rtl/**/*.v"]}), encoding="utf-8")
+    p = project.load(tmp_path / "pcbflow.json")
+    monkeypatch.setattr(fpedit, "PROJ", p)
+    return p
+
+
+def test_in_project_nao_sai_do_projeto(proj):
+    assert fpedit.in_project("rtl") == (proj.root / "rtl").resolve()
     for bad in ("..", "../..", "rtl/../../x"):
         with pytest.raises(FloorplanError):
-            fpedit.in_repo(bad)
+            fpedit.in_project(bad)
 
 
 def test_modules_in_ignora_comentarios(tmp_path):
@@ -129,10 +141,41 @@ def test_drop_legacy():
     assert fpedit.drop_legacy({"modules": {}}) == {"modules": {}}
 
 
-def test_default_source():
-    assert fpedit.default_source(REPO / "rtl/x/a.v")
-    assert not fpedit.default_source(REPO / "rtl/x/a.sv")
-    assert not fpedit.default_source(REPO / "rtl/sva/a.v")
+def test_fontes_passadas_ao_fluxo(proj, tmp_path):
+    # top entre os fontes do pcbflow.json: o pcbflow usa os do projeto
+    assert fpedit.flow_sources(proj.root / "rtl" / "a.v") == []
+    # top fora deles: os do projeto mais ele
+    extra = tmp_path / "outro" / "c.sv"
+    extra.parent.mkdir()
+    extra.write_text("module c; endmodule\n", encoding="utf-8")
+    assert fpedit.flow_sources(extra) == ["rtl/a.v", "rtl/sub/b.v", "outro/c.sv"]
+
+
+def test_fontes_sem_pcbflow_json(tmp_path, monkeypatch):
+    monkeypatch.setattr(fpedit, "PROJ", project.Project(tmp_path))
+    (tmp_path / "x" / "y").mkdir(parents=True)
+    for f in ("x/top.v", "x/y/m.sv", "z.v"):
+        (tmp_path / f).write_text("", encoding="utf-8")
+    assert fpedit.flow_sources(tmp_path / "x" / "top.v") == ["x/top.v", "x/y/m.sv"]
+
+
+def test_comando_do_menu(proj, monkeypatch):
+    # o botão monta um comando python -m pcbflow com valores conhecidos (sem rodar)
+    got = {}
+    monkeypatch.setattr(fpedit.Job, "start", lambda self, cmd, info: got.update(cmd=cmd, info=info))
+    ed = fpedit.Editor()
+    ed.set(proj.root / "rtl" / "a.floorplan.json", None, proj.root / "rtl" / "a.v")
+    ed.start("place", "rtl", 2, sim=False)
+    cmd = got["cmd"]
+    assert cmd[1:3] == ["-m", "pcbflow"] and cmd[cmd.index("--top") + 1] == "a"
+    assert ["--lib", "rtl"] == cmd[cmd.index("--lib"):cmd.index("--lib") + 2]
+    assert "--place-only" in cmd and "--no-tb" in cmd and "--no-floorplan" in cmd and "--src" not in cmd
+    assert got["info"]["run"] == "a_rtl_2l"
+    (proj.root / "rtl" / "a.floorplan.json").write_text("{}", encoding="utf-8")
+    ed.start("pcb", "cmos", 4)
+    cmd = got["cmd"]
+    assert cmd[cmd.index("--floorplan") + 1] == "rtl/a.floorplan.json"
+    assert "--no-tb" not in cmd and "--synth-only" not in cmd and "--place-only" not in cmd
 
 
 # ------------------------------------------------------------- API HTTP
@@ -156,9 +199,11 @@ class Api:
 
 @pytest.fixture
 def server(tmp_path, monkeypatch):
-    """Editor com o floorplan num diretório temporário; a rodada é procurada em
-    <cwd>/build/pcb/<top>_*/placement.json."""
+    """Editor com o floorplan num projeto temporário (sem pcbflow.json); a rodada
+    é procurada em <projeto>/build/pcb/<top>_*/placement.json."""
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(fpedit, "PROJ", project.Project(tmp_path))
+    (tmp_path / "rtl").mkdir()
     fp = tmp_path / "hier8.floorplan.json"
     ed = fpedit.Editor()
     ed.set(fp, None, None)

@@ -8,27 +8,48 @@ Verilog ──Yosys/ABC──▶ células (.lib) ──expansão (.sp)──▶ 
                             └── simulação gate-level ─────────┴── simulação em nível de componente
 ```
 
-## Uso
+## Instalação
 
-Pré-requisitos: Python ≥ 3.11 (sem dependências externas), Yosys e Icarus Verilog (MSYS2: `pacman -S mingw-w64-ucrt-x86_64-yosys mingw-w64-ucrt-x86_64-iverilog`) e KiCad 8 ou 9 para abrir o resultado.
+Pré-requisitos: Python ≥ 3.10, Yosys e Icarus Verilog (MSYS2: `pacman -S mingw-w64-ucrt-x86_64-yosys mingw-w64-ucrt-x86_64-iverilog`) e KiCad 8 ou 9 para abrir o resultado e rodar o DRC.
 
 ```sh
-# pelo Makefile (usa sim/testbenches/tb_<top>.v se existir)
-make pcb PCB_TOP=adder                               # família CMOS (padrão)
-make pcb PCB_TOP=adder PCB_LIB=pcbflow/lib/rtl       # família RTL com BC548
-make pcb PCB_TOP=counter4 PCB_SRC=pcbflow/examples/counter4.v PCB_TB=pcbflow/examples/tb_counter4.v
-make pcb PCB_TOP=adder PCB_LIB=pcbflow/lib/rtl PCB_ARGS="--layers 2"   # placa de 2 camadas
-make pcb-stat PCB_TOP=ALU                            # só síntese + contagem
-make pcb-place PCB_TOP=basic_top                     # síntese + placement, sem rotear
-
-# direto
-PYTHONPATH=pcbflow python -m pcbflow --lib pcbflow/lib/rtl --top adder \
-    --src rtl/RISC_V/ALU/adder.v --tb sim/testbenches/tb_adder.v
+pip install -e ".[fast]"        # a partir do clone (editável); [fast] traz o numba, que compila o roteador
+pip install "pcbflow[fast] @ git+https://github.com/VictorGerin/pcbflow.git"   # ou direto do GitHub
 ```
 
-Opções úteis: `--effort` (esforço do placement), `--row-gap`/`--part-gap` (densidade, em mm), `--route-iter`, `--max-parts`, `--seed`, `--floorplan arquivo.json` (veja [Floorplan](#floorplan-posição-dos-módulos-e-keepouts)), `--layers 2|4` (veja [Placa de 2 camadas](#placa-de-2-camadas)), `--synth-only`/`--place-only` (param depois da síntese ou do placement), `--density` (ocupação das fileiras fora das fences/regions, veja [Densidade](#densidade)), `--flatten` e `--module-weight` (veja [Módulos na placa](#módulos-na-placa)), `--fresh` (veja abaixo).
+Sem o numba, o resultado é o mesmo, só que mais devagar. A instalação cria três comandos: `pcbflow` (o fluxo), `pcbflow-fpedit` (o [editor de floorplan](#editor-visual)) e `pcbflow-drc` (o [DRC do KiCad](#como-revisar-no-kicad)); `python -m pcbflow` também funciona.
 
-**Placement reaproveitado.** Ao fim do placement o fluxo grava `place_cache.pkl` na pasta da rodada: o design sintetizado e dimensionado, a placa posicionada e as simulações que já rodaram. Na rodada seguinte (ex.: `make pcb-place` e depois `make pcb`), se nada que influencia esse resultado mudou, as etapas 0 a 3 são puladas e o fluxo vai direto ao roteamento: `[0-3/6] ... reaproveitados da rodada de <data>`. A impressão digital cobre o conteúdo dos fontes Verilog, os arquivos da família de células (e o `footprints.json`), o floorplan, as opções que mudam a placa (`--layers`, `--effort`, `--seed`, `--density`, `--row-gap`, `--part-gap`, `--module-weight`, `--flatten`, `--no-size`) e o código do pcbflow que roda até o placement; se algo mudou, o log diz o quê e o fluxo refaz tudo. Uma simulação que já rodou com o mesmo testbench não roda de novo. `--fresh` ignora o cache.
+## Uso
+
+```sh
+pcbflow --top counter4 --src examples/counter4.v --tb examples/tb_counter4.v   # família CMOS (padrão)
+pcbflow --top counter4 --src examples/counter4.v --lib rtl                     # família RTL com BC548
+pcbflow --top counter4 --src examples/counter4.v --lib relay --layers 2       # relés, placa de 2 camadas
+pcbflow --top counter4 --src examples/counter4.v --synth-only                 # só síntese + contagem
+pcbflow --top counter4 --src examples/counter4.v --place-only                 # síntese + placement, sem rotear
+```
+
+`--lib` aceita o nome de uma família incluída (`cmos`, `rtl`, `relay`) ou a pasta de uma família própria (veja [Criar uma família nova](#criar-uma-família-nova)). A rodada vai para `build/pcb/<top>_<família>[_2l]/` (veja [Saídas](#saídas-buildpcbtop_família_2l-ex-adder_cmos-adder_rtl_2l)).
+
+### Projeto (`pcbflow.json`)
+
+Num projeto com vários módulos, um `pcbflow.json` na raiz diz onde estão os fontes, os testbenches e os floorplans, e o comando fica só `pcbflow --top <módulo>`:
+
+```json
+{
+  "src":       ["rtl/**/*.v"],
+  "exclude":   ["rtl/**/sva/**"],
+  "tb":        "sim/testbenches/tb_{top}.v",
+  "floorplan": ["rtl/**/{top}.floorplan.json"],
+  "out":       "build/pcb"
+}
+```
+
+O pcbflow procura o `pcbflow.json` na pasta atual e nas de cima (ou em `--project`). `src` e `exclude` são globs a partir da raiz; `{top}` é trocado pelo nome do módulo. Só `src` é obrigatório. Sem `--src`, entram os fontes do projeto; sem `--tb`, o testbench do top, se existir (`--no-tb` desliga); sem `--floorplan`, o primeiro que casar (`--no-floorplan` desliga); sem `--out`, `<out>/<top>_<família>[_2l]/`. O log diz o testbench e o floorplan que vieram do projeto.
+
+Opções úteis: `--effort` (esforço do placement), `--row-gap`/`--part-gap` (densidade, em mm), `--route-iter`, `--max-parts`, `--seed`, `--floorplan arquivo.json` (veja [Floorplan](#floorplan-posição-dos-módulos-e-keepouts)), `--layers 2|4` (veja [Placa de 2 camadas](#placa-de-2-camadas)), `--synth-only`/`--place-only` (param depois da síntese ou do placement), `--density` (ocupação das fileiras fora das fences/regions, veja [Densidade](#densidade)), `--flatten` e `--module-weight` (veja [Módulos na placa](#módulos-na-placa)), `--macro` (veja [Macros](#macros-fluxo-hierárquico)), `--fresh` (veja abaixo).
+
+**Placement reaproveitado.** Ao fim do placement o fluxo grava `place_cache.pkl` na pasta da rodada: o design sintetizado e dimensionado, a placa posicionada e as simulações que já rodaram. Na rodada seguinte (ex.: `pcbflow --place-only` e depois `pcbflow`), se nada que influencia esse resultado mudou, as etapas 0 a 3 são puladas e o fluxo vai direto ao roteamento: `[0-3/6] ... reaproveitados da rodada de <data>`. A impressão digital cobre o conteúdo dos fontes Verilog, os arquivos da família de células (e o `footprints.json`), o floorplan, as opções que mudam a placa (`--layers`, `--effort`, `--seed`, `--density`, `--row-gap`, `--part-gap`, `--module-weight`, `--flatten`, `--no-size`) e o código do pcbflow que roda até o placement; se algo mudou, o log diz o quê e o fluxo refaz tudo. Uma simulação que já rodou com o mesmo testbench não roda de novo. `--fresh` ignora o cache.
 
 **Roteamento retomável.** Ao fim de cada iteração o roteador grava um ponto de controle (`route_state.pkl`: os caminhos de cada net e o histórico de disputa). Se a rodada for interrompida (Ctrl+C, o *Cancelar* do editor, queda), rodar de novo com as mesmas entradas reaproveita o placement e **continua da última iteração completa** (`retomado do ponto de controle: 3 iteração(ões) já feita(s)`), com o mesmo resultado de uma rodada sem interrupção. Com o roteamento já concluído (ex.: o DRC falhou depois), a rodada seguinte o reaproveita inteiro. O ponto de controle só vale para a mesma placa e a mesma versão do roteador; `--fresh` começa do zero. A retomada é entre iterações: uma iteração interrompida no meio é refeita.
 
@@ -39,7 +60,7 @@ Opções úteis: `--effort` (esforço do placement), `--row-gap`/`--part-gap` (d
 Cada família fica numa pasta, e cada célula numa subpasta com três arquivos:
 
 ```
-pcbflow/lib/
+pcbflow/lib/                     (dentro do pacote)
   footprints.json              geometria dos footprints (compartilhada pelas famílias)
   cmos/                        CMOS estático, 2N7002 + BSS84 (SOT-23)
   rtl/                         RTL, BC548 (TO-92) + resistores de 1/4 W
@@ -79,7 +100,7 @@ Cada saída aguenta um número finito de entradas. O fluxo controla isso em dois
 - **`max_fanout`** no `.json`: quantas entradas cada saída da célula pode alimentar (é a "faixa" da célula).
 - **Drive elétrico em pior caso**, para famílias que declaram `"electrical"` no `library.json` (hoje a RTL). Com a saída em 1, o pull-up (RL) alimenta as bases das cargas pelos resistores de base (RB). O `drive.py` calcula o nível alto com VDD mínimo, RL no máximo e RB no mínimo da tolerância, e confere se cada carga recebe corrente de base para saturar: `Ib ≥ folga · Ic / β mín.`. NPNs empilhados (NAND) entram com o Vce(sat) de cada um. β mín., Vbe e Vce(sat) ficam no NPN do `parts.json`; VDD, tolerância, folga e `voh_min` ficam em `"electrical"`. Nets internas das células também são conferidas: uma montagem subdimensionada é barrada antes da síntese.
 
-`python -m pcbflow.drive pcbflow/lib/rtl` mostra a capacidade de cada saída (em cargas de `reference_load`, ex.: `INV.A`), o `max_fanout` e a corrente estática.
+`python -m pcbflow.drive rtl` mostra a capacidade de cada saída (em cargas de `reference_load`, ex.: `INV.A`), o `max_fanout` e a corrente estática.
 
 **Variantes.** Uma célula com `"variant_of": "<BASE>"` faz a mesma função da base com outra montagem, para outra faixa de fan-out. O Yosys só vê a base. Depois da síntese o fluxo troca cada instância pela variante **mais econômica** (menor corrente estática, depois menor área) em que todas as saídas passam nos dois critérios acima. Uma variante pode ter várias saídas no lugar de uma da base, cada uma com uma parte das cargas:
 
@@ -160,7 +181,7 @@ Footprints novos entram em `footprints.json`. O roteador exige que o menor lado 
 ## Como revisar no KiCad
 
 1. Abra o `.kicad_pro` e, no editor de PCB, pressione **B** para preencher os planos (In1.Cu = GND, In2.Cu = VDD). A placa de 2 camadas não tem planos.
-2. Rode o DRC. O pcbflow já verifica folgas e conectividade por conta própria (passo 5/6), mas o DRC do KiCad é a referência.
+2. Rode o DRC. O pcbflow já verifica folgas e conectividade por conta própria (passo 5/6) e, se achar o `kicad-cli`, roda o DRC do KiCad no fim (`--no-drc` pula). O DRC do KiCad é a referência; para rodá-lo de novo sobre uma placa já gerada, preenchendo os planos e salvando a placa preenchida: `pcbflow-drc build/pcb/<rodada>/<rodada>.kicad_pcb`.
 3. Cada célula lógica é um **grupo** com o nome da instância (`U12 (NOR2)`, `FF3 (DFFR)`…), dentro do grupo do seu módulo (`u_fa (full_adder)`). O `report.md` liga esses nomes aos do Yosys.
 4. Nets que o roteador não fechou, se houver, aparecem no ratsnest e em *Pendências* no relatório.
 
@@ -175,14 +196,14 @@ A hierarquia do Verilog é mantida até a placa:
 - **KiCad:** grupos aninhados (módulo > submódulo > célula), um contorno tracejado com o nome do módulo na camada *User.Drawings* e a propriedade `Module` em cada componente.
 - **Referências** numeradas por módulo: cada módulo tem uma faixa contínua (`u_and: Q1–Q4, R1–R7`), listada no `report.md`.
 
-Para ver cada módulo isolado na placa, instancie-os num topo sem fios em comum, como em `rtl/basic/basic_top.v`.
+Para ver cada módulo isolado na placa, instancie-os num topo sem fios em comum (ex.: o `basic_top` do projeto [riscv-pipelined](https://github.com/VictorGerin/riscv-pipelined), que junta portas, somadores e flip-flops).
 
 ### Macros (fluxo hierárquico)
 
 Para circuitos grandes, módulos podem ser implementados à parte e copiados, no padrão da indústria: **o topo decide onde cada bloco fica (top-down) e cada bloco é feito de baixo para cima (bottom-up)**.
 
 ```sh
-make pcb PCB_TOP=adder_32bit PCB_LIB=pcbflow/lib/rtl PCB_ARGS="--macro adder --macro adder_16bit"
+pcbflow --top adder_32bit --lib rtl --macro adder --macro adder_16bit
 ```
 
 ou, no floorplan, `"macros": ["adder", "adder_16bit"]`. Um macro é um **tipo** de módulo (o nome do Verilog):
@@ -212,7 +233,7 @@ A simulação de componentes, a verificação de conectividade e o DRC continuam
 
 ## Floorplan: posição dos módulos e keepouts
 
-Por padrão o pcbflow decide sozinho onde cada módulo fica. Com `--floorplan arquivo.json` você fixa áreas em **coordenadas absolutas**, em mm, a partir do canto superior esquerdo da placa. O `make pcb` usa automaticamente `<top>.floorplan.json` se houver um em `rtl/`; `PCB_FLOORPLAN=` desliga. Exemplo completo em [`rtl/basic/basic_top.floorplan.json`](../rtl/basic/basic_top.floorplan.json):
+Por padrão o pcbflow decide sozinho onde cada módulo fica. Com `--floorplan arquivo.json` você fixa áreas em **coordenadas absolutas**, em mm, a partir do canto superior esquerdo da placa. Num projeto com `pcbflow.json`, o fluxo usa o floorplan que a chave `floorplan` achar para o top (veja [Projeto](#projeto-pcbflowjson)); `--no-floorplan` desliga. Exemplo:
 
 ```json
 {
@@ -257,7 +278,7 @@ Ajuste avançado: `"density"` numa fence/region fixa uma densidade **acima** da 
 
 Fora das fences/regions, os módulos sem área se agrupam a 80% das fileiras livres (`--density` muda isso; 1 = compacto). Sem floorplan, as regiões automáticas já saem justas (8% de folga), e a densidade só reparte essa folga dentro das fileiras.
 
-No `basic_top` em CMOS (floorplan do repositório), as duas formas saem 100% roteadas:
+No `basic_top` do riscv-pipelined em CMOS (com o floorplan de lá), as duas formas saem 100% roteadas:
 
 | | HPWL | Trilhas / vias |
 |---|---:|---:|
@@ -271,36 +292,34 @@ No `basic_top` em CMOS (floorplan do repositório), as duas formas saem 100% rot
 ### Editor visual
 
 ```sh
-make fpedit PCB_TOP=basic_top                        # abre o floorplan do basic_top
-make fpedit PCB_TOP=basic_top PCB_LIB=pcbflow/lib/rtl   # já com a família RTL no menu
-# ou
-PYTHONPATH=pcbflow python -m pcbflow.fpedit rtl/basic/basic_top.floorplan.json
-PYTHONPATH=pcbflow python -m pcbflow.fpedit          # sem arquivo: escolhe o top pelo Abrir…
+pcbflow-fpedit rtl/basic/basic_top.floorplan.json             # abre um floorplan (criado ao salvar se não existir)
+pcbflow-fpedit rtl/basic/basic_top.floorplan.json --lib rtl   # já com a família RTL no menu
+pcbflow-fpedit                                                # sem arquivo: escolhe o top pelo Abrir…
 ```
 
-Abre um servidor local (só em `127.0.0.1`; `--host`/`--port` mudam isso) e o navegador padrão com o arquivo carregado. Se ele não existir, o editor começa vazio e o cria ao salvar; o `make fpedit` usa `<top>.floorplan.json` ao lado de `<top>.v`. Arraste as áreas para mover, os cantos para redimensionar; as setas movem 0,5 mm (Shift: 5 mm), Delete apaga, Ctrl+Z/Ctrl+Y desfazem/refazem e Ctrl+S salva. Os campos `_comment` do arquivo são preservados.
+Abre um servidor local (só em `127.0.0.1`; `--host`/`--port` mudam isso) e o navegador padrão com o arquivo carregado. Se ele não existir, o editor começa vazio e o cria ao salvar. O projeto é o do `pcbflow.json` acima do arquivo aberto (ou da pasta atual; `--project` escolhe outro): é nele que o editor procura fontes, testbenches e rodadas. Arraste as áreas para mover, os cantos para redimensionar; as setas movem 0,5 mm (Shift: 5 mm), Delete apaga, Ctrl+Z/Ctrl+Y desfazem/refazem e Ctrl+S salva. Os campos `_comment` do arquivo são preservados.
 
 **Menu do fluxo.** A barra de cima roda o fluxo sem sair do navegador:
 
-- **Abrir…** navega pelas pastas do projeto, mostra os `.v`/`.sv` e, ao escolher um arquivo, os módulos declarados nele; o escolhido vira o top. O floorplan fica em `<top>.floorplan.json` ao lado do fonte (ou o que já existir em `rtl/`). Um top fora de `rtl/` ou em `.sv` entra no `make` por `PCB_SRC_EXTRA`.
-- **Família** e **Camadas** escolhem a rodada (`build/pcb/<top>_<família>[_2l]/`) que o editor desenha e que os botões geram.
-- **Simulação** (marcada por padrão) roda o testbench `tb_<top>.v`, se existir; desmarcada, o editor passa `PCB_TB=` ao `make` e a etapa é pulada.
-- **① Síntese** roda `make pcb-stat`: mede os módulos e a grade de fileiras.
-- **② Placement** roda `make pcb-place`: síntese + placement com o floorplan, sem rotear. É o ciclo rápido para ajustar as áreas vendo os componentes no lugar.
-- **③ Gerar PCB** roda `make pcb`: placa roteada e projeto KiCad; no fim, o link *report.md* abre o relatório.
+- **Abrir…** navega pelas pastas do projeto, mostra os `.v`/`.sv` e, ao escolher um arquivo, os módulos declarados nele; o escolhido vira o top. O floorplan fica em `<top>.floorplan.json` ao lado do fonte (ou o que o `floorplan` do `pcbflow.json` achar). Os botões passam ao pcbflow os fontes do projeto; um top fora deles entra junto. Sem `pcbflow.json`, entram os `.v`/`.sv` da pasta do top e das de baixo.
+- **Família** e **Camadas** escolhem a rodada (`<out>/<top>_<família>[_2l]/`, `build/pcb` por padrão) que o editor desenha e que os botões geram.
+- **Simulação** (marcada por padrão) roda o testbench do top (`tb` do `pcbflow.json`), se existir; desmarcada, o editor passa `--no-tb` e a etapa é pulada.
+- **① Síntese** roda `pcbflow --synth-only`: mede os módulos e a grade de fileiras.
+- **② Placement** roda `pcbflow --place-only`: síntese + placement com o floorplan, sem rotear. É o ciclo rápido para ajustar as áreas vendo os componentes no lugar.
+- **③ Gerar PCB** roda o `pcbflow` completo: placa roteada e projeto KiCad; no fim, o link *report.md* abre o relatório.
 
-Antes de rodar, o editor salva o floorplan. Ao lado do estado da execução, uma barra mostra a etapa em andamento, com porcentagem e estimativa quando a etapa as tem. Depois de um ② Placement, o ③ Gerar PCB reaproveita o placement se o floorplan e o resto não mudaram. O log aparece ao vivo no painel de baixo (clique para abrir), e uma execução por vez pode ser cancelada: o cancelamento derruba a árvore inteira de processos (`make`, `python`, `yosys`, `vvp`), e ela também morre se o editor for fechado. O comando é montado pelo servidor a partir de listas fechadas (alvo, família, camadas), nunca de texto vindo da página.
+Antes de rodar, o editor salva o floorplan. Ao lado do estado da execução, uma barra mostra a etapa em andamento, com porcentagem e estimativa quando a etapa as tem. Depois de um ② Placement, o ③ Gerar PCB reaproveita o placement se o floorplan e o resto não mudaram. O log aparece ao vivo no painel de baixo (clique para abrir), e uma execução por vez pode ser cancelada: o cancelamento derruba a árvore inteira de processos (`python`, `yosys`, `iverilog`, `vvp`), e ela também morre se o editor for fechado. O comando é montado pelo servidor a partir de listas fechadas (ação, família, camadas), nunca de texto vindo da página.
 
 Para desenhar as fileiras, o placement e a capacidade de cada área, o editor lê o `placement.json` que toda rodada grava. A grade e o quanto cada módulo precisa vêm da síntese e não dependem do floorplan, então basta a ① Síntese para começar; o placement por baixo aparece depois da ② ou da ③. Pelo terminal, o mesmo ciclo é:
 
 ```sh
-make pcb-stat  PCB_TOP=basic_top PCB_LIB=pcbflow/lib/rtl   # síntese: mede os módulos
-make fpedit    PCB_TOP=basic_top                            # desenha vendo o tamanho mínimo
-make pcb-place PCB_TOP=basic_top PCB_LIB=pcbflow/lib/rtl    # placement com o floorplan, sem rotear
-make pcb       PCB_TOP=basic_top PCB_LIB=pcbflow/lib/rtl    # fluxo completo com o floorplan
+pcbflow --top basic_top --lib rtl --synth-only               # síntese: mede os módulos
+pcbflow-fpedit rtl/basic/basic_top.floorplan.json             # desenha vendo o tamanho mínimo
+pcbflow --top basic_top --lib rtl --place-only               # placement com o floorplan, sem rotear
+pcbflow --top basic_top --lib rtl                            # fluxo completo com o floorplan
 ```
 
-Os três alvos gravam na mesma pasta, então cada um substitui o `placement.json` do anterior; a rodada só de síntese mostra fileiras e capacidade, sem o placement por baixo. O editor avisa quando um fonte Verilog mudou depois da rodada. A verificação usa as mesmas funções do fluxo: o que o editor aprova o `make pcb` aceita. Sem rodada, ele só confere o formato.
+As três rodadas gravam na mesma pasta, então cada um substitui o `placement.json` do anterior; a rodada só de síntese mostra fileiras e capacidade, sem o placement por baixo. O editor avisa quando um fonte Verilog mudou depois da rodada. A verificação usa as mesmas funções do fluxo: o que o editor aprova o `pcbflow` aceita. Sem rodada, ele só confere o formato.
 
 ### Macros no editor
 
@@ -331,6 +350,8 @@ Os trilhos de 0,8 mm levam cerca de 2 A em cobre de 1 oz, folga suficiente para 
 
 ## Escala (família CMOS)
 
+Módulos do processador do [riscv-pipelined](https://github.com/VictorGerin/riscv-pipelined):
+
 | Módulo | Transistores |
 |---|---:|
 | adder (4 bits) | 144 |
@@ -348,13 +369,13 @@ O somador de 4 bits sai em cerca de 10 s em CMOS e 22 s em RTL; o de 32 bits em 
 
 ## Testes
 
-A suíte em `pcbflow/tests/` (pytest) confere o próprio pcbflow. A validação de cada placa (verificação das células, simulações, folgas, conectividade e DRC) diz que *aquela* placa está certa; os testes dizem que uma mudança no código não quebrou o que funcionava.
+A suíte em `tests/` (pytest) confere o próprio pcbflow. A validação de cada placa (verificação das células, simulações, folgas, conectividade e DRC) diz que *aquela* placa está certa; os testes dizem que uma mudança no código não quebrou o que funcionava.
 
 ```sh
-make pcb-test                                  # tudo o que as ferramentas instaladas permitem (~1,5 min)
-make pcb-test-quick                            # só os de unidade, sem o fluxo completo (~10 s)
-make pcb-test PCB_TEST_ARGS="-k fpedit -x"     # um grupo, parando no primeiro erro
-cd pcbflow && python -m pytest -m "not ui"     # direto pelo pytest
+pip install -e ".[fast,test]"     # uma vez: pytest e selenium
+python -m pytest                  # tudo o que as ferramentas instaladas permitem (~1,5 min)
+python -m pytest -m "not slow"    # só os de unidade, sem o fluxo completo (~10 s)
+python -m pytest -k fpedit -x     # um grupo, parando no primeiro erro
 ```
 
 | Arquivo | O que confere |
@@ -363,9 +384,10 @@ cd pcbflow && python -m pytest -m "not ui"     # direto pelo pytest
 | `test_floorplan.py` | formato do floorplan: o que é aceito e cada mensagem de recusa |
 | `test_library.py` | as três famílias: consistência `.sp` x `.lib` x `parts.json`, drive em pior caso, latches, `.lib` gerado; leitor SPICE; `cellcheck` de cada família e de montagens sabotadas de propósito (tem de acusar) |
 | `test_check_cache_misc.py` | folgas, conectividade e keepouts numa placa feita à mão; cache do placement; valores SPICE, tempos, escopos |
+| `test_project.py` | `pcbflow.json`: fontes com exclusões, testbench e floorplan por top, procura nas pastas de cima, o que é recusado, e o fluxo pegando tudo do projeto (e `--no-tb`/`--no-floorplan`) |
 | `test_hier_geom.py` | posição dos macros (com e sem floorplan, área pequena, macros dentro da área do pai) e o floorplan da lógica solta |
 | `test_flow.py` | fluxo completo: `counter4` nas três famílias (simulações OK, 0 violações, 0 nets incompletas, arquivos do KiCad), 2 e 4 camadas, latches, testbench que falha, reaproveitamento do placement, determinismo, macros (um molde para cópias iguais, cópias idênticas), previsão do editor igual ao placement real, erros de entrada e DRC do KiCad |
-| `test_fpedit.py` | validação do editor (capacidade, macros medidos e estimados, avisos) e a API HTTP com um servidor de verdade: salvar e conflito, Host não permitido, navegação presa ao projeto, execução só com valores conhecidos |
+| `test_fpedit.py` | validação do editor (capacidade, macros medidos e estimados, avisos) o comando que cada botão monta, e a API HTTP com um servidor de verdade: salvar e conflito, Host não permitido, navegação presa ao projeto, execução só com valores conhecidos |
 | `test_fpedit_ui.py` | a página no Chrome: macros do arquivo, marcar/desmarcar tipos, clicar e arrastar macros, área pequena e *Ajustar ao macro*, avisos, salvar |
 
 Os testes são marcados por dependência (`pytest.ini`): `tools` (Yosys e Icarus), `slow` (fluxo completo), `kicad` (`kicad-cli`) e `ui` (Selenium e Chrome). O que não está instalado é pulado, com o motivo no resumo. Os projetos de teste ficam em `tests/data/` (`hier8.v`: somador de 8 bits feito de 2 `add4` de 4 `fa`; `latch_demo.v`), e cada rodada do fluxo vai para uma pasta temporária do pytest.

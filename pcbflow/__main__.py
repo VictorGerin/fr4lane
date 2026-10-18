@@ -1,12 +1,17 @@
 """pcbflow: Verilog -> Yosys -> células de componentes discretos -> placement -> roteamento -> KiCad.
 
 Uso:
-  python -m pcbflow --top adder --src rtl/RISC_V/ALU/adder.v --tb sim/testbenches/tb_adder.v
-  python -m pcbflow --lib pcbflow/lib/rtl --top adder --src ...      (família RTL com BC548)
+  pcbflow --top adder --src adder.v --tb tb_adder.v          (família CMOS, padrão)
+  pcbflow --top adder --src adder.v --lib rtl                (família RTL com BC548)
+  pcbflow --top ALU                                          (fontes, testbench e floorplan do pcbflow.json)
+
+Num projeto com pcbflow.json (veja pcbflow/project.py), --src, --tb, --floorplan
+e --out saem dele quando não são dados.
 """
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -15,13 +20,20 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from . import cache, cellcheck, check, drc, drive, floorplan, hier, kicad, netlist, place, progress, route, sizing, synth
+from . import cache, cellcheck, check, drc, drive, floorplan, hier, kicad, netlist, place, progress, project, route,     sizing, synth
 from .layout import Rules
-from .library import Library, LibraryError
+from .library import Library, LibraryError, resolve_family
 
-ROOT = Path(__file__).resolve().parents[1]
 # marcadores de falha usados pelos testbenches do projeto
 FAIL_RE = re.compile(r"\[ERRO|(?<![A-Za-z])(ERROR|FAILED|FALHOU)(?![A-Za-z])")
+
+
+def _short(p):
+    """Caminho relativo à pasta atual quando dá (relatório e log mais legíveis)."""
+    try:
+        return Path(os.path.relpath(p)).as_posix()
+    except ValueError:                 # outro drive no Windows
+        return str(p)
 
 
 def log(msg=""):
@@ -67,10 +79,14 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="pcbflow", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--top", required=True, help="módulo topo")
-    ap.add_argument("--src", nargs="+", required=True, help="arquivos Verilog")
-    ap.add_argument("--lib", default=str(ROOT / "lib" / "cmos"), help="pasta da família de células")
-    ap.add_argument("--out", help="diretório de saída (padrão: build/pcb/<top>)")
-    ap.add_argument("--tb", help="testbench para simular gate-level e switch-level")
+    ap.add_argument("--src", nargs="+", help="arquivos Verilog (padrão: 'src' do pcbflow.json)")
+    ap.add_argument("--lib", default="cmos",
+                    help="família de células: cmos (padrão), rtl, relay ou a pasta de uma família própria")
+    ap.add_argument("--out", help="diretório de saída (padrão: <out do pcbflow.json ou build/pcb>/<top>_<família>)")
+    ap.add_argument("--tb", help="testbench para simular gate-level e switch-level "
+                                 "(padrão: 'tb' do pcbflow.json, se existir para o top)")
+    ap.add_argument("--no-tb", action="store_true", help="não simula, mesmo com testbench no pcbflow.json")
+    ap.add_argument("--project", help="pasta do projeto (padrão: a do pcbflow.json da pasta atual ou de cima)")
     ap.add_argument("--effort", type=float, default=1.0, help="esforço do placement")
     ap.add_argument("--density", type=float, default=None,
                     help="ocupação-alvo das fileiras fora das fences/regions, de 0 a 1 (padrão 0.8; "
@@ -84,7 +100,9 @@ def main(argv=None):
                     help="aborta antes do P&R se o projeto for maior que isso")
     ap.add_argument("--layers", type=int, choices=(2, 4), default=4,
                     help="4: VDD/GND em planos internos (padrão); 2: trilhos de alimentação")
-    ap.add_argument("--floorplan", help="arquivo JSON com a posição (mm) dos módulos e keepouts")
+    ap.add_argument("--floorplan", help="arquivo JSON com a posição (mm) dos módulos e keepouts "
+                                        "(padrão: 'floorplan' do pcbflow.json, se achar um para o top)")
+    ap.add_argument("--no-floorplan", action="store_true", help="ignora o floorplan do pcbflow.json")
     ap.add_argument("--flatten", action="store_true",
                     help="achata antes do mapeamento: o ABC otimiza entre módulos, "
                          "mas a placa perde o agrupamento por módulo")
@@ -107,11 +125,35 @@ def main(argv=None):
                     help="não roda o DRC do KiCad (kicad-cli) sobre a placa gerada")
     args = ap.parse_args(argv)
 
+    # projeto (pcbflow.json): fontes, testbench, floorplan e pasta de saída padrão
+    try:
+        proj = project.find(args.project)
+        args.lib = str(resolve_family(args.lib))
+    except (project.ProjectError, LibraryError) as e:
+        log(f"ERRO: {e}")
+        return 3
+    if not args.src:
+        args.src = [_short(p) for p in proj.sources()]
+        if not args.src:
+            log("ERRO: sem fontes: use --src ou 'src' no pcbflow.json"
+                + (f" ({proj.config})" if proj.config else " (nenhum pcbflow.json na pasta atual nem acima)"))
+            return 3
+    if args.no_tb:
+        args.tb = None
+    elif not args.tb and proj.testbench(args.top):
+        args.tb = str(proj.testbench(args.top))
+        log(f"Testbench do projeto: {proj.rel(args.tb)}")
+    if args.no_floorplan:
+        args.floorplan = None
+    elif not args.floorplan and not args.flatten and proj.find_floorplan(args.top):
+        args.floorplan = str(proj.find_floorplan(args.top))
+        log(f"Floorplan do projeto: {proj.rel(args.floorplan)}")
+
     # o nome da família (pasta da biblioteca) vai na pasta e nos arquivos do KiCad,
     # para as versões cmos/rtl do mesmo módulo não se confundirem
-    family = Path(args.lib).resolve().name
+    family = Path(args.lib).name
     tag = f"{args.top}_{family}" + ("_2l" if args.layers == 2 else "")
-    out = Path(args.out or f"build/pcb/{tag}")
+    out = Path(args.out) if args.out else proj.out_dir(tag)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     clock = _Clock()

@@ -42,15 +42,37 @@ KIND_ROW = {"pmos": 0, "pnp": 0, "resistor": 1, "capacitor": 1, "diode": 1, "nmo
 PASSIVE_KINDS = ("resistor", "capacitor", "diode")   # não dirigem a saída de um bloco
 
 
+# famílias que vêm com o pcbflow (cmos, rtl, relay): --lib aceita o nome de uma
+# delas ou o caminho da pasta de uma família própria
+FAMILIES_DIR = Path(__file__).resolve().parent / "lib"
+
+
+def families():
+    """Nomes das famílias incluídas no pcbflow."""
+    return sorted(p.name for p in FAMILIES_DIR.iterdir() if (p / "library.json").is_file())
+
+
+def resolve_family(arg):
+    """Pasta da família: o caminho dado (se for uma pasta de família) ou, pelo
+    nome, uma das incluídas no pcbflow."""
+    p = Path(arg)
+    if p.is_dir() and (p / "library.json").is_file():
+        return p.resolve()
+    if p.is_file():
+        raise LibraryError(f"{arg}: aponte para a pasta da família (ex.: rtl ou minha_familia/)")
+    if (FAMILIES_DIR / str(arg) / "library.json").is_file():
+        return FAMILIES_DIR / str(arg)
+    raise LibraryError(f"família '{arg}' não encontrada: use o nome de uma das incluídas "
+                       f"({', '.join(families())}) ou o caminho da pasta de uma família")
+
+
 class LibraryError(Exception):
     pass
 
 
 class Library:
     def __init__(self, path):
-        self.path = Path(path)
-        if self.path.is_file():
-            raise LibraryError(f"{path}: aponte para a pasta da família (ex.: pcbflow/lib/cmos)")
+        self.path = resolve_family(path)          # nome de uma família incluída ou pasta
         meta = json.loads((self.path / "library.json").read_text(encoding="utf-8"))
         self.meta = meta
         self.name = meta.get("name", self.path.name)

@@ -148,7 +148,7 @@ def _editor_info(blocks, width, geo):
 
 
 def measure(lib, design, params=None, rules=None):
-    """As mesmas medidas do placement, sem posicionar nada (make pcb-stat): o
+    """As mesmas medidas do placement, sem posicionar nada (--synth-only): o
     que o fpedit precisa e o tamanho que a placa teria sem floorplan."""
     params = params or PlaceParams()
     m = _measure(lib, design, params, rules or Rules())

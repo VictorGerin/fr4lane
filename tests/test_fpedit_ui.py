@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from conftest import data, lib_path
-from pcbflow import fpedit
+from pcbflow import fpedit, project
 
 pytestmark = [pytest.mark.ui, pytest.mark.slow]
 
@@ -40,6 +40,7 @@ def page(tmp_path, monkeypatch, hier_run, browser):
     """Abre o editor com um floorplan inicial; devolve (driver, js, arquivo)."""
     def open_with(fp_data):
         monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(fpedit, "PROJ", project.Project(tmp_path))
         run_dir = tmp_path / "build" / "pcb" / "hier8_rtl"
         run_dir.mkdir(parents=True, exist_ok=True)
         (run_dir / "placement.json").write_text(json.dumps(hier_run), encoding="utf-8")

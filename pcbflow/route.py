@@ -927,7 +927,7 @@ def _load_checkpoint(path, key):
 
 
 def _save_checkpoint(path, key, it, pres, hist, paths, todo, ok, prev, **extra):
-    """Grava o estado ao fim de uma iteração (atômico: um make interrompido no
+    """Grava o estado ao fim de uma iteração (atômico: uma rodada interrompida no
     meio da gravação não deixa um arquivo pela metade)."""
     if not path or not key:
         return

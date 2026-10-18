@@ -1,0 +1,27 @@
+# Rodadas do fluxo e empacotamento
+build/
+dist/
+*.egg-info/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# Simulação
+*.vcd
+*.vvp
+
+# KiCad: projetos gerados ficam em build/. Se um projeto for aberto ou salvo
+# fora de build/, o KiCad cria estes arquivos:
+*.kicad_prl
+*-backups/
+fp-info-cache
+*.lck
+_autosave-*
+\#auto_saved_files#
+
+# Yosys / ABC
+abc.history
+*.blif
