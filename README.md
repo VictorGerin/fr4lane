@@ -1,6 +1,8 @@
 # pcbflow — Verilog para PCB com componentes discretos
 
-O pcbflow sintetiza um módulo Verilog com o Yosys, mapeia o resultado para uma biblioteca de células montadas com componentes discretos (MOSFETs, transistores bipolares, resistores…), faz o placement e o roteamento na PCB e gera um projeto KiCad pronto para revisão.
+[![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-blue.svg)](LICENSE)
+
+O pcbflow transforma um módulo Verilog numa placa de circuito impresso feita só de componentes discretos: transistores MOSFET, transistores bipolares com resistores (lógica RTL) ou relés. Ele sintetiza o circuito com o Yosys, mapeia o resultado para uma biblioteca de portas montadas com esses componentes, confere por simulação que a placa faz o mesmo que o Verilog, posiciona e roteia tudo e entrega um projeto KiCad pronto para revisão e fabricação.
 
 ```
 Verilog ──Yosys/ABC──▶ células (.lib) ──expansão (.sp)──▶ componentes ──placement──▶ roteamento ──▶ KiCad
@@ -8,16 +10,60 @@ Verilog ──Yosys/ABC──▶ células (.lib) ──expansão (.sp)──▶ 
                             └── simulação gate-level ─────────┴── simulação em nível de componente
 ```
 
+É um fluxo de projeto de chip (síntese, biblioteca de células, floorplan, placement, roteamento, verificação) aplicado a uma PCB. Serve para construir computadores e circuitos digitais "à moda antiga", com portas lógicas visíveis, a partir de um RTL comum.
+
+**Exemplo de resultado:** a ALU de 32 bits do [riscv-pipelined](https://github.com/VictorGerin/riscv-pipelined) na família RTL vira uma placa de 860 x 681 mm com 3 234 transistores BC548 e 4 908 resistores, totalmente roteada em 4 camadas (66 mil trilhas, 6 mil vias), com 0 erros no DRC do KiCad. A geração leva cerca de 17 minutos, com os somadores e os estágios do shifter montados como [macros](#macros-fluxo-hierárquico).
+
+**O que tem:**
+
+- três famílias de células incluídas: **CMOS** (2N7002 + BSS84), **RTL** (BC548 + resistores) e **relés** (SPDT de 5 V), com portas, flip-flops e latches; e um formato simples para criar outras;
+- verificação de cada célula montada contra a função declarada, e simulação do circuito inteiro em nível de componente com o seu testbench;
+- dimensionamento por fan-out em pior caso elétrico (família RTL);
+- floorplan com fences, regions, guides e keepouts, editado num [editor visual](#editor-visual) no navegador;
+- placement por anelamento simulado e roteamento por negociação (PathFinder) em grade, compilados com numba;
+- fluxo hierárquico com [macros](#macros-fluxo-hierárquico): blocos repetidos são montados uma vez e copiados;
+- placas de 4 camadas (VDD e GND em planos) ou de [2 camadas](#placa-de-2-camadas);
+- projeto KiCad com grupos por módulo, modelos 3D, lista de materiais e DRC.
+
+**Sumário:** [Instalação](#instalação) · [Uso](#uso) · [Como funciona](#como-funciona) · [Bibliotecas de células](#bibliotecas-de-células) · [Saídas](#saídas) · [Revisar no KiCad](#como-revisar-no-kicad) · [Módulos e macros](#módulos-na-placa) · [Montagem da placa](#como-a-placa-é-montada) · [Floorplan](#floorplan-posição-dos-módulos-e-keepouts) · [Editor visual](#editor-visual) · [2 camadas](#placa-de-2-camadas) · [Testes](#testes) · [Arquitetura](#arquitetura-do-código) · [Limitações](#limitações-conhecidas) · [Licença](#licença)
+
 ## Instalação
 
-Pré-requisitos: Python ≥ 3.10, Yosys e Icarus Verilog (MSYS2: `pacman -S mingw-w64-ucrt-x86_64-yosys mingw-w64-ucrt-x86_64-iverilog`) e KiCad 8 ou 9 para abrir o resultado e rodar o DRC.
+Pré-requisitos:
+
+- Python ≥ 3.10;
+- [Yosys](https://github.com/YosysHQ/yosys) e [Icarus Verilog](https://github.com/steveicarus/iverilog) no PATH;
+- [KiCad](https://www.kicad.org/) 8 ou mais novo, para abrir o resultado e rodar o DRC (opcional para gerar a placa; testado com o 9 e o 10).
+
+| Sistema | Yosys e Icarus Verilog |
+|---|---|
+| Windows (MSYS2) | `pacman -S mingw-w64-ucrt-x86_64-yosys mingw-w64-ucrt-x86_64-iverilog` |
+| Debian / Ubuntu | `sudo apt install yosys iverilog` |
+| macOS (Homebrew) | `brew install yosys icarus-verilog` |
 
 ```sh
-pip install -e ".[fast]"        # a partir do clone (editável); [fast] traz o numba, que compila o roteador
-pip install "pcbflow[fast] @ git+https://github.com/VictorGerin/pcbflow.git"   # ou direto do GitHub
+git clone https://github.com/VictorGerin/pcbflow.git
+cd pcbflow
+pip install -e ".[fast]"        # editável; [fast] traz o numba, que compila o placement e o roteador
+# ou, sem clonar:
+pip install "pcbflow[fast] @ git+https://github.com/VictorGerin/pcbflow.git"
 ```
 
-Sem o numba, o resultado é o mesmo, só que mais devagar. A instalação cria três comandos: `pcbflow` (o fluxo), `pcbflow-fpedit` (o [editor de floorplan](#editor-visual)) e `pcbflow-drc` (o [DRC do KiCad](#como-revisar-no-kicad)); `python -m pcbflow` também funciona.
+Sem o numba, o resultado é o mesmo, só que de 10 a 20 vezes mais devagar. A instalação cria três comandos: `pcbflow` (o fluxo), `pcbflow-fpedit` (o [editor de floorplan](#editor-visual)) e `pcbflow-drc` (o [DRC do KiCad](#como-revisar-no-kicad)); `python -m pcbflow` também funciona.
+
+A suíte de testes passa inteira no Windows (Yosys 0.66, Icarus 13, KiCad 10) e no Linux (Debian 13: Yosys 0.52, Icarus 12, KiCad 9), incluindo os testes da página do editor no Chrome/Chromium e o DRC do KiCad.
+
+### Docker
+
+O `Dockerfile` monta o ambiente Linux de referência (Debian 13 com Yosys, Icarus Verilog, KiCad e Chromium) e roda os testes:
+
+```sh
+docker build -t pcbflow .
+docker run --rm --shm-size=1g pcbflow                                        # a suíte de testes
+docker run --rm -v "$PWD/meu_projeto:/proj" -w /proj pcbflow pcbflow --top meu_top   # um projeto seu
+```
+
+`--build-arg WITH_KICAD=0` deixa o KiCad de fora (imagem bem menor; o DRC fica pulado). Para rodar os testes contra o código da sua pasta, sem reconstruir a imagem: `docker run --rm -v "$PWD:/pcbflow" pcbflow`.
 
 ## Uso
 
@@ -29,7 +75,9 @@ pcbflow --top counter4 --src examples/counter4.v --synth-only                 # 
 pcbflow --top counter4 --src examples/counter4.v --place-only                 # síntese + placement, sem rotear
 ```
 
-`--lib` aceita o nome de uma família incluída (`cmos`, `rtl`, `relay`) ou a pasta de uma família própria (veja [Criar uma família nova](#criar-uma-família-nova)). A rodada vai para `build/pcb/<top>_<família>[_2l]/` (veja [Saídas](#saídas-buildpcbtop_família_2l-ex-adder_cmos-adder_rtl_2l)).
+Com `--tb`, o testbench roda contra o netlist de portas e contra o de componentes; uma falha é reconhecida pelas marcas `[ERRO`, `ERROR`, `FAILED` ou `FALHOU` na saída (veja [Simulação](#simulação-em-nível-de-componente)).
+
+`--lib` aceita o nome de uma família incluída (`cmos`, `rtl`, `relay`) ou a pasta de uma família própria (veja [Criar uma família nova](#criar-uma-família-nova)). A rodada vai para `build/pcb/<top>_<família>[_2l]/` (veja [Saídas](#saídas)).
 
 ### Projeto (`pcbflow.json`)
 
@@ -54,6 +102,22 @@ Opções úteis: `--effort` (esforço do placement), `--row-gap`/`--part-gap` (d
 **Roteamento retomável.** Ao fim de cada iteração o roteador grava um ponto de controle (`route_state.pkl`: os caminhos de cada net e o histórico de disputa). Se a rodada for interrompida (Ctrl+C, o *Cancelar* do editor, queda), rodar de novo com as mesmas entradas reaproveita o placement e **continua da última iteração completa** (`retomado do ponto de controle: 3 iteração(ões) já feita(s)`), com o mesmo resultado de uma rodada sem interrupção. Com o roteamento já concluído (ex.: o DRC falhou depois), a rodada seguinte o reaproveita inteiro. O ponto de controle só vale para a mesma placa e a mesma versão do roteador; `--fresh` começa do zero. A retomada é entre iterações: uma iteração interrompida no meio é refeita.
 
 **Progresso.** As etapas longas mostram o andamento: no terminal, uma linha reescrita no lugar; num arquivo ou pipe, uma linha a cada ~30 s. O anelamento do placement e cada iteração do roteamento têm porcentagem e estimativa do que falta (no roteamento, cada net pesa pelo tamanho, porque as maiores ficam por último); a síntese mostra o passo do Yosys (ex.: `passo 16/25: ABC`) e a simulação, a última linha do testbench. Cada etapa termina com o seu tempo (`etapa: 2 min 10 s`).
+
+## Como funciona
+
+Cada rodada passa por seis etapas, que aparecem no log com o tempo de cada uma:
+
+| Etapa | O que faz | Onde |
+|---|---|---|
+| **[0/6] Biblioteca** | lê a família de células, confere a consistência dos arquivos, simula cada montagem (`.sp`) contra a função declarada (`.lib`) e confere o drive em pior caso | `library.py`, `cellcheck.py`, `drive.py` |
+| **[1/6] Síntese** | o Yosys sintetiza o Verilog e mapeia para as células da família (cada módulo à parte, para a hierarquia chegar à placa); o pcbflow expande cada célula nos seus componentes e troca as que estouram o fan-out por variantes mais fortes | `synth.py`, `netlist.py`, `sizing.py` |
+| **[2/6] Simulação** | roda o seu testbench duas vezes: contra o netlist de portas e contra o netlist de componentes (transistores, resistores, relés) | `__main__.py`, `netlist.py` |
+| **[3/6] Placement** | arruma os componentes de cada célula num bloco, distribui os blocos em fileiras (respeitando o floorplan) e minimiza o comprimento de fio por anelamento simulado; com macros, monta e roteia cada bloco repetido à parte | `place.py`, `anneal.py`, `hier.py` |
+| **[4/6] Roteamento** | liga VDD/GND aos planos e roteia os sinais numa grade de 0,5 mm, por negociação entre as nets | `route.py` |
+| **[5/6] Verificação** | confere folgas, conectividade e as regras do floorplan sobre o cobre gerado, independentemente do roteador | `check.py` |
+| **[6/6] KiCad** | escreve o projeto, a lista de materiais e o `report.md`; com o `kicad-cli` instalado, roda o DRC do KiCad | `kicad.py`, `drc.py` |
+
+`--synth-only` para depois da etapa 2 e `--place-only` depois da 3. Com as mesmas entradas, uma nova rodada reaproveita o placement e retoma o roteamento de onde parou (veja abaixo).
 
 ## Bibliotecas de células
 
@@ -159,14 +223,16 @@ Na simulação de componentes, uma entrada de bloco que passa por contato de rel
 
 ### Criar uma família nova
 
-Copie uma pasta existente e ajuste três coisas:
+Copie uma das famílias de `pcbflow/lib/` para uma pasta sua (ex.: `minha_familia/`) e ajuste três coisas:
 - o `parts.json`, com os componentes;
 - os `.sp`, com a montagem de cada célula;
 - os números do `.lib` (área, e no futuro tempos), se mudarem.
 
-Footprints novos entram em `footprints.json`. O roteador exige que o menor lado de cada pad seja ≥ 0,5 mm, o passo da grade.
+Depois é só `pcbflow --lib minha_familia/ ...`: a verificação da etapa 0 diz o que estiver inconsistente e simula cada célula. A chave `"footprints"` do `library.json` aponta o arquivo de geometria, relativo à pasta da família: as famílias CMOS e RTL usam o `../footprints.json` compartilhado, e a de relés tem o seu (`"footprints": "footprints.json"`). Numa cópia fora do pacote, copie também o arquivo de footprints e ajuste essa chave. O roteador exige que o menor lado de cada pad seja ≥ 0,5 mm, o passo da grade.
 
-## Saídas (`build/pcb/<top>_<família>[_2l]/`, ex.: `adder_cmos`, `adder_rtl_2l`)
+## Saídas
+
+Cada rodada grava numa pasta `build/pcb/<top>_<família>[_2l]/` (ex.: `adder_cmos`, `adder_rtl_2l`; a base muda com `out` no `pcbflow.json` ou `--out`):
 
 | Arquivo | Conteúdo |
 |---|---|
@@ -177,11 +243,16 @@ Footprints novos entram em `footprints.json`. O roteador exige que o menor lado 
 | `<top>_switch.v` | netlist em nível de componente, com a mesma interface do módulo |
 | `sim_gates.log`, `sim_switch.log` | resultado do testbench contra cada netlist |
 | `cells.lib`, `cells_models.v`, `cellcheck/` | Liberty unificado, modelos e verificação das células |
+| `synth.ys`, `yosys.log`, `yosys_stat.txt`, `latch_map.v` | script, log e estatísticas do Yosys; mapeamento dos latches |
+| `<top>_gates.json`, `<top>_hier.json` | netlists do Yosys (achatado e por módulo) |
+| `placement.json` | grade de fileiras, medidas dos módulos e dos macros e posição dos componentes, para o editor de floorplan |
+| `place_cache.pkl`, `route_state.pkl` | placement reaproveitável e ponto de controle do roteamento (veja [Uso](#uso)) |
+| `drc.json` | relatório do DRC do KiCad, quando roda |
 
 ## Como revisar no KiCad
 
 1. Abra o `.kicad_pro` e, no editor de PCB, pressione **B** para preencher os planos (In1.Cu = GND, In2.Cu = VDD). A placa de 2 camadas não tem planos.
-2. Rode o DRC. O pcbflow já verifica folgas e conectividade por conta própria (passo 5/6) e, se achar o `kicad-cli`, roda o DRC do KiCad no fim (`--no-drc` pula). O DRC do KiCad é a referência; para rodá-lo de novo sobre uma placa já gerada, preenchendo os planos e salvando a placa preenchida: `pcbflow-drc build/pcb/<rodada>/<rodada>.kicad_pcb`.
+2. Rode o DRC. O pcbflow já verifica folgas e conectividade por conta própria (passo 5/6) e, se achar o `kicad-cli`, roda o DRC do KiCad no fim (`--no-drc` pula). O DRC do KiCad é a referência; para rodá-lo de novo sobre uma placa já gerada: `pcbflow-drc build/pcb/<rodada>/<rodada>.kicad_pcb`. Antes do DRC os planos são preenchidos e a placa é salva preenchida: pelo próprio `kicad-cli` no KiCad 10 (`--refill-zones --save-board`) ou, no 8 e no 9, pela API Python do KiCad (`pcbnew`), usando o Python que vem com ele (no Windows, o `python.exe` ao lado do `kicad-cli`; no Linux, o do sistema; ou o de `PCBFLOW_KICAD_PYTHON`). Sem nenhum dos dois, o DRC roda com os planos vazios e avisa que a ligação de VDD/GND pelos planos não foi conferida.
 3. Cada célula lógica é um **grupo** com o nome da instância (`U12 (NOR2)`, `FF3 (DFFR)`…), dentro do grupo do seu módulo (`u_fa (full_adder)`). O `report.md` liga esses nomes aos do Yosys.
 4. Nets que o roteador não fechou, se houver, aparecem no ratsnest e em *Pendências* no relatório.
 
@@ -214,22 +285,45 @@ ou, no floorplan, `"macros": ["adder", "adder_16bit"]`. Um macro é um **tipo** 
 4. **Montagem:** cada instância recebe uma cópia do seu molde (componentes, trilhas e vias, com nets e instâncias renomeadas), num retângulo reservado com um canal livre de 1,5 mm em volta para chegar aos pinos. O resto do circuito ("cola") é posicionado normalmente, puxado pelos pinos dos macros, e o roteamento de cima só liga os pinos e os pads da cola: muito menos nets e buscas menores.
 5. **Onde fica cada macro:** sem floorplan, os macros vão para o alto da placa, em prateleiras, e a cola vai para as fileiras de baixo. Com floorplan, uma fence/region com o caminho da instância (ex.: `add_comp_inst.main_adder`) diz onde ela fica (a área tem de comportar o macro mais o canal; o erro diz o tamanho necessário); sem isso, o macro vai para dentro da área do módulo que o contém (empacotado a partir do canto superior esquerdo) ou, se nenhum módulo acima dele tem área, para uma faixa abaixo das áreas declaradas. O log mostra o tamanho de cada molde para dimensionar as áreas.
 
-Instâncias do mesmo tipo podem ganhar moldes diferentes: no `fanout_test`, a `u_and2` alimenta 16 NOTs, o sizing a troca por `AND2_X2` e ela fica com molde próprio, maior. O cobre de um macro pronto é obstáculo para as rotas de fora (até da própria net, que só entra pelo pino), mas o espaço livre dentro dele continua disponível para elas.
+Instâncias do mesmo tipo podem ganhar moldes diferentes: no `fanout_test` do riscv-pipelined, a `u_and2` alimenta 16 NOTs, o sizing a troca por `AND2_X2` e ela fica com molde próprio, maior. O cobre de um macro pronto é obstáculo para as rotas de fora (até da própria net, que só entra pelo pino), mas o espaço livre dentro dele continua disponível para elas.
 
 A simulação de componentes, a verificação de conectividade e o DRC continuam sobre a placa inteira, então um erro de montagem aparece. O editor de floorplan escolhe os macros e mostra onde cada um fica (veja [Macros no editor](#macros-no-editor)). Limites: só placas de 4 camadas (VDD/GND nos planos internos); e os pinos são escolhidos só pelo lado de dentro do macro (o topo não opina).
 
 ## Como a placa é montada
 
-- **Simulação em nível de componente:** MOSFETs e BJTs viram as primitivas `nmos`/`pmos` do Verilog, e resistores viram `rtran`, uma ligação resistiva: um transistor conduzindo vence o pull-up. Cada saída de bloco tem um atraso de transporte de 10 ps; com atraso inercial, o Icarus prende glitches como X.
-- **Placement:** cada instância de subcircuito vira um bloco desenhado conforme o layout do JSON. Os blocos são distribuídos em fileiras (dentro da região do seu módulo, quando há mais de um), e um anelamento simulado minimiza o comprimento de fio (HPWL); ele roda compilado pelo numba (`anneal.py`, de 15 a 20 vezes mais rápido que em Python puro) e é reprodutível: a mesma semente (`--seed`) dá o mesmo placement, com ou sem numba. Os conectores de 2,54 mm ficam nas bordas: entradas e alimentação à esquerda, saídas à direita. Há um capacitor de desacoplamento por fileira (veja [Floorplan](#floorplan-posição-dos-módulos-e-keepouts) para as áreas) e um de bulk.
-- **Roteamento (`route.py`):**
-  - grade de 0,5 mm em F.Cu (horizontal) e B.Cu (vertical), com vias para trocar de camada;
-  - VDD e GND são planos internos, sem trilha: pads SMD de alimentação ganham uma via curta até o plano, e pads com furo ligam-se a ele direto;
-  - os sinais são roteados por negociação (PathFinder): as nets podem disputar espaço no início, e o custo dos pontos disputados sobe a cada iteração (1,6× por iteração, com teto de 300 vezes o custo de um passo; o histórico de disputa segue acumulando) até ninguém mais compartilhar;
-  - o limite de pontos que a busca de uma net explora acompanha o tamanho dela (20 vezes a área do retângulo da net, entre 400 mil e 8 milhões); se mesmo assim ela não acha caminho, tenta de novo sem custo de disputa, de modo que toda net entra na negociação e só fica sem caminho o que é fisicamente impossível;
-  - depois da última iteração, as nets ainda em conflito são descartadas e cada uma tenta uma última vez contra a placa já roteada (sem cruzar ninguém); o que sobra vai para *Pendências* no `report.md`, marcado quando é bloqueio físico (sem caminho nem com a placa vazia: um pad ou pino cercado) — o resto é falta de espaço (`--row-gap`, floorplan);
-  - trilha de 0,25 mm, folga de 0,2 mm e via de 0,6/0,3 mm;
-  - a busca A* de cada ligação é compilada pelo [numba](https://numba.pydata.org/) (já incluso no Anaconda), com a grade em arrays numpy: de 10 a 20 vezes mais rápido que em Python puro, com as mesmas trilhas. Sem o numba, a mesma busca roda em Python puro, e o log avisa (`busca A*: Python puro`). A primeira rodada depois de mudar o `route.py` compila a busca (alguns segundos); depois ela fica em cache em `__pycache__`.
+### Simulação em nível de componente
+
+O netlist de componentes (`<top>_switch.v`) é Verilog estrutural que o Icarus simula com o mesmo testbench do RTL:
+
+- MOSFETs viram as primitivas `nmos`/`pmos`; um NPN saturado vira uma chave `nmos` entre coletor e emissor (e um PNP, `pmos`);
+- resistores viram `rtran`, uma ligação resistiva: um transistor conduzindo vence o pull-up, como no circuito real;
+- o contato de um relé vira duas chaves bidirecionais comandadas pela bobina (`tranif1` entre comum e NA, `tranif0` entre comum e NF). Como no relé real, só uma bobina em 1 puxa o contato: em X ou Z (no início da simulação, nada dirigindo) ele fica em repouso, o que também deixa o resultado igual em qualquer versão do Icarus. Uma entrada de bloco que passa por contato entra por um buffer, para o X de uma bobina ainda indefinida não voltar pelo contato até a fonte;
+- capacitores e diodos (desacoplamento, supressão da bobina) não afetam a lógica e ficam de fora;
+- cada saída de bloco tem um atraso de transporte de 10 ps; com atraso inercial, o Icarus prenderia glitches como X.
+
+O pcbflow considera que o testbench falhou se a saída tiver `[ERRO`, `ERROR`, `FAILED` ou `FALHOU` (o `vvp` não devolve o código do `$finish`).
+
+### Placement
+
+Cada instância de célula vira um bloco desenhado conforme o `"layout"` do seu `.json` (ex.: resistores numa fileira, transistores na outra). Os blocos vão para fileiras de uma grade fixa, dentro da região do seu módulo ou da área do floorplan, e um anelamento simulado troca blocos de lugar ou leva um bloco para outra posição permitida, minimizando o comprimento de fio (HPWL), com uma força que mantém cada módulo agrupado (`--module-weight`). O anelamento roda compilado pelo numba (`anneal.py`) e é reprodutível: a mesma semente (`--seed`) dá o mesmo placement, com ou sem numba; `--effort` aumenta o número de passos.
+
+Os conectores de 2,54 mm ficam nas bordas (entradas e alimentação à esquerda, saídas à direita). Cada fileira livre leva um capacitor de desacoplamento, e a placa tem um de bulk (veja [Densidade](#densidade) para as áreas).
+
+### Roteamento
+
+O roteador (`route.py`) trabalha numa grade de 0,5 mm com duas camadas de sinal: F.Cu só com trilhas horizontais e B.Cu só com verticais, trocando de camada por via. Trilha de 0,25 mm, folga de 0,2 mm, via de 0,6/0,3 mm.
+
+1. **Alimentação.** Na placa de 4 camadas, VDD e GND são planos internos: cada pad SMD de alimentação ganha uma via curta até o plano, e os pads com furo ligam-se a ele direto. Na de 2 camadas, veja [Placa de 2 camadas](#placa-de-2-camadas).
+2. **Negociação (PathFinder).** Cada net é roteada com uma busca A* (compilada pelo numba) que pode, no início, passar por pontos já usados por outras. A cada iteração, o custo dos pontos disputados sobe (1,6× por iteração) e o histórico de disputa de cada ponto acumula (+0,4 por iteração em conflito), até nenhuma net dividir espaço com outra. O limite de pontos explorados por busca acompanha o tamanho da net (20 vezes a área do seu retângulo, entre 400 mil e 8 milhões); se mesmo assim ela não acha caminho, tenta de novo ignorando a disputa, para toda net participar da negociação.
+3. **Teto adaptativo.** O custo de disputa tem teto de 300 vezes o custo de um passo: sem teto, a estimativa do A* deixa de orientar a busca e as nets que precisam contornar congestionamento estouram o limite. Quando a negociação estaciona (as nets em conflito param de cair por 4 iterações, tipicamente nets trocando de lugar sem nenhuma desistir), o teto sobe 3× (até 100 mil); se isso faz o número de conflitos disparar, ele volta um passo. O log mostra cada mudança (`negociação estacionada: teto ... sobe para 900`).
+4. **Melhor iteração.** O roteador guarda a iteração com menos conflitos. Se a última for pior, a etapa seguinte parte da melhor.
+5. **Passada final.** Ao fim das iterações (`--route-iter`, padrão 40), as nets ainda em conflito são arrancadas, e cada uma tenta de novo contra a placa já roteada, sem cruzar ninguém e com o limite de busca máximo.
+6. **Arrancar e rerrotear.** Para cada net que ainda não passa, o roteador acha um caminho que cruza poucas outras, arranca essas, coloca a net e rerroteia as arrancadas. Uma arrancada que não volta limpa pode arrancar outras por sua vez, numa cadeia de até 5 níveis. Se a cadeia não fecha, tudo volta como estava: só fica a troca que diminui as pendências.
+7. **Limpeza e pendências.** Vias de sinal com cobre numa camada só são removidas. O que não fechou vai para *Pendências* no `report.md`, marcado como bloqueio físico (sem caminho nem com a placa vazia, ex.: um pad cercado) ou falta de espaço (resolva com `--row-gap`, densidade ou floorplan).
+
+Ao fim de cada iteração o estado vai para o ponto de controle (`route_state.pkl`), com a melhor iteração junto, e uma rodada interrompida continua de onde parou.
+
+A busca A* e o anelamento são os laços pesados e rodam compilados pelo [numba](https://numba.pydata.org/), com a grade em arrays numpy: de 10 a 20 vezes mais rápido que em Python puro, com o mesmo resultado. Sem o numba, o log avisa (`busca A*: Python puro`). A primeira rodada depois de mudar esses arquivos compila as funções (alguns segundos); depois elas ficam em cache em `__pycache__`.
 
 ## Floorplan: posição dos módulos e keepouts
 
@@ -365,7 +459,7 @@ Módulos do processador do [riscv-pipelined](https://github.com/VictorGerin/risc
 | ex_stage | 11 984 |
 | register_file | 51 372 |
 
-O somador de 4 bits sai em cerca de 10 s em CMOS e 22 s em RTL; o de 32 bits em CMOS leva cerca de 6 min. Todos saem 100 % roteados. O processador completo passaria de 80 mil transistores, e o banco de registradores sozinho responde por 60 % disso. O caminho viável é fazer uma placa por estágio, ligadas por conectores, e trocar o banco de registradores por SRAM.
+O somador de 4 bits sai em poucos segundos; a ALU em RTL, com macros, em cerca de 17 min (veja o exemplo no início). Todos saem 100 % roteados. O processador completo passaria de 80 mil transistores, e o banco de registradores sozinho responde por 60 % disso. O caminho viável é fazer uma placa por estágio, ligadas por conectores, e trocar o banco de registradores por SRAM.
 
 ## Testes
 
@@ -373,7 +467,7 @@ A suíte em `tests/` (pytest) confere o próprio pcbflow. A validação de cada 
 
 ```sh
 pip install -e ".[fast,test]"     # uma vez: pytest e selenium
-python -m pytest                  # tudo o que as ferramentas instaladas permitem (~1,5 min)
+python -m pytest                  # tudo o que as ferramentas instaladas permitem (~2 min)
 python -m pytest -m "not slow"    # só os de unidade, sem o fluxo completo (~10 s)
 python -m pytest -k fpedit -x     # um grupo, parando no primeiro erro
 ```
@@ -386,9 +480,56 @@ python -m pytest -k fpedit -x     # um grupo, parando no primeiro erro
 | `test_check_cache_misc.py` | folgas, conectividade e keepouts numa placa feita à mão; cache do placement; valores SPICE, tempos, escopos |
 | `test_project.py` | `pcbflow.json`: fontes com exclusões, testbench e floorplan por top, procura nas pastas de cima, o que é recusado, e o fluxo pegando tudo do projeto (e `--no-tb`/`--no-floorplan`) |
 | `test_hier_geom.py` | posição dos macros (com e sem floorplan, área pequena, macros dentro da área do pai) e o floorplan da lógica solta |
-| `test_flow.py` | fluxo completo: `counter4` nas três famílias (simulações OK, 0 violações, 0 nets incompletas, arquivos do KiCad), 2 e 4 camadas, latches, testbench que falha, reaproveitamento do placement, determinismo, macros (um molde para cópias iguais, cópias idênticas), previsão do editor igual ao placement real, erros de entrada e DRC do KiCad |
-| `test_fpedit.py` | validação do editor (capacidade, macros medidos e estimados, avisos) o comando que cada botão monta, e a API HTTP com um servidor de verdade: salvar e conflito, Host não permitido, navegação presa ao projeto, execução só com valores conhecidos |
-| `test_fpedit_ui.py` | a página no Chrome: macros do arquivo, marcar/desmarcar tipos, clicar e arrastar macros, área pequena e *Ajustar ao macro*, avisos, salvar |
+| `test_flow.py` | fluxo completo: `counter4` nas três famílias (simulações OK, 0 violações, 0 nets incompletas, arquivos do KiCad), 2 e 4 camadas, latches, testbench que falha, reaproveitamento do placement, determinismo, macros (um molde para cópias iguais, cópias idênticas), previsão do editor igual ao placement real, erros de entrada e DRC do KiCad (com o `kicad-cli` preenchendo os planos, com o `pcbnew` e sem nenhum dos dois) |
+| `test_fpedit.py` | validação do editor (capacidade, macros medidos e estimados, avisos), o comando que cada botão monta, uma execução de verdade pelo menu e o cancelamento dela (a árvore de processos termina), e a API HTTP com um servidor de verdade: salvar e conflito, Host não permitido, navegação presa ao projeto, execução só com valores conhecidos |
+| `test_fpedit_ui.py` | a página no Chrome (ou Chromium): macros do arquivo, marcar/desmarcar tipos, clicar e arrastar macros, área pequena e *Ajustar ao macro*, avisos, salvar, barra de progresso |
 
 Os testes são marcados por dependência (`pytest.ini`): `tools` (Yosys e Icarus), `slow` (fluxo completo), `kicad` (`kicad-cli`) e `ui` (Selenium e Chrome). O que não está instalado é pulado, com o motivo no resumo. Os projetos de teste ficam em `tests/data/` (`hier8.v`: somador de 8 bits feito de 2 `add4` de 4 `fa`; `latch_demo.v`), e cada rodada do fluxo vai para uma pasta temporária do pytest.
 
+## Arquitetura do código
+
+```
+pcbflow/
+  __main__.py     linha de comando: encadeia as etapas, simulação, report.md, placement.json
+  project.py      pcbflow.json: fontes, testbench, floorplan e pasta de saída de um projeto
+  library.py      família de células: leitura, consistência, Liberty unificado, modelos Verilog
+  liberty.py      leitor de Liberty (.lib) e das expressões booleanas
+  spice.py        leitor dos .subckt (.sp)
+  cellcheck.py    simula cada montagem contra a função do .lib
+  drive.py        drive elétrico em pior caso (níveis, corrente de base, capacidade de fan-out)
+  synth.py        script e execução do Yosys (mapeamento por módulo, latches)
+  netlist.py      netlist do Yosys -> células -> componentes; escreve o netlist de componentes
+  sizing.py       troca células por variantes conforme o fan-out
+  floorplan.py    formato e validação do floorplan
+  place.py        blocos, fileiras, áreas do floorplan e placement
+  anneal.py       anelamento simulado do placement (numba)
+  hier.py         fluxo hierárquico: moldes de macro, cópias e posição dos macros
+  route.py        roteamento por negociação, passada final, rip-up, ponto de controle (numba)
+  jit.py          numba opcional: compila se instalado, Python puro se não
+  check.py        verificação de folgas, conectividade e floorplan sobre o cobre
+  layout.py       modelo da placa: footprints, pads, trilhas, vias, regras
+  kicad.py        escreve .kicad_pcb, .kicad_pro e a lista de materiais
+  drc.py          DRC pelo kicad-cli (pcbflow-drc)
+  cache.py        reaproveitamento do placement entre rodadas
+  progress.py     linhas de progresso no terminal e no editor
+  fpedit.py       editor de floorplan: servidor HTTP local e validação
+  fpedit.html     a página do editor (sem dependências externas)
+  lib/            famílias de células: cmos, rtl, relay e footprints.json
+examples/         counter4.v e o seu testbench
+tests/            suíte pytest (veja Testes)
+```
+
+Os dados passam de uma etapa para outra assim: o Yosys devolve um netlist JSON de células; `netlist.py` o transforma num `Design` (instâncias lógicas e, para cada uma, os blocos e componentes da sua montagem); `place.py` (ou `hier.py`, com macros) produz um `Board` com footprints posicionados; `route.py` acrescenta trilhas e vias ao mesmo `Board`; `check.py` e `kicad.py` leem esse `Board`. O `Design` e o `Board` são guardados em `place_cache.pkl` para a rodada seguinte.
+
+## Limitações conhecidas
+
+- **Sem análise de tempo:** o `.lib` não tem atrasos; a frequência máxima da placa não é calculada. A simulação de componentes confere a lógica, não o tempo.
+- **Footprints aproximados:** a geometria vem do `footprints.json` e é fiel o bastante para o roteamento; antes de fabricar, confira ou use *Update Footprints from Library* no KiCad. O relé é genérico.
+- **Fan-out:** só a família RTL tem modelo elétrico; nas outras vale o `max_fanout` de cada célula. Quando o ABC usa uma célula sem variante mais forte, o fluxo só avisa (não insere buffers).
+- **Macros:** só em placas de 4 camadas, e os pinos são escolhidos olhando só para dentro do macro.
+- **Tamanho:** placas com dezenas de milhares de componentes levam horas para rotear; o `--max-parts` (padrão 20 000) para o fluxo antes do placement acima disso.
+- **Editor:** o menu do fpedit lista só as famílias incluídas no pcbflow; uma família própria roda pela linha de comando.
+
+## Licença
+
+[MIT](LICENSE).
