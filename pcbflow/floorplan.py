@@ -43,6 +43,24 @@ ela fica; sem isso, o macro vai para dentro da área do módulo que o contém ou
 sem nenhuma, para uma faixa abaixo das áreas declaradas (sem floorplan: o alto
 da placa).
 
+Conectores: "connectors" fixa a borda, a posição e a pinagem das barras de
+pinos de E/S (o que permite casar os conectores de placas vizinhas):
+
+    "connectors": [
+      {"name": "J_IN", "side": "left", "at": 20.32, "pins": ["VDD", "GND", "a[*]", "b[7:0]"]},
+      {"name": "J_OP", "side": "top",  "pins": ["op[3:0]", "NC", "GND"]}
+    ]
+
+  side   left, right, top ou bottom;
+  at     posição do pino 1 em mm: da borda de cima da placa (left/right) ou da
+         esquerda (top/bottom); sem ele, o conector entra depois dos outros da
+         mesma borda;
+  pins   a ordem física dos pinos (até 40): portas do topo ("ci", "a[3]"), um
+         barramento inteiro ("a[*]", do bit 0 para cima), uma faixa ("a[7:0]",
+         na ordem escrita), "VDD", "GND" ou "NC" (pino sem ligação).
+As portas que nenhum conector lista vão para os conectores automáticos: as
+entradas na borda esquerda e as saídas na direita (connectors.py).
+
 Módulos são caminhos de instância (u_fa, u0.u2), os mesmos do report.md. Um
 caminho vale para todos os submódulos dele; se um submódulo também tiver
 regra, vale a mais específica.
@@ -55,6 +73,8 @@ from pathlib import Path
 TYPES = ("fence", "region", "guide")
 WHAT = ("place", "route")
 LAYERS = ("F.Cu", "B.Cu")
+SIDES = ("left", "right", "top", "bottom")
+MAX_PINS = 40          # maior barra de pinos 1xN da biblioteca do KiCad
 
 
 class FloorplanError(Exception):
@@ -80,12 +100,21 @@ class Keepout:
 
 
 @dataclass
+class Connector:
+    name: str
+    side: str              # left | right | top | bottom
+    at: float              # posição do pino 1 ao longo da borda (mm), ou None (automático)
+    pins: list             # textos do arquivo: portas, barramentos, VDD, GND, NC
+
+
+@dataclass
 class Floorplan:
     source: str
     board: tuple = None                        # (largura, altura) ou None (automático)
     modules: dict = field(default_factory=dict)   # caminho -> ModuleRule
     keepouts: list = field(default_factory=list)
     macros: list = field(default_factory=list)    # tipos de módulo implementados como macro
+    connectors: list = field(default_factory=list)  # Connector, na ordem do arquivo
 
     def rule_of(self, module_path):
         """Regra mais específica que vale para um caminho de módulo (ou None)."""
@@ -146,7 +175,7 @@ def parse(data, path="floorplan"):
     """Valida um floorplan já lido do JSON (path só aparece nas mensagens)."""
     if not isinstance(data, dict):
         raise FloorplanError(f"{path}: esperado um objeto JSON")
-    _keys(data, ("board", "modules", "keepouts", "macros", "_comment"), path)
+    _keys(data, ("board", "modules", "keepouts", "macros", "connectors", "_comment"), path)
     fp = Floorplan(str(path))
     macros = data.get("macros", [])
     if not isinstance(macros, list) or not all(isinstance(m, str) and m for m in macros):
@@ -217,6 +246,34 @@ def parse(data, path="floorplan"):
         if not layers or any(l not in LAYERS for l in layers):
             raise FloorplanError(f"{where}: 'layers' deve conter 'F.Cu' e/ou 'B.Cu'")
         fp.keepouts.append(Keepout(name, _rect(k.get("rect"), where), "place" in what, "route" in what, layers))
+
+    conns = data.get("connectors", [])
+    if not isinstance(conns, list):
+        raise FloorplanError(f"{path}: 'connectors' deve ser uma lista")
+    names = set()
+    for i, c in enumerate(conns):
+        if not isinstance(c, dict):
+            raise FloorplanError(f"{path}: conector {i + 1}: esperado um objeto")
+        name = c.get("name")
+        where = f"{path}: conector '{name}'" if name else f"{path}: conector {i + 1}"
+        _keys(c, ("name", "side", "at", "pins", "_comment"), where)
+        if not isinstance(name, str) or not name.strip():
+            raise FloorplanError(f"{where}: falta 'name'")
+        if name in names:
+            raise FloorplanError(f"{where}: nome repetido")
+        names.add(name)
+        if c.get("side") not in SIDES:
+            raise FloorplanError(f"{where}: 'side' deve ser {', '.join(SIDES)}")
+        at = c.get("at")
+        if at is not None:
+            at = _num(at, "at", where)
+            if at < 0:
+                raise FloorplanError(f"{where}: 'at' não pode ser negativo")
+        pins = c.get("pins")
+        if not isinstance(pins, list) or not pins or not all(isinstance(x, str) and x.strip() for x in pins):
+            raise FloorplanError(f"{where}: 'pins' deve ser uma lista de textos (portas, \"a[*]\", "
+                                 "\"VDD\", \"GND\", \"NC\")")
+        fp.connectors.append(Connector(name, c["side"], at, [x.strip() for x in pins]))
 
     # áreas obrigatórias não podem se sobrepor (a não ser um submódulo dentro do pai)
     hard = [r for r in fp.modules.values() if r.type in ("fence", "region")]

@@ -443,7 +443,12 @@ def _write_placement(path, args, lib, design, info, board=None, fplan=None):
             "floorplan": str(fplan.source) if fplan else None,
             "geo": info["geo"], "min_width": info["min_width"], "module_width": info["module_width"],
             "module_types": design.modules, "footprints": parts,
-            "macros": getattr(board, "macro_info", None) if board is not None else None}
+            "macros": getattr(board, "macro_info", None) if board is not None else None,
+            # portas do topo (o editor resolve a pinagem dos conectores com elas) e os conectores montados
+            "ports": [{"name": p.name, "dir": p.direction} for p in design.ports],
+            "connectors": [{"name": c.plan.name, "side": c.plan.side, "at": c.plan.at, "auto": c.plan.auto,
+                            "pins": [lbl for _, lbl in c.plan.entries]}
+                           for c in getattr(board, "connectors", [])] if board is not None else None}
     Path(path).write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
 

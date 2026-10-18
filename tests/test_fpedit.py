@@ -354,3 +354,20 @@ def test_menu_cancela_a_execucao(hier_project):
     assert j["status"] == "cancelled"
     proc.wait(timeout=30)                           # o processo do fluxo termina logo depois
     assert proc.returncode is not None and proc.returncode != 0
+
+
+@pytest.mark.slow
+def test_check_conectores(hier_run):
+    fp = {"connectors": [{"name": "J_A", "side": "left", "at": 30, "pins": ["VDD", "GND", "a[*]"]},
+                         {"name": "J_B", "side": "bottom", "pins": ["b[7:0]", "GND"]}]}
+    out = fpedit.check(fp, hier_run, "fp")
+    assert out["errors"] == [], out["errors"]
+    conns = {c["name"]: c for c in out["connectors"]}
+    assert set(conns) == {"J_A", "J_B", "IN", "OUT"}                   # ci e as saídas nos automáticos
+    assert not conns["J_A"]["auto"] and conns["IN"]["auto"]
+    assert [p[0] for p in conns["IN"]["pins"]] == ["VDD", "GND", "ci"]  # todo conector de entradas leva alimentação
+    assert conns["J_A"]["pins"][0][1:] == [4 + 1.27, 30]               # pino 1: margem + 1,27 mm; at
+    # a faixa do conector de baixo entra na altura mínima da placa
+    assert out["board"][1] > fpedit.check({}, hier_run, "fp")["board"][1]
+    bad = fpedit.check({"connectors": [{"name": "J", "side": "top", "pins": ["a"]}]}, hier_run, "fp")
+    assert any("é um barramento" in e for e in bad["errors"])

@@ -80,6 +80,7 @@ class Footprint:
     tht: bool = False
     group: str = ""
     uuid: str = field(default_factory=new_uuid)
+    rot: int = 0              # rotação no KiCad (graus); pads, contorno e serigrafia já vêm girados
 
     def pad(self, num):
         for p in self.pads:
@@ -155,13 +156,18 @@ def footprint_from_library(lib, lib_name, ref, value):
     return fp
 
 
-def pin_header(ref, n_pins, value=""):
-    """Barra de pinos 1xN, 2.54 mm (mesma geometria da biblioteca do KiCad)."""
+def pin_header(ref, n_pins, value="", horizontal=False):
+    """Barra de pinos 1xN, 2.54 mm (mesma geometria da biblioteca do KiCad).
+    horizontal: deitada, com os pinos para a direita (o footprint da biblioteca
+    girado 90°; a geometria aqui já vem girada, o kicad.py escreve a rotação)."""
     lib_name = f"Connector_PinHeader_2.54mm:PinHeader_1x{n_pins:02d}_P2.54mm_Vertical"
-    fp = Footprint(ref, value or f"Conn_01x{n_pins:02d}", lib_name,
-                   courtyard=(-1.8, -1.8, 1.8, (n_pins - 1) * 2.54 + 1.8), tht=True)
+    span = (n_pins - 1) * 2.54
+    courtyard = (-1.8, -1.8, span + 1.8, 1.8) if horizontal else (-1.8, -1.8, 1.8, span + 1.8)
+    fp = Footprint(ref, value or f"Conn_01x{n_pins:02d}", lib_name, courtyard=courtyard, tht=True,
+                   rot=90 if horizontal else 0)
     for i in range(n_pins):
         shape = "rect" if i == 0 else "oval"
-        fp.pads.append(Pad(str(i + 1), 0.0, i * 2.54, 1.7, 1.7, shape, tht=True, drill=1.0, fp=fp))
-    fp.silk = [(-1.33, -1.33, 1.33, -1.33)]
+        rx, ry = (i * 2.54, 0.0) if horizontal else (0.0, i * 2.54)
+        fp.pads.append(Pad(str(i + 1), rx, ry, 1.7, 1.7, shape, tht=True, drill=1.0, fp=fp))
+    fp.silk = [(-1.33, -1.33, -1.33, 1.33)] if horizontal else [(-1.33, -1.33, 1.33, -1.33)]
     return fp

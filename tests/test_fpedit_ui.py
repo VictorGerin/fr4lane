@@ -231,3 +231,69 @@ def test_barra_de_progresso_legivel(page):
     assert d.find_element("id", "jobProgPct").text == "" and box.get_attribute("aria-valuenow") is None
     js("renderJob({status: 'ok', action: 'pcb', run: 'hier8_rtl', elapsed: 800, progress: null})")
     assert not box.is_displayed()
+
+
+# --------------------------------------------------------------- conectores
+def test_conectores_automaticos_desenhados(page):
+    page.open({})
+    js, d = page.js, page.d
+    names = js("return result.connectors.map(c => c.name + ':' + c.auto).join(',')")
+    assert names == "IN:true,OUT:true"
+    assert len(d.find_elements("css selector", "#gConns [data-kind=conn]")) == 2
+    assert "automático" in d.find_element("id", "conns").text
+
+
+def test_arrastar_automatico_fixa_o_conector(page):
+    from selenium.webdriver import ActionChains
+    page.open({})
+    js, d = page.js, page.d
+    at0 = js("return connOf('IN').at")
+    k = js("return mmPerPx()")
+    g = d.find_element("css selector", "#gConns [data-key='IN'] rect")
+    ActionChains(d).move_to_element(g).click_and_hold().move_by_offset(0, 30).move_by_offset(0, 30) \
+        .release().perform()
+    page.settle()
+    conns = js("return data.connectors")
+    assert len(conns) == 1 and conns[0]["name"] == "J_IN" and conns[0]["side"] == "left"
+    assert conns[0]["pins"][:3] == ["VDD", "GND", "a[0]"]
+    assert abs(conns[0]["at"] - at0 - 60 * k) <= 1.27                 # andou o arrasto, no passo de 1,27 mm
+    assert abs(conns[0]["at"] / 1.27 - round(conns[0]["at"] / 1.27)) < 1e-6
+    assert js("return result.errors.length") == 0
+    assert js("return result.connectors.map(c => c.name).join(',')") == "J_IN,OUT"
+    js("undo()")
+    page.settle()
+    assert js("return 'connectors' in data") is False
+
+
+def test_criar_e_editar_conector(page):
+    page.open({})
+    js, d = page.js, page.d
+    btn = next(b for b in d.find_elements("css selector", "#conns button") if b.text == "+ Conector")
+    btn.click()
+    page.settle()
+    assert js("return selConn") == "J1" and js("return data.connectors[0].side") == "top"
+    pins = d.find_element("css selector", "#props textarea")
+    pins.clear()
+    pins.send_keys("co, GND, VDD")
+    d.find_element("css selector", "#props select").click()          # tira o foco: dispara o change
+    page.settle()
+    assert js("return data.connectors[0].pins") == ["co", "GND", "VDD"]
+    out = js("return connOf('OUT').pins.map(p => p[0])")
+    assert "co" not in out and js("return connOf('J1').pins.map(p => p[0]).join(',')") == "co,GND,VDD"
+    # pino que não é porta: erro na verificação
+    js("edit(() => { data.connectors[0].pins = ['zz']; })")
+    page.settle()
+    assert any("'zz' não é uma porta do topo" in e for e in js("return result.errors"))
+    js("edit(() => { data.connectors[0].pins = ['co']; })")
+    page.settle()
+    # setas movem ao longo da borda; Delete apaga
+    from selenium.webdriver.common.keys import Keys
+    js("selectConn('J1')")
+    at0 = js("return connOf('J1').at")
+    d.find_element("tag name", "body").send_keys(Keys.ARROW_RIGHT)
+    page.settle()
+    # a seta anda 1,27 mm e encaixa na grade de 1,27 mm (alinha com a placa vizinha)
+    assert abs(js("return data.connectors[0].at") - round((at0 + 1.27) / 1.27) * 1.27) < 1e-6
+    d.find_element("tag name", "body").send_keys(Keys.DELETE)
+    page.settle()
+    assert js("return 'connectors' in data") is False

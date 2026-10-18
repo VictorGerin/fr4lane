@@ -295,6 +295,13 @@ class Router:
         self._keepouts()
         for pad in self.b.pads():
             if not pad.net:
+                # pad sem ligação (pino NC de conector): obstáculo para todas as nets
+                layers = (0, 1) if pad.tht else (0,)
+                for ix, iy, _ in self._points_near(pad.bbox(), track_r):
+                    for layer in layers:
+                        self._claim(self.static, self.node(layer, ix, iy), BLOCK)
+                for ix, iy, _ in self._points_near(pad.bbox(), via_r):
+                    self._claim(self.via_static, iy * self.nx + ix, BLOCK)
                 continue
             net = self.net_id[pad.net]
             rect = pad.bbox()

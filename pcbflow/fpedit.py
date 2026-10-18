@@ -35,7 +35,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
-from . import floorplan, hier, library, place, project
+from . import connectors, floorplan, hier, library, place, project
 from .floorplan import FloorplanError
 from .layout import Rules
 
@@ -108,7 +108,7 @@ def check(data, run, source):
     hierárquico faz: posiciona os macros (mesma função do hier.py) e confere as
     fileiras só da lógica solta, com os macros como keepout."""
     out = {"errors": [], "warnings": [], "usage": [], "slots": [], "bands": [], "logic": None, "board": None,
-           "macros": None}
+           "macros": None, "connectors": None}
     try:
         fp = floorplan.parse(data, source)
     except FloorplanError as e:
@@ -117,6 +117,22 @@ def check(data, run, source):
     if run is None:
         return out
     geo = SimpleNamespace(**run["geo"])
+    # conectores do floorplan em edição: a pinagem (com as portas da rodada) e a
+    # faixa deles em cima e embaixo, que muda a grade (connectors.py)
+    plans = None
+    if "ports" in run:
+        ports = [SimpleNamespace(name=p["name"], direction=p["dir"], net=p["name"]) for p in run["ports"]]
+        geo.__dict__.setdefault("y_top0", geo.y_top)          # rodada sem conectores declarados
+        geo.__dict__.setdefault("io_gap", place.PlaceParams().io_gap)
+        try:
+            plans = connectors.plan(fp.connectors, ports, "VDD", "GND", geo, source)
+            connectors.apply_geo(geo, plans)
+        except FloorplanError as e:
+            out["errors"].append(str(e))
+            plans = None
+    elif fp.connectors:
+        out["warnings"].append("Esta rodada não tem a lista de portas: rode ① Síntese para ver e conferir "
+                               "os conectores.")
     widths = run["module_width"]
     mods = {m for m in widths if m}
     for path in fp.modules:
@@ -186,6 +202,16 @@ def check(data, run, source):
     out["bands"] = [[geo.y_top + k * geo.row_pitch, geo.block_h] for k in range(lay["n_global"])]
     out["logic"] = [geo.x0, lay["lx1"]]
     out["board"] = [lay["W"], lay["H"]]
+    if plans is not None:
+        try:
+            placed = connectors.place(plans, lay["W"], lay["H"], geo.margin, source)
+        except FloorplanError as e:
+            out["errors"].append(str(e))
+        else:
+            out["connectors"] = [{"name": c.plan.name, "side": c.plan.side, "at": c.plan.at, "auto": c.plan.auto,
+                                  "rect": list(c.rect), "pins": [[lbl, x, y] for (_, lbl), (x, y)
+                                                                 in zip(c.plan.entries, c.pins)]}
+                                 for c in placed]
     return out
 
 

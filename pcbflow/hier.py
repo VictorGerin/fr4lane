@@ -174,7 +174,7 @@ def _copy(board, tpl, ox, oy, netmap, cellmap):
         return n
 
     for f in tpl.footprints:
-        nf = Footprint(f.ref, f.value, f.lib_name, f.x + ox, f.y + oy, courtyard=f.courtyard,
+        nf = Footprint(f.ref, f.value, f.lib_name, f.x + ox, f.y + oy, courtyard=f.courtyard, rot=f.rot,
                        silk=list(f.silk), tht=f.tht, group=cellmap.get(f.group, f.group) if f.group else "")
         for p in f.pads:
             nf.pads.append(Pad(p.num, p.rx, p.ry, p.w, p.h, p.shape, tht=p.tht, drill=p.drill,
@@ -361,7 +361,8 @@ def macro_spots(top, boxes, fplan, geo, glue_area, g, errors=None):
 def glue_floorplan(fplan, macro_paths, glue_mods, top, spot):
     """Floorplan para os blocos soltos: as áreas que ainda têm blocos e, como
     keepout de posicionamento, os macros (com o canal) e as áreas só de macros."""
-    syn = Floorplan(fplan.source if fplan else "(macros)", board=fplan.board if fplan else None)
+    syn = Floorplan(fplan.source if fplan else "(macros)", board=fplan.board if fplan else None,
+                    connectors=list(fplan.connectors) if fplan else [])
     for path, r in (fplan.modules.items() if fplan else ()):
         if any(path == p or path.startswith(p + ".") for p in macro_paths):
             continue
@@ -432,7 +433,7 @@ def place_hier(lib, design, params, rules, fplan, types, route_iter, log=print):
     top = children[None]
     glue = [b for i in glue_cells(None) for b in blocks_of[i]]
     glue_design = Design(design.top, design.ports, glue, design.vdd, design.gnd)
-    meas = placemod._measure(lib, glue_design, params, rules)
+    meas = placemod._measure(lib, glue_design, params, rules, fplan)
     boxes = {m: (tpls[rep[m]].type, tpls[rep[m]].w, tpls[rep[m]].h) for m in top}
     spot = macro_spots(top, boxes, fplan, meas.geo, sum(meas.width) * meas.geo.row_pitch, g)
     syn = glue_floorplan(fplan, paths, {b.module for b in glue}, top, spot)

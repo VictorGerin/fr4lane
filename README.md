@@ -19,7 +19,7 @@ Verilog ──Yosys/ABC──▶ células (.lib) ──expansão (.sp)──▶ 
 - três famílias de células incluídas: **CMOS** (2N7002 + BSS84), **RTL** (BC548 + resistores) e **relés** (SPDT de 5 V), com portas, flip-flops e latches; e um formato simples para criar outras;
 - verificação de cada célula montada contra a função declarada, e simulação do circuito inteiro em nível de componente com o seu testbench;
 - dimensionamento por fan-out em pior caso elétrico (família RTL);
-- floorplan com fences, regions, guides e keepouts, editado num [editor visual](#editor-visual) no navegador;
+- floorplan com fences, regions, guides e keepouts, editado num [editor visual](#editor-visual) no navegador, e [conectores](#conectores) em qualquer borda com a pinagem escolhida (para casar placas vizinhas);
 - placement por anelamento simulado e roteamento por negociação (PathFinder) em grade, compilados com numba;
 - fluxo hierárquico com [macros](#macros-fluxo-hierárquico): blocos repetidos são montados uma vez e copiados;
 - placas de 4 camadas (VDD e GND em planos) ou de [2 camadas](#placa-de-2-camadas);
@@ -358,6 +358,30 @@ Os módulos são caminhos de instância (`u_fa`, `u0.u2`), os mesmos da seção 
 
 **Fileiras.** Os componentes ficam em fileiras de uma grade fixa, e uma área de fence/region só usa as fileiras que couberem **inteiras** dentro dela. O passo da grade depende da família e do número de camadas: o RTL usa 13,05 mm em 4 camadas e 15,55 mm em 2. A seção *Floorplan* do `report.md` lista a área de lógica e a faixa de y de cada fileira, e mostra quanto de fileira cada área usa e oferece. Se uma área não comportar o módulo, o fluxo para antes do roteamento e diz quanto falta e onde ficam as fileiras próximas.
 
+### Conectores
+
+Por padrão as entradas ficam numa barra de pinos de 2,54 mm na borda esquerda (depois de VDD e GND) e as saídas na direita (antes de um GND), na ordem das portas do Verilog. `"connectors"` no floorplan escolhe a borda, a posição e a pinagem de cada barra:
+
+```json
+"connectors": [
+  {"name": "J_A",   "side": "left",   "at": 30, "pins": ["VDD", "GND", "a[*]", "GND"]},
+  {"name": "J_B",   "side": "top",              "pins": ["b[7:0]", "GND", "VDD"]},
+  {"name": "J_S",   "side": "right",  "at": 40, "pins": ["s[*]", "GND"]},
+  {"name": "J_CTL", "side": "bottom", "at": 40, "pins": ["ci", "co", "NC", "GND", "VDD"]}
+]
+```
+
+- **`side`:** `left`, `right`, `top` ou `bottom`. Em cima e embaixo a barra fica deitada (o footprint da biblioteca girado 90°), e a lógica abre uma faixa para ela.
+- **`at`:** posição do pino 1 em mm, medida da borda de cima da placa (conectores das laterais) ou da esquerda (em cima e embaixo). A posição não depende do tamanho da placa, e a distância até a borda é sempre a mesma (margem + 1,27 mm): o mesmo `at` em duas placas dá conectores alinhados. Sem `at`, o conector entra depois dos outros da mesma borda.
+- **`pins`:** a ordem física dos pinos (até 40 por conector): uma porta (`ci`, `a[3]`), um barramento inteiro (`a[*]`, do bit 0 para cima), uma faixa na ordem escrita (`a[7:0]`), `VDD`, `GND` ou `NC` (pino sem ligação, para manter a pinagem de um conector padrão).
+- **O resto:** as portas que nenhum conector lista vão para os conectores automáticos (`IN` à esquerda, `OUT` à direita), que sempre levam VDD e GND junto.
+
+O fluxo recusa porta inexistente, porta em dois conectores, conectores sobrepostos e conector fora de uma placa de tamanho fixo. Os pinos puxam a lógica ligada a eles no placement, então pôr cada barramento perto de quem o usa também encurta os fios.
+
+**Alimentação pelo conector.** `VDD` e `GND` podem aparecer quantas vezes for preciso. Um pino de barra de 2,54 mm leva uns 2 a 3 A, e uma placa RTL grande consome mais que isso (cerca de 5 mA por porta com saída em 0): vários pinos dividem a corrente e a queda de tensão. Um `GND` entre grupos de sinais também dá à corrente de cada sinal um caminho de volta curto, o que reduz o acoplamento entre sinais vizinhos e a oscilação da referência quando muitas saídas comutam juntas, principalmente entre placas ligadas por cabo. Na placa de 4 camadas cada pino de VDD/GND liga direto ao plano pelo furo; na de 2 camadas, os das laterais vão direto aos troncos de alimentação e os de cima e de baixo o roteador liga ao trilho mais próximo.
+
+**Placas por estágio.** Para dividir um circuito em placas ligadas por conectores (ex.: um processador, um estágio por placa), gere a primeira placa, fixe os conectores dela no editor (*Fixar* copia posição e pinagem para o floorplan) e use o mesmo `at` e a mesma ordem de sinais no conector correspondente da placa seguinte, na borda oposta. Com o tamanho da placa fixo (`"board"`), os conectores da direita e de baixo também ficam em posições absolutas.
+
 ### Densidade
 
 **O tamanho da área é o controle.** Uma fence/region espalha o módulo por igual pela área toda: as fileiras recebem a mesma carga, e a sobra de cada fileira é repartida entre os blocos (os vãos viram canais para as trilhas verticais). A densidade da área é calculada, não digitada:
@@ -414,6 +438,10 @@ pcbflow --top basic_top --lib rtl                            # fluxo completo co
 ```
 
 As três rodadas gravam na mesma pasta, então cada um substitui o `placement.json` do anterior; a rodada só de síntese mostra fileiras e capacidade, sem o placement por baixo. O editor avisa quando um fonte Verilog mudou depois da rodada. A verificação usa as mesmas funções do fluxo: o que o editor aprova o `pcbflow` aceita. Sem rodada, ele só confere o formato.
+
+### Conectores no editor
+
+A seção **Conectores** do painel lista os conectores do floorplan e os automáticos, que aparecem tracejados no desenho com os rótulos de cada pino. Arraste um conector ao longo da borda para mudar o pino 1 (passos de 1,27 mm; as setas fazem o mesmo, Shift anda 2,54 mm); arrastar um automático o fixa no floorplan. **+ Conector** cria um novo, e o painel edita o nome, a borda, a posição e os pinos (separados por vírgula). A verificação usa as mesmas funções do fluxo (`connectors.py`): o que o editor desenha é onde o conector fica na placa.
 
 ### Macros no editor
 
@@ -479,10 +507,11 @@ python -m pytest -k fpedit -x     # um grupo, parando no primeiro erro
 | `test_library.py` | as três famílias: consistência `.sp` x `.lib` x `parts.json`, drive em pior caso, latches, `.lib` gerado; leitor SPICE; `cellcheck` de cada família e de montagens sabotadas de propósito (tem de acusar) |
 | `test_check_cache_misc.py` | folgas, conectividade e keepouts numa placa feita à mão; cache do placement; valores SPICE, tempos, escopos |
 | `test_project.py` | `pcbflow.json`: fontes com exclusões, testbench e floorplan por top, procura nas pastas de cima, o que é recusado, e o fluxo pegando tudo do projeto (e `--no-tb`/`--no-floorplan`) |
+| `test_connectors.py` | pinagem dos conectores (barramentos, faixas, VDD/GND/NC), conectores automáticos, posição em cada borda, sobreposição, placa pequena e o espaço que a grade abre em cima e embaixo |
 | `test_hier_geom.py` | posição dos macros (com e sem floorplan, área pequena, macros dentro da área do pai) e o floorplan da lógica solta |
-| `test_flow.py` | fluxo completo: `counter4` nas três famílias (simulações OK, 0 violações, 0 nets incompletas, arquivos do KiCad), 2 e 4 camadas, latches, testbench que falha, reaproveitamento do placement, determinismo, macros (um molde para cópias iguais, cópias idênticas), previsão do editor igual ao placement real, erros de entrada e DRC do KiCad (com o `kicad-cli` preenchendo os planos, com o `pcbnew` e sem nenhum dos dois) |
+| `test_flow.py` | fluxo completo: `counter4` nas três famílias (simulações OK, 0 violações, 0 nets incompletas, arquivos do KiCad), 2 e 4 camadas, latches, testbench que falha, reaproveitamento do placement, determinismo, macros (um molde para cópias iguais, cópias idênticas), previsão do editor igual ao placement real, conectores nas quatro bordas em 4 e 2 camadas (com macros e com DRC) e os recusados, erros de entrada e DRC do KiCad (com o `kicad-cli` preenchendo os planos, com o `pcbnew` e sem nenhum dos dois) |
 | `test_fpedit.py` | validação do editor (capacidade, macros medidos e estimados, avisos), o comando que cada botão monta, uma execução de verdade pelo menu e o cancelamento dela (a árvore de processos termina), e a API HTTP com um servidor de verdade: salvar e conflito, Host não permitido, navegação presa ao projeto, execução só com valores conhecidos |
-| `test_fpedit_ui.py` | a página no Chrome (ou Chromium): macros do arquivo, marcar/desmarcar tipos, clicar e arrastar macros, área pequena e *Ajustar ao macro*, avisos, salvar, barra de progresso |
+| `test_fpedit_ui.py` | a página no Chrome (ou Chromium): macros do arquivo, marcar/desmarcar tipos, clicar e arrastar macros, área pequena e *Ajustar ao macro*, avisos, salvar, barra de progresso, conectores (arrastar, fixar, criar, editar a pinagem, mover com as setas) |
 
 Os testes são marcados por dependência (`pytest.ini`): `tools` (Yosys e Icarus), `slow` (fluxo completo), `kicad` (`kicad-cli`) e `ui` (Selenium e Chrome). O que não está instalado é pulado, com o motivo no resumo. Os projetos de teste ficam em `tests/data/` (`hier8.v`: somador de 8 bits feito de 2 `add4` de 4 `fa`; `latch_demo.v`), e cada rodada do fluxo vai para uma pasta temporária do pytest.
 
@@ -501,6 +530,7 @@ pcbflow/
   netlist.py      netlist do Yosys -> células -> componentes; escreve o netlist de componentes
   sizing.py       troca células por variantes conforme o fan-out
   floorplan.py    formato e validação do floorplan
+  connectors.py   conectores de E/S: pinagem, conectores automáticos, posição nas bordas
   place.py        blocos, fileiras, áreas do floorplan e placement
   anneal.py       anelamento simulado do placement (numba)
   hier.py         fluxo hierárquico: moldes de macro, cópias e posição dos macros
@@ -529,6 +559,7 @@ Os dados passam de uma etapa para outra assim: o Yosys devolve um netlist JSON d
 - **Macros:** só em placas de 4 camadas, e os pinos são escolhidos olhando só para dentro do macro.
 - **Tamanho:** placas com dezenas de milhares de componentes levam horas para rotear; o `--max-parts` (padrão 20 000) para o fluxo antes do placement acima disso.
 - **Editor:** o menu do fpedit lista só as famílias incluídas no pcbflow; uma família própria roda pela linha de comando.
+- **Conectores:** só barras de uma fileira (1xN, até 40 pinos), de 2,54 mm.
 
 ## Licença
 

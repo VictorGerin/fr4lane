@@ -9,14 +9,14 @@
   --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #677085; --line: #d9dde5;
   --board: #ffffff; --logic: #eef2f7; --band: #e3e8f0; --foot: #8a93a6;
   --fence: #2563eb; --region: #16a34a; --guide: #d97706; --keepout: #dc2626; --free: #94a3b8;
-  --ok: #16a34a; --bad: #dc2626; --accent: #2563eb; --sel: #7c3aed; --macro: #0e7490;
+  --ok: #16a34a; --bad: #dc2626; --accent: #2563eb; --sel: #7c3aed; --macro: #0e7490; --conn: #a21caf;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #12151b; --panel: #1a1f28; --text: #e6e9ef; --muted: #8e97a8; --line: #2c3340;
     --board: #171b22; --logic: #1e2530; --band: #26303d; --foot: #6b7486;
     --fence: #60a5fa; --region: #4ade80; --guide: #fbbf24; --keepout: #f87171; --free: #64748b;
-    --ok: #4ade80; --bad: #f87171; --accent: #60a5fa; --sel: #a78bfa; --macro: #22d3ee;
+    --ok: #4ade80; --bad: #f87171; --accent: #60a5fa; --sel: #a78bfa; --macro: #22d3ee; --conn: #e879f9;
   }
 }
 * { box-sizing: border-box; }
@@ -105,6 +105,8 @@ aside h3:first-child { margin-top: 0; }
 .usage .bar > div { height: 100%; }
 .usage .dens { font-size: 11px; color: var(--muted); margin-top: 1px; }
 .muted { color: var(--muted); }
+textarea { font: 12px ui-monospace, Consolas, monospace; color: var(--text); background: var(--bg);
+           border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px; width: 100%; }
 .tag { font-size: 11px; padding: 0 5px; border-radius: 3px; border: 1px solid var(--macro); color: var(--macro); }
 .mrow { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 6px; align-items: center; padding: 3px 6px;
         border-radius: 5px; }
@@ -159,7 +161,7 @@ aside h3:first-child { margin-top: 0; }
           <line x1="0" y1="0" x2="0" y2="2" stroke="var(--keepout)" stroke-width="0.5" />
         </pattern>
       </defs>
-      <g id="gBoard"></g><g id="gRows"></g><g id="gParts"></g><g id="gMacros"></g><g id="gAreas"></g><g id="gHandles"></g>
+      <g id="gBoard"></g><g id="gRows"></g><g id="gParts"></g><g id="gMacros"></g><g id="gAreas"></g><g id="gConns"></g><g id="gHandles"></g>
     </svg>
     <div id="toast"></div>
   </div>
@@ -179,6 +181,9 @@ aside h3:first-child { margin-top: 0; }
 
     <h3>Macros</h3>
     <div id="macros"></div>
+
+    <h3>Conectores</h3>
+    <div id="conns" class="list"></div>
 
     <h3>Áreas e keepouts</h3>
     <div id="list" class="list"></div>
@@ -261,6 +266,23 @@ function ensure() {
 }
 // macros: tipos marcados no floorplan ("macros") e, da verificação, cada
 // instância do topo com o tamanho (medido ou estimado) e onde o fluxo a põe
+// conectores: os do arquivo ("connectors") e, da verificação, todos os montados
+// (inclusive os automáticos) com a posição de cada pino
+let selConn = null;          // nome do conector selecionado (fora de 'sel', que é de áreas/keepouts)
+const CONN_STEP = 1.27;      // passo de arrasto/setas: meio passo da barra de pinos
+function declared() { return Array.isArray(data.connectors) ? data.connectors : []; }
+function declIdx(name) { return declared().findIndex(c => c.name === name); }
+function connOf(name) { return result && result.connectors ? result.connectors.find(c => c.name === name) || null : null; }
+function parsePins(text) { return text.split(/[\n,;]+/).map(t => t.trim()).filter(Boolean); }
+// conector automático vira declarado (mesma posição e pinagem): é o "fixar"
+function fixConn(name) {
+  const c = connOf(name); if (!c || declIdx(name) >= 0) return;
+  if (!Array.isArray(data.connectors)) data.connectors = [];
+  data.connectors.push({ name: c.name === "IN" || c.name === "OUT" ? `J_${c.name}` : c.name, side: c.side,
+                         at: c.at, pins: c.pins.map(p => p[0]) });
+  return data.connectors[data.connectors.length - 1].name;
+}
+function selectConn(name) { sel = null; selConn = name; renderAreas(); renderHandles(); renderConns(); renderPanel(); }
 function macroTypes() { return Array.isArray(data.macros) ? data.macros : []; }
 function macroOf(path) { return result && result.macros ? result.macros.instances.find(m => m.path === path) || null : null; }
 // o macro (do topo) que contém este caminho, sem ser ele mesmo
@@ -365,7 +387,37 @@ function toMM(ev) {
 }
 
 // ---------------------------------------------------------------- desenho
-function renderAll() { renderBoard(); renderRows(); renderParts(); renderMacros(); renderAreas(); renderHandles(); renderPanel(); }
+function renderAll() { renderBoard(); renderRows(); renderParts(); renderMacros(); renderAreas(); renderConns(); renderHandles(); renderPanel(); }
+
+// conectores: contorno, pinos (o 1 quadrado) e rótulos do lado de dentro da placa
+function renderConns() {
+  const g = $("gConns"); g.innerHTML = "";
+  if (!result || !result.connectors) return;
+  for (const c of result.connectors) {
+    const decl = declIdx(c.name) >= 0, on = selConn === c.name;
+    const grp = el("g", { "data-kind": "conn", "data-key": c.name, style: `cursor: ${c.side === "left" || c.side === "right" ? "ns" : "ew"}-resize` }, g);
+    const [x0, y0, x1, y1] = c.rect;
+    el("rect", { x: x0, y: y0, width: x1 - x0, height: y1 - y0, fill: "var(--conn)", "fill-opacity": decl ? 0.12 : 0.05,
+                 stroke: on ? "var(--sel)" : "var(--conn)", "stroke-width": on ? 0.5 : 0.3, "stroke-dasharray": decl ? "" : "1 0.7" }, grp);
+    const inside = { left: [1, 0], right: [-1, 0], top: [0, 1], bottom: [0, -1] }[c.side];
+    c.pins.forEach(([label, x, y], i) => {
+      if (i === 0) el("rect", { x: x - 0.85, y: y - 0.85, width: 1.7, height: 1.7, fill: "var(--conn)" }, grp);
+      else el("circle", { cx: x, cy: y, r: 0.85, fill: label === "NC" ? "none" : "var(--conn)", stroke: "var(--conn)", "stroke-width": 0.2 }, grp);
+      const tx = x + inside[0] * 1.6, ty = y + inside[1] * 1.6;
+      const vertical = c.side === "top" || c.side === "bottom";
+      const t = el("text", { x: tx, y: ty, "font-size": 1.1, fill: "var(--conn)", "dominant-baseline": "central", "pointer-events": "none",
+                             "text-anchor": inside[0] > 0 || inside[1] < 0 ? "start" : "end",
+                             transform: vertical ? `rotate(-90 ${tx} ${ty})` : "" }, grp);
+      t.textContent = label;
+    });
+    const lx = c.side === "right" ? x1 : x0, ly = c.side === "bottom" ? y1 + 2.2 : y0 - 0.7;
+    const t = el("text", { x: lx, y: ly, "font-size": 1.8, "font-weight": 600, fill: "var(--conn)", "pointer-events": "none",
+                           "text-anchor": c.side === "right" ? "end" : "start" }, grp);
+    t.textContent = `${c.name}${decl ? "" : " (automático)"}`;
+    el("title", {}, grp).textContent = `${c.name}: ${c.side}, pino 1 em ${fmt(c.at)} mm, ${c.pins.length} pinos` +
+      (decl ? "\nArraste ao longo da borda para mover" : "\nArraste para fixar a posição (vira um conector do floorplan)");
+  }
+}
 
 // onde o fluxo põe cada macro do topo: o canal (tracejado) e o macro dentro
 function renderMacros() {
@@ -529,7 +581,9 @@ function renderPanel() {
   // propriedades do selecionado
   const p = $("props"); p.innerHTML = ""; p.className = "";
   const it = selected();
-  if (!it) {
+  if (selConn) {
+    p.append(connProps(selConn));
+  } else if (!it) {
     p.className = "hint";
     p.textContent = "Clique numa área ou keepout. Arraste para mover, pelos cantos para redimensionar; setas movem 0,5 mm (Shift: 5 mm), Delete apaga. Arraste o fundo para mover a vista e use a roda para zoom.";
   } else if (it.kind === "mod") {
@@ -613,6 +667,7 @@ function renderPanel() {
       h("span", { class: "muted" }, it2.type + (densLabel(it2) ? ` · ${densLabel(it2)}` : ""))));
 
   renderMacroPanel();
+  renderConnPanel();
 
   // módulos do projeto
   const md = $("mods"); md.innerHTML = "";
@@ -676,6 +731,59 @@ function macroRow(mac, m) {
     h("div", { class: "row" }, h("button", { onclick: () => edit(() => { m.rect[2] = aw; m.rect[3] = ah; }) }, "Ajustar ao macro")));
 }
 
+function connProps(name) {
+  const i = declIdx(name), c = connOf(name);
+  if (i < 0) {
+    if (!c) return h("div", { class: "hint" }, "Conector não encontrado.");
+    return h("div", {},
+      h("div", { class: "row" }, h("label", {}, "Conector"), h("b", {}, name), h("span", { class: "tag" }, "automático")),
+      h("div", { class: "hint" }, `${c.side}, pino 1 em ${fmt(c.at)} mm: ${c.pins.map(p => p[0]).join(", ")}`),
+      h("div", { class: "hint" }, "Recebe as portas que nenhum conector do floorplan lista. Fixar copia a posição e a pinagem para o floorplan (para casar com a placa vizinha)."),
+      h("div", { class: "row" }, h("button", { onclick: () => edit(() => { selConn = fixConn(name); }) }, "Fixar")));
+  }
+  const d = data.connectors[i];
+  const side = h("select", { onchange: e => edit(() => { d.side = e.target.value; delete d.at; }) },
+    ...["left", "right", "top", "bottom"].map(s => h("option", { value: s, ...(s === d.side ? { selected: "" } : {}) },
+      { left: "esquerda", right: "direita", top: "em cima", bottom: "embaixo" }[s])));
+  const at = h("input", { type: "number", step: CONN_STEP, value: d.at == null ? "" : fmtIn(d.at), placeholder: "automático",
+    onchange: e => edit(() => { const v = parseFloat(e.target.value); if (isNaN(v)) delete d.at; else d.at = Math.max(0, v); }) });
+  const pins = h("textarea", { rows: 4, onchange: e => edit(() => { const l = parsePins(e.target.value); if (l.length) d.pins = l; }) });
+  pins.value = d.pins.join(", ");
+  const rename = h("input", { value: d.name, style: "flex: 1", onchange: e => {
+    const v = e.target.value.trim();
+    if (!v || v === d.name) return renderPanel();
+    if (declIdx(v) >= 0) { toast(`já há um conector '${v}'`); return renderPanel(); }
+    edit(() => { d.name = v; selConn = v; });
+  } });
+  return h("div", {},
+    h("div", { class: "row" }, h("label", {}, "Nome"), rename),
+    h("div", { class: "row" }, h("label", {}, "Borda"), side),
+    h("div", { class: "row", title: "Pino 1, em mm, da borda de cima (esquerda/direita) ou da esquerda (em cima/embaixo). Vazio: depois dos outros da mesma borda." },
+      h("label", {}, "Pino 1"), at, h("span", { class: "muted" }, "mm")),
+    h("div", { class: "row" }, h("label", {}, "Pinos")), pins,
+    h("div", { class: "hint" }, "Na ordem física, separados por vírgula: portas (ci, a[3]), barramentos (a[*], a[7:0]), VDD, GND, NC. Repita VDD/GND para distribuir a corrente."),
+    c ? h("div", { class: "hint" }, `${c.pins.length} pinos: ${c.pins.map(p => p[0]).join(", ")}`) : null,
+    h("div", { class: "row" }, h("button", { onclick: () => edit(() => { data.connectors.splice(i, 1); if (!data.connectors.length) delete data.connectors; selConn = null; }) }, "Apagar")));
+}
+
+// lista de conectores (os do floorplan e os automáticos) e o botão de criar
+function renderConnPanel() {
+  const box = $("conns"); box.innerHTML = "";
+  const list = result && result.connectors ? result.connectors : declared().map(d => ({ name: d.name, side: d.side, pins: d.pins.map(x => [x]), at: d.at }));
+  for (const c of list) {
+    const decl = declIdx(c.name) >= 0;
+    box.append(h("div", { class: "item" + (selConn === c.name ? " sel" : ""), onclick: () => selectConn(c.name) },
+      h("span", { class: "swatch", style: `background: ${decl ? "var(--conn)" : "transparent"}; border: 1px solid var(--conn)` }),
+      h("span", {}, c.name), h("span", { class: "muted" }, `${c.side} · ${c.pins.length} pinos${decl ? "" : " · automático"}`)));
+  }
+  if (!list.length) box.append(h("div", { class: "hint" }, run ? "Rode ① Síntese para ver os conectores." : "Sem rodada."));
+  box.append(h("div", { class: "row" }, h("button", { onclick: () => {
+    let n = declared().length + 1;
+    while (declIdx(`J${n}`) >= 0 || connOf(`J${n}`)) n++;
+    edit(() => { if (!Array.isArray(data.connectors)) data.connectors = []; data.connectors.push({ name: `J${n}`, side: "top", pins: ["GND"] }); selConn = `J${n}`; });
+  } }, "+ Conector")));
+}
+
 function rectInputs(o) {
   const r = o.rect;
   const set = i => v => edit(() => { r[i] = i >= 2 ? Math.max(SNAP, v) : Math.max(0, v); });
@@ -707,7 +815,7 @@ function pickRun() {
 function runInfo() { return state && runName ? state.runs.find(r => r.name === runName) || null : null; }
 
 // ---------------------------------------------------------------- edição
-function select(it) { sel = it ? (it.kind === "mod" ? { kind: "mod", key: it.key } : { kind: "ko", idx: it.idx }) : null; renderAreas(); renderHandles(); renderPanel(); }
+function select(it) { selConn = null; sel = it ? (it.kind === "mod" ? { kind: "mod", key: it.key } : { kind: "ko", idx: it.idx }) : null; renderAreas(); renderHandles(); renderPanel(); }
 function setType(key, t) {
   const m = data.modules[key]; m.type = t;
   if (t !== "guide" && m.near) { m.rect = [m.near[0] - 15, m.near[1] - 10, 30, 20].map(snap); delete m.near; }
@@ -771,6 +879,17 @@ $("svg").addEventListener("mousedown", ev => {
   if (ev.button === 0 && hd) {
     const it = selected();
     drag = { mode: "resize", hd, start: p, rect0: [...it.obj.rect], before: snapshot(), obj: it.obj };
+  } else if (ev.button === 0 && grp && grp.getAttribute("data-kind") === "conn") {
+    // arrastar um conector o move ao longo da borda; um automático vira do floorplan
+    let name = grp.getAttribute("data-key");
+    const c = connOf(name), before = snapshot();
+    if (declIdx(name) < 0) name = fixConn(name);
+    const d = data.connectors[declIdx(name)];
+    if (d.at == null) d.at = c.at;
+    selectConn(name);
+    drag = { mode: "conn", start: p, at0: d.at, obj: d, before, axis: c.side === "left" || c.side === "right" ? "y" : "x",
+             grp: $("gConns").querySelector(`[data-key="${CSS.escape(c.name)}"]`) };
+    ev.preventDefault(); return;
   } else if (ev.button === 0 && grp && grp.getAttribute("data-kind") === "macro") {
     // arrastar o macro move a fence dele; sem fence, cria uma do tamanho dele ali mesmo
     const key = grp.getAttribute("data-key"), mac = macroOf(key);
@@ -805,6 +924,13 @@ window.addEventListener("mousemove", ev => {
   }
   const p = toMM(ev), dx = p.x - drag.start.x, dy = p.y - drag.start.y;
   const o = drag.obj;
+  if (drag.mode === "conn") {
+    o.at = Math.max(0, Math.round((drag.at0 + (drag.axis === "y" ? dy : dx)) / CONN_STEP) * CONN_STEP);
+    const off = o.at - drag.at0;
+    if (drag.grp) drag.grp.setAttribute("transform", drag.axis === "y" ? `translate(0 ${off})` : `translate(${off} 0)`);
+    scheduleCheck();
+    return;
+  }
   if (drag.mode === "move") {
     if (o.near) { o.near = [snap(Math.max(0, drag.pos0[0] + dx)), snap(Math.max(0, drag.pos0[1] + dy))]; }
     else { o.rect[0] = snap(Math.max(0, drag.pos0[0] + dx)); o.rect[1] = snap(Math.max(0, drag.pos0[1] + dy)); }
@@ -852,6 +978,21 @@ window.addEventListener("keydown", ev => {
   if (mod && ev.key.toLowerCase() === "y") { ev.preventDefault(); redo(); return; }
   if (ev.key === "f" || ev.key === "F") { fit(); return; }
   if (ev.key === "Escape") { select(null); return; }
+  if (selConn && declIdx(selConn) >= 0) {
+    const d = data.connectors[declIdx(selConn)], c = connOf(selConn);
+    if (ev.key === "Delete" || ev.key === "Backspace") {
+      ev.preventDefault();
+      edit(() => { data.connectors.splice(declIdx(selConn), 1); if (!data.connectors.length) delete data.connectors; selConn = null; });
+      return;
+    }
+    const along = d.side === "left" || d.side === "right" ? { ArrowUp: -1, ArrowDown: 1 } : { ArrowLeft: -1, ArrowRight: 1 };
+    if (along[ev.key] && c) {
+      ev.preventDefault();
+      const step = ev.shiftKey ? 2.54 : CONN_STEP;
+      edit(() => { d.at = Math.max(0, Math.round(((d.at ?? c.at) + along[ev.key] * step) / CONN_STEP) * CONN_STEP); });
+    }
+    return;
+  }
   const it = selected(); if (!it) return;
   if (ev.key === "Delete" || ev.key === "Backspace") { ev.preventDefault(); removeSel(); return; }
   const step = ev.shiftKey ? 5 : SNAP;
@@ -871,7 +1012,7 @@ async function runCheck() {
     if (seq !== checkSeq) return;
     result = r;
   } catch (e) { result = { errors: [String(e.message || e)], usage: [], slots: [], bands: [] }; }
-  renderBoard(); renderRows(); renderMacros(); renderAreas(); renderHandles(); renderPanel();
+  renderBoard(); renderRows(); renderMacros(); renderAreas(); renderConns(); renderHandles(); renderPanel();
 }
 async function loadRun() {
   const ri = pickRun();
@@ -890,6 +1031,7 @@ async function save(force = false) {
   if (!state || !state.top) { toast("Nenhum top aberto"); return false; }
   const clean = JSON.parse(JSON.stringify(data));
   if (!clean.keepouts.length) delete clean.keepouts;
+  if (Array.isArray(clean.connectors) && !clean.connectors.length) delete clean.connectors;
   try {
     const r = await api("/api/save", { data: clean, mtime, force });
     if (r.conflict) {

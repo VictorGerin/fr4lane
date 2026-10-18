@@ -1,6 +1,7 @@
 """Escrita do projeto KiCad (formato KiCad 8; abre também no KiCad 9)."""
 
 import json
+import math
 import os
 import re
 from pathlib import Path
@@ -200,13 +201,27 @@ def _groups(w, board):
           f"(uuid {_q(new_uuid())}) (effects (font (size 1 1) (thickness 0.15)) (justify left)))")
 
 
+def _local(fp):
+    """Coordenadas do footprint girado: o pcbflow guarda a geometria já girada
+    (como fica na placa) e o KiCad quer a do footprint da biblioteca mais a
+    rotação. Rotação positiva = anti-horária na tela (y para baixo)."""
+    if not fp.rot:
+        return lambda x, y: (x, y)
+    c, s = math.cos(math.radians(fp.rot)), math.sin(math.radians(fp.rot))
+    return lambda x, y: (round(x * c - y * s, 6), round(x * s + y * c, 6))
+
+
 def _footprint(w, fp, nid, board):
     tht = fp.tht
+    loc = _local(fp)
     x0, y0, x1, y1 = fp.courtyard
     w(f"\t(footprint {_q(fp.lib_name)}")
     w('\t\t(layer "F.Cu")')
     w(f"\t\t(uuid {_q(fp.uuid)})")
-    w(f"\t\t(at {_n(OX + fp.x)} {_n(OY + fp.y)})")
+    w(f"\t\t(at {_n(OX + fp.x)} {_n(OY + fp.y)}{f' {fp.rot}' if fp.rot else ''})")
+    if fp.rot:                           # contorno no referencial do footprint (antes de girar)
+        xs, ys = zip(*(loc(x, y) for x in (x0, x1) for y in (y0, y1)))
+        x0, y0, x1, y1 = min(xs), min(ys), max(xs), max(ys)
     ref_y = y0 - 0.6 if not tht else -2.6
     w(f"\t\t(property \"Reference\" {_q(fp.ref)} (at 0 {_n(ref_y)} 0) (layer \"F.SilkS\") "
       f"(uuid {_q(new_uuid())}) {_font(0.6, 0.1)})")
@@ -224,27 +239,33 @@ def _footprint(w, fp, nid, board):
         w(f"\t\t(fp_line (start {_n(a)} {_n(b)}) (end {_n(c)} {_n(d)}) (stroke (width 0.05) (type solid)) "
           f"(layer \"F.CrtYd\") (uuid {_q(new_uuid())}))")
     for a, b, c, d in fp.silk:
+        (a, b), (c, d) = loc(a, b), loc(c, d)
         w(f"\t\t(fp_line (start {_n(a)} {_n(b)}) (end {_n(c)} {_n(d)}) (stroke (width 0.12) (type solid)) "
           f"(layer \"F.SilkS\") (uuid {_q(new_uuid())}))")
     labels = getattr(board, "port_labels", {}).get(fp.ref)
+    rot = f" {fp.rot}" if fp.rot else ""
     for pad in fp.pads:
+        px, py = loc(pad.rx, pad.ry)
         net = f" (net {nid[pad.net]} {_q(pad.net)})" if pad.net else ""
         func = f" (pinfunction {_q(pad.function)}) (pintype \"passive\")" if pad.function else ""
         if pad.tht:
-            w(f"\t\t(pad {_q(pad.num)} thru_hole {pad.shape} (at {_n(pad.rx)} {_n(pad.ry)}) "
+            w(f"\t\t(pad {_q(pad.num)} thru_hole {pad.shape} (at {_n(px)} {_n(py)}{rot}) "
               f"(size {_n(pad.w)} {_n(pad.h)}) (drill {_n(pad.drill)}) (layers \"*.Cu\" \"*.Mask\") "
               f"(remove_unused_layers no){net}{func} (uuid {_q(new_uuid())}))")
         else:
             rr = " (roundrect_rratio 0.25)" if pad.shape == "roundrect" else ""
-            w(f"\t\t(pad {_q(pad.num)} smd {pad.shape} (at {_n(pad.rx)} {_n(pad.ry)}) "
+            w(f"\t\t(pad {_q(pad.num)} smd {pad.shape} (at {_n(px)} {_n(py)}{rot}) "
               f"(size {_n(pad.w)} {_n(pad.h)}) (layers \"F.Cu\" \"F.Paste\" \"F.Mask\"){rr}{net}{func} "
               f"(uuid {_q(new_uuid())}))")
     if labels:
-        left_side = fp.x < board.width / 2
+        # rótulo de cada pino do lado de dentro da placa, crescendo para dentro
+        side = getattr(fp, "side", None) or ("left" if fp.x < board.width / 2 else "right")
+        ix, iy = {"left": (1, 0), "right": (-1, 0), "top": (0, 1), "bottom": (0, -1)}[side]
+        bx, by = round(math.cos(math.radians(fp.rot))), round(-math.sin(math.radians(fp.rot)))  # direção do texto
+        just = "left" if (ix, iy) == (bx, by) else "right"
         for pad, text in zip(fp.pads, labels):
-            dx = 1.6 if left_side else -1.6
-            just = "left" if left_side else "right"
-            w(f"\t\t(fp_text user {_q(text)} (at {_n(dx)} {_n(pad.ry)} 0) (layer \"F.SilkS\") "
+            tx, ty = loc(pad.rx + 1.6 * ix, pad.ry + 1.6 * iy)
+            w(f"\t\t(fp_text user {_q(text)} (at {_n(tx)} {_n(ty)} {fp.rot}) (layer \"F.SilkS\") "
               f"(uuid {_q(new_uuid())}) (effects (font (size 0.7 0.7) (thickness 0.1)) (justify {just})))")
     model = _model_path(fp, board.model_var)
     if model:

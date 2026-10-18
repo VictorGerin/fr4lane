@@ -214,3 +214,80 @@ def test_drc_sem_como_preencher_planos(flow, monkeypatch):
     assert res["fill"] is None and drc.ok(res), drc.summary(res)
     assert res["warnings"]["plano sem preencher"] > 0
     assert any("planos não preenchidos" in line for line in drc.summary(res))
+
+
+# --------------------------------------------------------------- conectores
+FP_CONN = {"connectors": [
+    {"name": "J_A", "side": "left", "at": 30, "pins": ["VDD", "GND", "a[*]", "GND"]},
+    {"name": "J_B", "side": "top", "pins": ["b[7:0]", "GND", "VDD"]},
+    {"name": "J_S", "side": "right", "at": 40, "pins": ["s[*]", "GND"]},
+    {"name": "J_CTL", "side": "bottom", "at": 40, "pins": ["ci", "co", "NC", "GND", "VDD"]}]}
+
+
+def _conn_run(flow, tmp_path_factory, name, *args):
+    fpf = tmp_path_factory.mktemp("fp") / "hier8.floorplan.json"
+    fpf.write_text(json.dumps(FP_CONN), encoding="utf-8")
+    return flow(name, *HIER[:-1], "--tb", data("tb_hier8.v"), "--floorplan", fpf, "--fresh", *args)
+
+
+@pytest.mark.parametrize("lib, layers", [("cmos", "4"), ("rtl", "2")])
+def test_conectores_nas_quatro_bordas(flow, tmp_path_factory, lib, layers):
+    r = _conn_run(flow, tmp_path_factory, f"conn_{lib}_{layers}", "--lib", lib_path(lib), "--layers", layers,
+                  "--no-drc")
+    routed_ok(r)
+    sims_ok(r)
+    p = r.placement()
+    conns = {c["name"]: c for c in p["connectors"]}
+    assert set(conns) == {"J_A", "J_B", "J_S", "J_CTL"}            # nenhuma porta sobrou para os automáticos
+    assert conns["J_A"]["at"] == 30 and conns["J_S"]["at"] == 40 and conns["J_CTL"]["at"] == 40
+    assert conns["J_CTL"]["pins"] == ["ci", "co", "NC", "GND", "VDD"]
+    pcb = next(r.out.glob("*.kicad_pcb")).read_text(encoding="utf-8")
+    # em cima e embaixo, a barra da biblioteca girada 90°; os pinos com o nome da porta
+    for ref, value in (("J2", "J_B"), ("J4", "J_CTL")):
+        block = pcb.split(f'"Reference" "{ref}"')[0].rsplit("(footprint", 1)[1]
+        assert re.search(r"\(at [\d.]+ [\d.]+ 90\)", block), ref
+    assert '(pinfunction "b[7]")' in pcb and '(pinfunction "NC")' in pcb
+    W, H = p["board"]
+    x_ctl = 40 + 4 * 2.54                                           # último pino do J_CTL
+    assert W > x_ctl and H > 30 + 10 * 2.54                         # a placa contém os conectores
+
+
+@pytest.mark.kicad
+def test_conectores_drc(flow, tmp_path_factory):
+    from pcbflow import drc
+    r = _conn_run(flow, tmp_path_factory, "conn_cmos_4", "--lib", lib_path("cmos"), "--layers", "4", "--no-drc")
+    copy = r.out / "drc_conn.kicad_pcb"
+    shutil.copy(next(r.out.glob("hier8_*.kicad_pcb")), copy)
+    res = drc.run(drc.find_cli(), copy, r.out / "drc_conn.json")
+    assert drc.ok(res), drc.summary(res)
+
+
+def test_conectores_com_macros(tmp_path):
+    fpf = tmp_path / "fp.json"
+    fpf.write_text(json.dumps(dict(FP_CONN, macros=["add4"])), encoding="utf-8")
+    r = run_flow(tmp_path / "out", *HIER, "--floorplan", fpf, "--fresh")
+    routed_ok(r)
+    assert {c["name"] for c in r.placement()["connectors"]} == {"J_A", "J_B", "J_S", "J_CTL"}
+
+
+@pytest.mark.parametrize("conns, msg", [
+    ([{"name": "J", "side": "left", "pins": ["zz"]}], "'zz' não é uma porta do topo"),
+    ([{"name": "J", "side": "left", "pins": ["ci"]}, {"name": "K", "side": "top", "pins": ["ci"]}],
+     "já está no conector"),
+    ([{"name": "J", "side": "left", "at": 6, "pins": ["a[*]"]}, {"name": "K", "side": "top", "at": 6, "pins": ["ci"]}],
+     "se sobrepõem"),
+])
+def test_conectores_invalidos(tmp_path, conns, msg):
+    fpf = tmp_path / "fp.json"
+    fpf.write_text(json.dumps({"connectors": conns}), encoding="utf-8")
+    r = run_flow(tmp_path / "out", *HIER, "--floorplan", fpf, "--place-only", "--fresh")
+    assert r.rc == 3 and msg in r.log, r
+
+
+def test_conector_fora_da_placa_fixa(tmp_path):
+    fpf = tmp_path / "fp.json"
+    fpf.write_text(json.dumps({"board": {"width": 300, "height": 300},
+                               "connectors": [{"name": "J", "side": "bottom", "at": 290, "pins": ["s[*]"]}]}),
+                   encoding="utf-8")
+    r = run_flow(tmp_path / "out", *HIER, "--floorplan", fpf, "--place-only", "--fresh")
+    assert r.rc == 3 and "sai da placa" in r.log, r

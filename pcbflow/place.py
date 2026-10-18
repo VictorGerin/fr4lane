@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 
 from .floorplan import FloorplanError, contains, overlap
-from . import anneal
+from . import anneal, connectors
 from .jit import COMPILED
 from .layout import Board, Rules, Track, Via, footprint_from_library, pin_header
 from .progress import Progress
@@ -62,45 +62,40 @@ def _snap(v, g):
     return round(v / g) * g
 
 
-def _pin_pos(k):
-    """Posição (em passos de 2,54 mm) do k-ésimo pino da coluna de conectores:
-    as barras têm até 40 pinos e uma posição vazia entre elas, senão os
-    contornos de duas barras vizinhas se sobrepõem."""
-    return k + k // 40
-
-
 class _Geo:
-    """Medidas comuns aos dois construtores de trechos."""
+    """Medidas comuns aos dois construtores de trechos. Os conectores (plans,
+    connectors.py) definem as faixas de cima e de baixo e o tamanho mínimo."""
 
-    def __init__(self, params, rules, two, row_gap, block_h, dec_w, n_left, n_right):
+    def __init__(self, params, rules, two, row_gap, block_h, dec_w, plans):
         g = rules.grid
         self.params, self.two = params, two
         self.block_h, self.dec_w = block_h, dec_w
         self.row_gap = row_gap
         self.row_pitch = block_h + row_gap
+        self.margin, self.cell_gap, self.io_gap = params.margin, params.cell_gap, params.io_gap
         self.trunk_band = 4.0 if two else 0.0      # faixa dos troncos de alimentação de cada lado
         self.x0 = _snap(params.margin + 2.54 + params.io_gap + self.trunk_band, g)  # borda esq. da lógica
         # da borda direita da lógica até a borda da placa
         self.reserve_r = self.trunk_band + params.io_gap + 2.54 + params.margin
-        self.y_top = _snap(params.margin + 2.0 + (0.5 if two else 0.0), g)
-        self.min_h = params.margin + 1.27 + max(_pin_pos(n_left) + 4, _pin_pos(n_right)) * 2.54 + params.margin + 4.0
-        self.io_h = max(_pin_pos(n_left), _pin_pos(n_right)) * 2.54
+        self.y_top0 = _snap(params.margin + 2.0 + (0.5 if two else 0.0), g)   # topo da lógica sem conector em cima
         if params.bare:                            # macro: só a margem em volta da lógica
-            self.x0 = self.y_top = _snap(params.margin, g)
+            self.x0 = self.y_top0 = self.y_top = _snap(params.margin, g)
             self.reserve_r = params.margin
-            self.min_h = self.io_h = 0.0
-        self.margin, self.cell_gap = params.margin, params.cell_gap
+            self.min_h = self.io_h = self.min_w = self.bottom_band = 0.0
+        else:
+            connectors.apply_geo(self, plans)       # y_top, bottom_band, min_h, min_w, io_h
 
     def as_dict(self):
         """Medidas da grade para o placement.json (o fpedit refaz as fileiras com elas)."""
-        keys = ("two", "block_h", "dec_w", "row_gap", "row_pitch", "x0", "reserve_r", "y_top",
-                "min_h", "margin", "cell_gap")
+        keys = ("two", "block_h", "dec_w", "row_gap", "row_pitch", "x0", "reserve_r", "y_top", "y_top0",
+                "bottom_band", "min_h", "min_w", "io_h", "io_gap", "margin", "cell_gap")
         return {k: getattr(self, k) for k in keys}
 
 
-def _measure(lib, design, params, rules):
-    """Medidas que só dependem da síntese, da família e do número de camadas:
-    largura de cada bloco, altura das fileiras, conectores e a grade (_Geo)."""
+def _measure(lib, design, params, rules, floorplan=None):
+    """Medidas que só dependem da síntese, da família, do número de camadas e
+    dos conectores do floorplan: largura de cada bloco, altura das fileiras,
+    conectores e a grade (_Geo)."""
     two = params.layers == 2
     part_gap = lib.placement.get("part_gap", 1.0)
     if two:   # na placa de 2 camadas as ligações aos trilhos passam entre os componentes
@@ -119,14 +114,6 @@ def _measure(lib, design, params, rules):
     width = [layouts[b.cell][1] + params.cell_gap for b in blocks]
     block_h = max((l[2] for l in layouts.values()), default=0.0)   # 0: só macros, sem blocos soltos
 
-    # --- conectores de E/S --------------------------------------------------
-    inputs = [p for p in design.ports if p.direction == "input"]
-    outputs = [p for p in design.ports if p.direction != "input"]
-    left = [(design.vdd, "VDD"), (design.gnd, "GND")] + [(p.net, p.name) for p in inputs]
-    right = [(p.net, p.name) for p in outputs] + [(design.gnd, "GND")]
-    if params.bare:                    # macro: as ligações para fora são pinos na borda (hier.py)
-        left, right = [], []
-
     dec = lib.meta.get("decoupling", {})
     dec_row = lib.parts.get(dec.get("row", ""))
     dec_w = 0.0
@@ -134,9 +121,17 @@ def _measure(lib, design, params, rules):
         c = lib.footprints[dec_row["footprint"]]["courtyard"]
         dec_w = c[2] - c[0]
 
-    geo = _Geo(params, rules, two, row_gap, block_h, dec_w, len(left), len(right))
+    # --- conectores de E/S (connectors.py) ------------------------------------
+    # macro: as ligações para fora são pinos na borda (hier.py), sem conector
+    plans = []
+    if not params.bare:
+        base = SimpleNamespace(margin=params.margin, x0=_snap(params.margin + 2.54 + params.io_gap +
+                                                               (4.0 if two else 0.0), rules.grid))
+        plans = connectors.plan(floorplan.connectors if floorplan else [], design.ports, design.vdd,
+                                design.gnd, base, floorplan.source if floorplan else "floorplan")
+    geo = _Geo(params, rules, two, row_gap, block_h, dec_w, plans)
     return SimpleNamespace(two=two, part_gap=part_gap, layouts=layouts, width=width, block_h=block_h,
-                           left=left, right=right, geo=geo, dec=dec, dec_row=dec_row)
+                           plans=plans, geo=geo, dec=dec, dec_row=dec_row)
 
 
 def _editor_info(blocks, width, geo):
@@ -165,9 +160,9 @@ def place(lib, design, params=None, rules=None, floorplan=None, extra_fixed=None
     params = params or PlaceParams()
     rules = rules or Rules()
     g = rules.grid
-    m = _measure(lib, design, params, rules)
+    m = _measure(lib, design, params, rules, floorplan)
     two, layouts, width, block_h = m.two, m.layouts, m.width, m.block_h
-    left, right, geo, dec, dec_row = m.left, m.right, m.geo, m.dec, m.dec_row
+    plans, geo, dec, dec_row = m.plans, m.geo, m.dec, m.dec_row
     blocks = design.blocks
     n = len(blocks)
     power = {design.vdd, design.gnd}
@@ -187,13 +182,13 @@ def place(lib, design, params=None, rules=None, floorplan=None, extra_fixed=None
     x0 = geo.x0
     n_rows = len(slots)
     left_x = params.margin + 1.27
-    right_x = W - params.margin - 1.27
+    placed = connectors.place(plans, W, H, params.margin, floorplan.source if floorplan else "floorplan")
 
     fixed = {}
-    for entries, x in ((left, left_x), (right, right_x)):
-        for k, (net, _) in enumerate(entries):
-            if net not in power:
-                fixed.setdefault(net, []).append((x, params.margin + 1.27 + _pin_pos(k) * 2.54))
+    for c in placed:
+        for (net, _), xy in zip(c.plan.entries, c.pins):
+            if net is not None and net not in power:
+                fixed.setdefault(net, []).append(xy)
     # ordem fixa (um set de nomes muda de ordem a cada processo, e a ordem das
     # somas de custo mudaria o anelamento): o placement é reprodutível
     for net, pts in (extra_fixed or {}).items():
@@ -415,36 +410,37 @@ def place(lib, design, params=None, rules=None, floorplan=None, extra_fixed=None
             if here:
                 decap(dec["row"], sx + cp + params.cell_gap, sy + block_h / 2)
     if dec.get("bulk") and not params.bare:
-        decap(dec["bulk"], left_x - 1.0, params.margin + 1.27 + _pin_pos(len(left)) * 2.54 + 4.0)
+        decap(dec["bulk"], left_x - 1.0, connectors.bulk_y(plans, geo))
 
-    # conectores (divididos em barras de no máximo 40 pinos)
-    jn = 0
+    # conectores: barras de pinos verticais nas laterais e deitadas (giradas 90°) em cima e embaixo
     port_label = {}
-    for side, entries, x in (("in", left, left_x), ("out", right, right_x)):
-        for start in range(0, len(entries), 40):
-            chunk = entries[start:start + 40]
-            jn += 1
-            hdr = pin_header(f"J{jn}", len(chunk), "IN" if side == "in" else "OUT")
-            hdr.x = x
-            hdr.y = params.margin + 1.27 + _pin_pos(start) * 2.54
-            for pad, (net, label) in zip(hdr.pads, chunk):
-                pad.net = net
-                pad.function = label
-            port_label[hdr.ref] = [lbl for _, lbl in chunk]
-            footprints.append(hdr)
+    for jn, c in enumerate(placed, 1):
+        hdr = pin_header(f"J{jn}", len(c.plan.entries), c.plan.name, horizontal=c.horizontal)
+        hdr.x, hdr.y = c.pins[0]
+        for pad, (net, label) in zip(hdr.pads, c.plan.entries):
+            pad.net = net or ""
+            pad.function = label
+        hdr.side = c.plan.side
+        port_label[hdr.ref] = [lbl for _, lbl in c.plan.entries]
+        footprints.append(hdr)
 
     board = Board(W, H, footprints, design.vdd, design.gnd, rules)
     board.layers = params.layers
     board.floorplan = floorplan
     board.keepouts = floorplan.keepouts if floorplan else []
     if two:
-        hdr_y = lambda k: params.margin + 1.27 + _pin_pos(k) * 2.54
-        _power_grid(board, params, rules, x0, lx1, y0, n_global, geo.row_pitch, block_h,
-                    left_x, right_x, hdr_y(0), hdr_y(1), hdr_y(len(right) - 1), board.keepouts)
+        # pinos de VDD/GND dos conectores das laterais: ligados direto aos troncos;
+        # os de cima e de baixo o roteador liga ao trilho mais próximo
+        stubs = [(x, y, 0 if c.plan.side == "left" else 1, "vdd" if net == design.vdd else "gnd")
+                 for c in placed if c.plan.side in ("left", "right")
+                 for (net, _), (x, y) in zip(c.plan.entries, c.pins) if net in power]
+        _power_grid(board, params, rules, x0, lx1, y0, n_global, geo.row_pitch, block_h, stubs,
+                    board.keepouts)
     for fp in footprints:
         if fp.group:
             board.groups.setdefault(fp.group, []).append(fp.uuid)
     board.port_labels = port_label
+    board.connectors = placed
     board.place_stats = {"rows": n_rows, "regions": fm.get("n_regions", 0),
                          "hpwl_mm": round(sum(net_cost[:n_real]), 1), "blocks": n,
                          "usage": fm.get("usage", []), "grid": fm.get("grid"),
@@ -569,8 +565,8 @@ def _auto_slots(blocks, width, geo, grow=0):
         rest = _fill_area([v for v in order if region[v] == r], ks, slots, target, width, rows, used)
         for v in rest:                      # não deve acontecer (8% de folga); vai pro último
             rows[ks[-1]].append(v)
-    W_raw = geo.x0 + logic_w + geo.reserve_r
-    H_raw = max(y0 + logic_h - geo.row_gap + params.margin, geo.min_h)
+    W_raw = max(geo.x0 + logic_w + geo.reserve_r, geo.min_w)
+    H_raw = max(y0 + logic_h - geo.row_gap + params.margin + geo.bottom_band, geo.min_h)
     return {"slots": slots, "allowed": allowed, "rows": rows, "owner": [names[region[v]] for v in range(n)],
             "target": target, "spread": [params.density < 1.0] * len(slots),
             "W": _snap(W_raw + 0.5, 1.0), "H": _snap(H_raw + 0.5, 1.0), "y0": y0,
@@ -589,7 +585,7 @@ def declared_rows(geo, fplan, W, H, min_width):
     qualquer objeto com os mesmos atributos (o fpedit usa o do placement.json)."""
     hard = {r.path: r for r in fplan.modules.values() if r.type in ("fence", "region")}
     lx0, lx1 = geo.x0, W - geo.reserve_r
-    ly1 = H - geo.margin - (1.5 if geo.two else 0.0)
+    ly1 = H - geo.margin - (1.5 if geo.two else 0.0) - getattr(geo, "bottom_band", 0.0)
     for r in hard.values():
         if r.rect[0] < lx0 - 1e-6 or r.rect[2] > lx1 + 1e-6:
             raise FloorplanError(
@@ -687,9 +683,11 @@ def declared_layout(geo, fplan, need, total_width, min_width, grow=0, max_width=
         logic_w = max(logic_w, max_width + 2 * geo.cell_gap + geo.dec_w + 1.0)
         # as áreas declaradas e os keepouts (onde ficam os macros) cabem na placa
         rects = [r.rect for r in fplan.modules.values()] + [k.rect for k in fplan.keepouts]
-        W = max(geo.x0 + logic_w + geo.reserve_r, max((r[2] for r in rects), default=0) + geo.reserve_r)
-        H = max(geo.y_top + nr * geo.row_pitch + geo.margin + (1.5 if geo.two else 0.0), geo.min_h,
-                max((r[3] for r in rects), default=0) + geo.margin)
+        W = max(geo.x0 + logic_w + geo.reserve_r, max((r[2] for r in rects), default=0) + geo.reserve_r,
+                getattr(geo, "min_w", 0.0))
+        bottom = getattr(geo, "bottom_band", 0.0)
+        H = max(geo.y_top + nr * geo.row_pitch + geo.margin + (1.5 if geo.two else 0.0) + bottom, geo.min_h,
+                max((r[3] for r in rects), default=0) + geo.margin + bottom)
         W, H = _snap(W + 0.5, 1.0), _snap(H + 0.5, 1.0)
         for _ in range(400):
             slots, n_global, lx1 = declared_rows(geo, fplan, W, H, min_width)
@@ -846,8 +844,7 @@ def _cut(a, b, holes):
     return out
 
 
-def _power_grid(board, params, rules, xl, xr, y0, n_rows, row_pitch, block_h,
-                left_x, right_x, y_vdd_in, y_gnd_in, y_gnd_out, keepouts=()):
+def _power_grid(board, params, rules, xl, xr, y0, n_rows, row_pitch, block_h, pins, keepouts=()):
     """Grade de alimentação fixa da placa de 2 camadas (veja o docstring do módulo).
     Trilhos que cruzam um keepout de roteamento são interrompidos; só ficam os
     pedaços ligados a algum tronco."""
@@ -870,7 +867,9 @@ def _power_grid(board, params, rules, xl, xr, y0, n_rows, row_pitch, block_h,
                 if layer in k.layers and k.rect[1] - m < y < k.rect[3] + m]
 
     # ligações dos pinos de alimentação dos conectores aos troncos: (x do pino, y, lado)
-    stubs = {"vdd": [(left_x, y_vdd_in, 0)], "gnd": [(left_x, y_gnd_in, 0), (right_x, y_gnd_out, 1)]}
+    stubs = {"vdd": [], "gnd": []}
+    for x, y, side, key in pins:
+        stubs[key].append((x, y, side))
     for key in ("vdd", "gnd"):
         net = nets[key]
         a, b = xs[key]
