@@ -182,3 +182,35 @@ def test_drc_do_kicad(flow):
     shutil.copy(board, copy)
     res = drc.run(drc.find_cli(), copy, r.out / "drc.json")
     assert drc.ok(res), drc.summary(res)
+
+
+@pytest.mark.kicad
+def test_drc_preenche_planos_pelo_pcbnew(flow, monkeypatch):
+    """KiCad sem --refill-zones (8 e 9): a API pcbnew preenche os planos e salva a placa."""
+    from pcbflow import drc
+    cli = drc.find_cli()
+    if not drc.kicad_python(cli):
+        pytest.skip("Python do KiCad (pcbnew) não encontrado")
+    r = flow("c4_cmos", *COUNTER, "--lib", lib_path("cmos"), "--fresh")
+    copy = r.out / "drc_pcbnew.kicad_pcb"
+    shutil.copy(next(r.out.glob("counter4_*.kicad_pcb")), copy)
+    monkeypatch.setattr(drc, "drc_options", lambda cli: set())      # como no KiCad 9
+    res = drc.run(cli, copy, r.out / "drc_pcbnew.json")
+    assert res["fill"] == "pcbnew" and drc.ok(res), drc.summary(res)
+    assert "filled_polygon" in copy.read_text(encoding="utf-8")
+
+
+@pytest.mark.kicad
+def test_drc_sem_como_preencher_planos(flow, monkeypatch):
+    """Sem --refill-zones nem pcbnew: os planos ficam vazios e as desconexões
+    das nets deles viram aviso, não erro."""
+    from pcbflow import drc
+    r = flow("c4_cmos", *COUNTER, "--lib", lib_path("cmos"), "--fresh")
+    copy = r.out / "drc_vazio.kicad_pcb"
+    shutil.copy(next(r.out.glob("counter4_*.kicad_pcb")), copy)
+    monkeypatch.setattr(drc, "drc_options", lambda cli: set())
+    monkeypatch.setattr(drc, "kicad_python", lambda cli: None)
+    res = drc.run(drc.find_cli(), copy, r.out / "drc_vazio.json")
+    assert res["fill"] is None and drc.ok(res), drc.summary(res)
+    assert res["warnings"]["plano sem preencher"] > 0
+    assert any("planos não preenchidos" in line for line in drc.summary(res))
