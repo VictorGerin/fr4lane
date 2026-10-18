@@ -345,3 +345,28 @@ Os trilhos de 0,8 mm levam cerca de 2 A em cobre de 1 oz, folga suficiente para 
 | register_file | 51 372 |
 
 O somador de 4 bits sai em cerca de 10 s em CMOS e 22 s em RTL; o de 32 bits em CMOS leva cerca de 6 min. Todos saem 100 % roteados. O processador completo passaria de 80 mil transistores, e o banco de registradores sozinho responde por 60 % disso. O caminho viável é fazer uma placa por estágio, ligadas por conectores, e trocar o banco de registradores por SRAM.
+
+## Testes
+
+A suíte em `pcbflow/tests/` (pytest) confere o próprio pcbflow. A validação de cada placa (verificação das células, simulações, folgas, conectividade e DRC) diz que *aquela* placa está certa; os testes dizem que uma mudança no código não quebrou o que funcionava.
+
+```sh
+make pcb-test                                  # tudo o que as ferramentas instaladas permitem (~1,5 min)
+make pcb-test-quick                            # só os de unidade, sem o fluxo completo (~10 s)
+make pcb-test PCB_TEST_ARGS="-k fpedit -x"     # um grupo, parando no primeiro erro
+cd pcbflow && python -m pytest -m "not ui"     # direto pelo pytest
+```
+
+| Arquivo | O que confere |
+|---|---|
+| `test_liberty.py` | expressões booleanas (operadores, precedência, `to_verilog`) e leitura de células, flip-flops e latches; o que o leitor recusa |
+| `test_floorplan.py` | formato do floorplan: o que é aceito e cada mensagem de recusa |
+| `test_library.py` | as três famílias: consistência `.sp` x `.lib` x `parts.json`, drive em pior caso, latches, `.lib` gerado; leitor SPICE; `cellcheck` de cada família e de montagens sabotadas de propósito (tem de acusar) |
+| `test_check_cache_misc.py` | folgas, conectividade e keepouts numa placa feita à mão; cache do placement; valores SPICE, tempos, escopos |
+| `test_hier_geom.py` | posição dos macros (com e sem floorplan, área pequena, macros dentro da área do pai) e o floorplan da lógica solta |
+| `test_flow.py` | fluxo completo: `counter4` nas três famílias (simulações OK, 0 violações, 0 nets incompletas, arquivos do KiCad), 2 e 4 camadas, latches, testbench que falha, reaproveitamento do placement, determinismo, macros (um molde para cópias iguais, cópias idênticas), previsão do editor igual ao placement real, erros de entrada e DRC do KiCad |
+| `test_fpedit.py` | validação do editor (capacidade, macros medidos e estimados, avisos) e a API HTTP com um servidor de verdade: salvar e conflito, Host não permitido, navegação presa ao projeto, execução só com valores conhecidos |
+| `test_fpedit_ui.py` | a página no Chrome: macros do arquivo, marcar/desmarcar tipos, clicar e arrastar macros, área pequena e *Ajustar ao macro*, avisos, salvar |
+
+Os testes são marcados por dependência (`pytest.ini`): `tools` (Yosys e Icarus), `slow` (fluxo completo), `kicad` (`kicad-cli`) e `ui` (Selenium e Chrome). O que não está instalado é pulado, com o motivo no resumo. Os projetos de teste ficam em `tests/data/` (`hier8.v`: somador de 8 bits feito de 2 `add4` de 4 `fa`; `latch_demo.v`), e cada rodada do fluxo vai para uma pasta temporária do pytest.
+
