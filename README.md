@@ -195,7 +195,7 @@ ou, no floorplan, `"macros": ["adder", "adder_16bit"]`. Um macro é um **tipo** 
 
 Instâncias do mesmo tipo podem ganhar moldes diferentes: no `fanout_test`, a `u_and2` alimenta 16 NOTs, o sizing a troca por `AND2_X2` e ela fica com molde próprio, maior. O cobre de um macro pronto é obstáculo para as rotas de fora (até da própria net, que só entra pelo pino), mas o espaço livre dentro dele continua disponível para elas.
 
-A simulação de componentes, a verificação de conectividade e o DRC continuam sobre a placa inteira, então um erro de montagem aparece. Limites: só placas de 4 camadas (VDD/GND nos planos internos); o editor de floorplan ainda mede as áreas pelos blocos soltos, sem saber o tamanho dos macros; e os pinos são escolhidos só pelo lado de dentro do macro (o topo não opina).
+A simulação de componentes, a verificação de conectividade e o DRC continuam sobre a placa inteira, então um erro de montagem aparece. O editor de floorplan escolhe os macros e mostra onde cada um fica (veja [Macros no editor](#macros-no-editor)). Limites: só placas de 4 camadas (VDD/GND nos planos internos); e os pinos são escolhidos só pelo lado de dentro do macro (o topo não opina).
 
 ## Como a placa é montada
 
@@ -301,6 +301,15 @@ make pcb       PCB_TOP=basic_top PCB_LIB=pcbflow/lib/rtl    # fluxo completo com
 ```
 
 Os três alvos gravam na mesma pasta, então cada um substitui o `placement.json` do anterior; a rodada só de síntese mostra fileiras e capacidade, sem o placement por baixo. O editor avisa quando um fonte Verilog mudou depois da rodada. A verificação usa as mesmas funções do fluxo: o que o editor aprova o `make pcb` aceita. Sem rodada, ele só confere o formato.
+
+### Macros no editor
+
+A seção **Macros** do painel lista os tipos de módulo do projeto, com o número de instâncias. Marcar um tipo grava `"macros": [...]` no floorplan, e o fluxo passa a montar cada instância dele como macro (posicionada e roteada sozinha e copiada pronta na placa, veja [Macros](#macros-fluxo-hierárquico)). Não é preciso passar `--macro`: os botões do menu usam o floorplan.
+
+- **Tamanho:** o de um macro só existe depois que ele é montado. Depois de um ② Placement com o tipo marcado, o painel mostra o tamanho medido de cada molde; antes disso, o editor usa uma estimativa pela largura de fileira do módulo (≈ 1,25 vez a área das fileiras, mais a borda), marcada como *estimado* e com contorno tracejado no desenho.
+- **Onde fica:** o desenho mostra cada macro do topo onde o fluxo o porá, com o canal de acesso aos pinos em volta (tracejado). O cálculo é a mesma função do `hier.py` (`macro_spots`), então a posição bate com a da placa: com uma fence com o caminho da instância, no canto superior esquerdo dela; sem isso, empacotado na área do módulo que o contém ou numa faixa abaixo das áreas declaradas.
+- **Controlar a posição:** clique num macro no desenho, ou na instância em *Módulos do projeto* (marcada com a etiqueta *macro*), para criar uma fence do tamanho exato dele (macro + canal), no lugar onde ele está; depois arraste a fence. Com uma área de macro selecionada, o painel mostra o tamanho necessário e o botão **Ajustar ao macro**.
+- **Verificação:** com macros, as fileiras e a capacidade são calculadas só para a lógica solta, com os macros como keepout, como no fluxo. Uma área pequena demais para o macro, macros que não cabem na área do módulo que os contém, ou um macro fora de uma placa de tamanho fixo viram erro. Uma área dentro de outro macro (ex.: a de um `adder` quando o `adder_16bit` que o contém também é macro) vira aviso, porque o fluxo a ignora.
 
 ## Placa de 2 camadas
 

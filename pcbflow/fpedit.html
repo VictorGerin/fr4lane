@@ -9,14 +9,14 @@
   --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #677085; --line: #d9dde5;
   --board: #ffffff; --logic: #eef2f7; --band: #e3e8f0; --foot: #8a93a6;
   --fence: #2563eb; --region: #16a34a; --guide: #d97706; --keepout: #dc2626; --free: #94a3b8;
-  --ok: #16a34a; --bad: #dc2626; --accent: #2563eb; --sel: #7c3aed;
+  --ok: #16a34a; --bad: #dc2626; --accent: #2563eb; --sel: #7c3aed; --macro: #0e7490;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #12151b; --panel: #1a1f28; --text: #e6e9ef; --muted: #8e97a8; --line: #2c3340;
     --board: #171b22; --logic: #1e2530; --band: #26303d; --foot: #6b7486;
     --fence: #60a5fa; --region: #4ade80; --guide: #fbbf24; --keepout: #f87171; --free: #64748b;
-    --ok: #4ade80; --bad: #f87171; --accent: #60a5fa; --sel: #a78bfa;
+    --ok: #4ade80; --bad: #f87171; --accent: #60a5fa; --sel: #a78bfa; --macro: #22d3ee;
   }
 }
 * { box-sizing: border-box; }
@@ -93,6 +93,11 @@ aside h3:first-child { margin-top: 0; }
 .usage .bar > div { height: 100%; }
 .usage .dens { font-size: 11px; color: var(--muted); margin-top: 1px; }
 .muted { color: var(--muted); }
+.tag { font-size: 11px; padding: 0 5px; border-radius: 3px; border: 1px solid var(--macro); color: var(--macro); }
+.mrow { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 6px; align-items: center; padding: 3px 6px;
+        border-radius: 5px; }
+.mrow:hover { background: var(--bg); }
+.mrow .sz { grid-column: 2 / 4; font-size: 11px; color: var(--muted); }
 .hint { color: var(--muted); font-size: 12px; }
 #toast { position: absolute; left: 12px; bottom: 12px; background: var(--panel); border: 1px solid var(--line);
          border-radius: 6px; padding: 6px 10px; display: none; }
@@ -138,7 +143,7 @@ aside h3:first-child { margin-top: 0; }
           <line x1="0" y1="0" x2="0" y2="2" stroke="var(--keepout)" stroke-width="0.5" />
         </pattern>
       </defs>
-      <g id="gBoard"></g><g id="gRows"></g><g id="gParts"></g><g id="gAreas"></g><g id="gHandles"></g>
+      <g id="gBoard"></g><g id="gRows"></g><g id="gParts"></g><g id="gMacros"></g><g id="gAreas"></g><g id="gHandles"></g>
     </svg>
     <div id="toast"></div>
   </div>
@@ -155,6 +160,9 @@ aside h3:first-child { margin-top: 0; }
 
     <h3>Verificação</h3>
     <div id="checks"></div>
+
+    <h3>Macros</h3>
+    <div id="macros"></div>
 
     <h3>Áreas e keepouts</h3>
     <div id="list" class="list"></div>
@@ -235,6 +243,33 @@ function ensure() {
   if (!data.modules || typeof data.modules !== "object") data.modules = {};
   if (!Array.isArray(data.keepouts)) data.keepouts = [];
 }
+// macros: tipos marcados no floorplan ("macros") e, da verificação, cada
+// instância do topo com o tamanho (medido ou estimado) e onde o fluxo a põe
+function macroTypes() { return Array.isArray(data.macros) ? data.macros : []; }
+function macroOf(path) { return result && result.macros ? result.macros.instances.find(m => m.path === path) || null : null; }
+// o macro (do topo) que contém este caminho, sem ser ele mesmo
+function insideMacro(path) {
+  if (!run || !macroTypes().length) return null;
+  const parts = path.split(".");
+  for (let i = 1; i < parts.length; i++) {
+    const q = parts.slice(0, i).join(".");
+    if (macroTypes().includes(run.module_types[q])) return q;
+  }
+  return null;
+}
+// área mínima de uma fence/region para o macro: ele mais o canal em volta
+function macroArea(m) {
+  const ring = result.macros.ring;
+  return [Math.ceil((m.w + 2 * ring) / SNAP) * SNAP, Math.ceil((m.h + 2 * ring) / SNAP) * SNAP];
+}
+function toggleMacro(type, on) {
+  edit(() => {
+    const s = new Set(macroTypes());
+    on ? s.add(type) : s.delete(type);
+    if (s.size) data.macros = [...s].sort(); else delete data.macros;
+  });
+  renderParts();
+}
 // retângulo [x0, y0, x1, y1] de um item; guide com near vira ponto
 function boxOf(it) {
   const o = it.obj || it;
@@ -314,7 +349,32 @@ function toMM(ev) {
 }
 
 // ---------------------------------------------------------------- desenho
-function renderAll() { renderBoard(); renderRows(); renderParts(); renderAreas(); renderHandles(); renderPanel(); }
+function renderAll() { renderBoard(); renderRows(); renderParts(); renderMacros(); renderAreas(); renderHandles(); renderPanel(); }
+
+// onde o fluxo põe cada macro do topo: o canal (tracejado) e o macro dentro
+function renderMacros() {
+  const g = $("gMacros"); g.innerHTML = "";
+  if (!result || !result.macros) return;
+  for (const m of result.macros.instances) {
+    if (!m.rect) continue;
+    const [x0, y0, x1, y1] = m.rect, [ox, oy] = m.origin;
+    const grp = el("g", { "data-kind": "macro", "data-key": m.path, style: "cursor: pointer" }, g);
+    el("rect", { x: x0, y: y0, width: x1 - x0, height: y1 - y0, fill: "none", stroke: "var(--macro)",
+                 "stroke-width": 0.2, "stroke-dasharray": "0.8 0.6" }, grp);
+    el("rect", { x: ox, y: oy, width: m.w, height: m.h, fill: "var(--macro)", "fill-opacity": 0.28,
+                 stroke: "var(--macro)", "stroke-width": Math.max(0.35, 2 * mmPerPx()),
+                 "stroke-dasharray": m.measured ? "" : "4 2" }, grp);
+    const fs = Math.max(1.6, Math.min(9, m.w / 12));
+    const t = el("text", { x: ox + 1, y: oy + fs + 0.6, "font-size": fs, fill: "var(--macro)", "font-weight": 600,
+                           "pointer-events": "none" }, grp);
+    t.textContent = `${m.path} (${m.type})`;
+    const t2 = el("text", { x: ox + 1, y: oy + 2 * fs + 1, "font-size": fs * 0.8, fill: "var(--macro)", "pointer-events": "none" }, grp);
+    t2.textContent = `${fmt(m.w)} x ${fmt(m.h)} mm${m.measured ? "" : " (estimado)"}`;
+    el("title", {}, grp).textContent = `macro ${m.path} (${m.type}): ${fmt(m.w)} x ${fmt(m.h)} mm` +
+      (m.measured ? "" : " — estimado; rode ② Placement para medir") +
+      (data.modules[m.path] ? "" : "\nClique para criar uma fence do tamanho dele e posicioná-lo");
+  }
+}
 
 function renderBoard() {
   const g = $("gBoard"); g.innerHTML = "";
@@ -345,9 +405,16 @@ function renderRows() {
 }
 
 function hue(s) { let x = 0; for (const c of s) x = (x * 31 + c.charCodeAt(0)) % 360; return x; }
+// o placement desenhado é o da rodada: se ela foi feita com outros macros, ele
+// não mostra o que o floorplan atual vai gerar (fica esmaecido)
+function partsMatch() {
+  const had = (run && run.macros && run.macros.types) || [];
+  return JSON.stringify([...had].sort()) === JSON.stringify([...macroTypes()].sort());
+}
 function renderParts() {
   const g = $("gParts"); g.innerHTML = "";
   if (!run || !$("showParts").checked) return;
+  g.setAttribute("opacity", partsMatch() ? 1 : 0.25);
   for (const p of run.footprints) {
     const [x0, y0, x1, y1] = p.box;
     const top = p.module ? p.module.split(".")[0] : "";
@@ -428,7 +495,7 @@ function densityRow(key, m) {
 // capacitor de desacoplamento em cada trecho da área (padrão: não; as fileiras
 // livres já têm um por fileira, no mesmo trilho de alimentação)
 function decouplingRow(m) {
-  const box = h("input", { type: "checkbox", ...(m.decoupling ? { checked: "" } : {}),
+  const box = h("input", { type: "checkbox", checked: !!m.decoupling,
     onchange: e => edit(() => { if (e.target.checked) m.decoupling = true; else delete m.decoupling; }) });
   return h("div", { class: "row", title: "Põe um capacitor de desacoplamento no fim de cada trecho de fileira da área." },
     h("label", {}, "Desacoplamento"), box, h("span", { class: "muted" }, "capacitor em cada trecho"));
@@ -462,7 +529,10 @@ function renderPanel() {
         h("div", { class: "row" }, h("button", { onclick: () => edit(() => { m.rect = [m.near[0] - 15, m.near[1] - 10, 30, 20].map(snap); delete m.near; }) }, "Usar retângulo")));
     } else {
       p.append(rectInputs(m));
-      if (m.type !== "guide") p.append(densityRow(it.key, m), decouplingRow(m));
+      const mac = macroOf(it.key), outer = insideMacro(it.key);
+      if (mac) p.append(macroRow(mac, m));
+      else if (outer) p.append(h("div", { class: "msg warn" }, `Fica dentro do macro ${outer}: o fluxo ignora esta área.`));
+      else if (m.type !== "guide") p.append(densityRow(it.key, m), decouplingRow(m));
       if (m.type === "guide")
         p.append(h("div", { class: "row" }, h("button", { onclick: () => edit(() => { const b = boxOf(it); m.near = [snap((b[0] + b[2]) / 2), snap((b[1] + b[3]) / 2)]; delete m.rect; }) }, "Usar ponto (near)")));
     }
@@ -496,9 +566,12 @@ function renderPanel() {
     c.append(h("div", { class: "msg warn" }, `Nenhuma rodada em build/pcb/${wantedRun()}/. Rode ① Síntese para ver fileiras e capacidade.`));
   if (ri && ri.stale) c.append(h("div", { class: "msg warn" }, "Há Verilog mais novo que esta rodada: rode ① Síntese de novo para atualizar fileiras e capacidade."));
   if (ri && !ri.placed) c.append(h("div", { class: "msg ok" }, "Rodada só de síntese: fileiras e capacidade valem; o placement por baixo aparece depois de ② Placement."));
+  if (ri && ri.placed && run && !partsMatch())
+    c.append(h("div", { class: "msg warn" }, "O placement desenhado (esmaecido) foi feito com outros macros: rode ② Placement para ver o resultado com os macros marcados."));
   if (state && state.load_error) c.append(h("div", { class: "msg err" }, `O arquivo no disco não é JSON válido: ${state.load_error}. Salvar vai substituí-lo.`));
   if (result) {
     for (const e of result.errors) c.append(h("div", { class: "msg err" }, e.replace(/^[^:]+\.json: /, "")));
+    for (const w of result.warnings || []) c.append(h("div", { class: "msg warn" }, w));
     if (!result.errors.length) c.append(h("div", { class: "msg ok" }, run ? "Tudo cabe: o fluxo deve aceitar este floorplan." : "Formato válido."));
     for (const u of result.usage) {
       const pct = u.have > 0 ? Math.min(100, u.need / u.have * 100) : 100;
@@ -523,6 +596,8 @@ function renderPanel() {
       h("span", { class: "swatch", style: `background: ${COLORS[it2.type]}` }), h("span", {}, labelOf(it2)),
       h("span", { class: "muted" }, it2.type + (densLabel(it2) ? ` · ${densLabel(it2)}` : ""))));
 
+  renderMacroPanel();
+
   // módulos do projeto
   const md = $("mods"); md.innerHTML = "";
   if (!run) { md.append(h("div", { class: "hint" }, "Sem rodada: a lista de módulos vem do placement.json.")); return; }
@@ -530,11 +605,59 @@ function renderPanel() {
   for (const [path, w] of tree) {
     const depth = path.split(".").length - 1;
     const rule = data.modules[path];
-    md.append(h("div", { class: "item", style: `padding-left: ${6 + depth * 14}px`, title: rule ? "Selecionar a área" : "Criar uma fence para este módulo",
-                         onclick: () => rule ? select({ kind: "mod", key: path }) : addArea("fence", path) },
+    const mac = macroOf(path), outer = insideMacro(path);
+    const title = outer ? `Dentro do macro ${outer}: montado junto com ele` : rule ? "Selecionar a área"
+                : mac ? "Criar uma fence do tamanho do macro" : "Criar uma fence para este módulo";
+    md.append(h("div", { class: "item", style: `padding-left: ${6 + depth * 14}px${outer ? "; opacity: .55" : ""}`, title,
+                         onclick: () => outer ? toast(title) : rule ? select({ kind: "mod", key: path }) : addArea("fence", path) },
       h("span", { class: "swatch", style: `background: ${rule ? COLORS[rule.type] : "transparent"}; border: 1px solid var(--line)` }),
-      h("span", {}, path), h("span", { class: "muted" }, `${run.module_types[path] || ""} · ${fmt(w)} mm`)));
+      h("span", {}, path), mac ? h("span", { class: "tag" }, "macro") : null,
+      h("span", { class: "muted" }, `${run.module_types[path] || ""} · ${fmt(w)} mm`)));
   }
+}
+
+// tipos de módulo do projeto: marcar um faz dele macro (montado e roteado sozinho,
+// copiado em cada instância); mostra o tamanho medido na rodada ou o estimado
+function renderMacroPanel() {
+  const box = $("macros"); box.innerHTML = "";
+  if (!run) { box.append(h("div", { class: "hint" }, "Sem rodada: rode ① Síntese para listar os tipos de módulo.")); return; }
+  const count = new Map();
+  for (const t of Object.values(run.module_types || {})) count.set(t, (count.get(t) || 0) + 1);
+  if (!count.size) { box.append(h("div", { class: "hint" }, "O projeto não tem submódulos.")); return; }
+  const measured = (run.macros && run.macros.templates) || {};
+  const chosen = macroTypes();
+  for (const [type, n] of [...count.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))) {
+    const on = chosen.includes(type);
+    const tpls = Object.values(measured).filter(t => t.type === type);
+    let size = "";
+    if (tpls.length) {
+      const dims = [...new Set(tpls.map(t => `${fmt(t.w)} x ${fmt(t.h)}`))];
+      size = `medido: ${dims.join(", ")} mm · ${tpls.length} molde(s)`;
+    } else if (on) {
+      const est = result && result.macros ? result.macros.instances.filter(m => m.type === type) : [];
+      size = est.length ? `estimado: ~${fmt(est[0].w)} x ${fmt(est[0].h)} mm (rode ② Placement para medir)`
+           : "dentro de outro macro";
+    }
+    box.append(h("label", { class: "mrow", title: on ? "Desmarque para posicionar como blocos soltos" : "Marque para montar como macro" },
+      h("input", { type: "checkbox", checked: on, onchange: e => toggleMacro(type, e.target.checked) }),
+      h("b", {}, type), h("span", { class: "muted" }, `${n} instância(s)`),
+      size ? h("span", { class: "sz" }, size) : null));
+  }
+  box.append(h("div", { class: "hint", style: "margin-top: 4px" },
+    "Macro: posicionado e roteado uma vez e copiado em cada instância. Fica no canto superior esquerdo da fence com o caminho da instância; " +
+    "sem fence, dentro da área do módulo que o contém ou numa faixa abaixo das áreas."));
+}
+
+// área de uma instância de macro: o tamanho que ela precisa e um botão para ajustar
+function macroRow(mac, m) {
+  const [aw, ah] = macroArea(mac);
+  const ok = m.rect[2] >= aw - 1e-6 && m.rect[3] >= ah - 1e-6;
+  return h("div", {},
+    h("div", { class: "row" }, h("label", {}, "Macro"), h("span", { class: "tag" }, mac.type),
+      h("span", { class: "muted" }, `${fmt(mac.w)} x ${fmt(mac.h)} mm${mac.measured ? "" : " (estimado)"}`)),
+    h("div", { class: "row" + (ok ? "" : " msg err") }, `Precisa de ${fmt(aw)} x ${fmt(ah)} mm (macro + canal de ${fmt(result.macros.ring)} mm). ` +
+      "O macro fica no canto superior esquerdo da área."),
+    h("div", { class: "row" }, h("button", { onclick: () => edit(() => { m.rect[2] = aw; m.rect[3] = ah; }) }, "Ajustar ao macro")));
 }
 
 function rectInputs(o) {
@@ -605,6 +728,13 @@ function addArea(type, path) {
     path = path.trim();
   }
   if (data.modules[path]) { select({ kind: "mod", key: path }); toast(`'${path}' já tem uma área`); return; }
+  const mac = macroOf(path);
+  if (mac && type !== "guide") {
+    const [aw, ah] = macroArea(mac);
+    const at = mac.rect ? [snap(mac.rect[0]), snap(mac.rect[1]), aw, ah] : viewCenterRect(aw, ah);
+    edit(() => { data.modules[path] = { type, rect: at }; sel = { kind: "mod", key: path }; });
+    return;
+  }
   // tamanho inicial: a fileira que o módulo precisa, em ~3 fileiras
   let w = 40, hh = 30;
   if (run) {
@@ -625,6 +755,19 @@ $("svg").addEventListener("mousedown", ev => {
   if (ev.button === 0 && hd) {
     const it = selected();
     drag = { mode: "resize", hd, start: p, rect0: [...it.obj.rect], before: snapshot(), obj: it.obj };
+  } else if (ev.button === 0 && grp && grp.getAttribute("data-kind") === "macro") {
+    // arrastar o macro move a fence dele; sem fence, cria uma do tamanho dele ali mesmo
+    const key = grp.getAttribute("data-key"), mac = macroOf(key);
+    const before = snapshot();
+    if (!data.modules[key] && mac && mac.rect) {
+      const [aw, ah] = macroArea(mac);
+      data.modules[key] = { type: "fence", rect: [snap(mac.rect[0]), snap(mac.rect[1]), aw, ah] };
+    }
+    if (!data.modules[key]) { ev.preventDefault(); return; }
+    select({ kind: "mod", key });
+    const it = selected();
+    drag = { mode: "move", start: p, pos0: [...it.obj.rect], before, obj: it.obj, macro: key };
+    ev.preventDefault(); return;
   } else if (ev.button === 0 && grp) {
     const kind = grp.getAttribute("data-kind"), key = grp.getAttribute("data-key");
     select(kind === "mod" ? { kind, key } : { kind, idx: +key });
@@ -658,8 +801,17 @@ window.addEventListener("mousemove", ev => {
     x0 = Math.max(0, x0); y0 = Math.max(0, y0);
     o.rect.splice(0, 4, x0, y0, x1 - x0, y1 - y0);
   }
+  if (result && result.macros) {
+    const moved = result.macros.instances.find(m => m.path === (drag.macro || (selected() || {}).key));
+    if (moved && moved.rect && o.rect) {
+      const ring = result.macros.ring;
+      moved.origin = [Math.ceil((o.rect[0] + ring) / SNAP) * SNAP, Math.ceil((o.rect[1] + ring) / SNAP) * SNAP];
+      moved.rect = [o.rect[0], o.rect[1], o.rect[0] + o.rect[2], o.rect[1] + o.rect[3]];
+      renderMacros();
+    }
+  }
   renderAreas(); renderHandles();
-  scheduleCheck();                      // densidade e capacidade ao vivo
+  scheduleCheck();                      // densidade, capacidade e posição dos macros ao vivo
 });
 window.addEventListener("mouseup", () => {
   if (!drag) return;
@@ -703,7 +855,7 @@ async function runCheck() {
     if (seq !== checkSeq) return;
     result = r;
   } catch (e) { result = { errors: [String(e.message || e)], usage: [], slots: [], bands: [] }; }
-  renderBoard(); renderRows(); renderAreas(); renderHandles(); renderPanel();
+  renderBoard(); renderRows(); renderMacros(); renderAreas(); renderHandles(); renderPanel();
 }
 async function loadRun() {
   const ri = pickRun();

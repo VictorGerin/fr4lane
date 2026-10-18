@@ -234,7 +234,10 @@ def main(argv=None):
 
     by_cell = Counter(c for c, _ in design.instances.values())
     n_parts = len(design.parts)
-    _write_placement(out / "placement.json", args, lib, design, board.place_stats["editor"], board, fplan)
+    # com macros, o placement mede só a lógica solta: o editor precisa do projeto inteiro
+    editor = (place.measure(lib, design, _place_params(args), Rules()) if getattr(board, "macro_info", None)
+              else board.place_stats["editor"])
+    _write_placement(out / "placement.json", args, lib, design, editor, board, fplan)
     reg = board.place_stats.get("regions")
     what = "áreas declaradas" if fplan else "regiões (uma por módulo)"
     log(f"      {f'{reg} {what}, ' if reg else ''}{board.place_stats['rows']} fileiras, HPWL {board.place_stats['hpwl_mm']} mm, "
@@ -397,7 +400,8 @@ def _write_placement(path, args, lib, design, info, board=None, fplan=None):
             "board": [board.width, board.height] if board is not None else info["board"],
             "floorplan": str(fplan.source) if fplan else None,
             "geo": info["geo"], "min_width": info["min_width"], "module_width": info["module_width"],
-            "module_types": design.modules, "footprints": parts}
+            "module_types": design.modules, "footprints": parts,
+            "macros": getattr(board, "macro_info", None) if board is not None else None}
     Path(path).write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
 

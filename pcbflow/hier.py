@@ -282,6 +282,99 @@ def build_template(job):
                     board.vias, pins, job["n_cells"], unrouted, time.time() - t0)
 
 
+# ------------------------------------------------- posição dos macros no topo
+def top_macros(modules, types):
+    """Instâncias de macro de um mapa caminho -> tipo e, delas, as do topo (sem
+    outro macro acima)."""
+    paths = sorted(p for p, t in modules.items() if t in types)
+    top = [p for p in paths if not any(p.startswith(q + ".") for q in paths)]
+    return paths, top
+
+
+def macro_spots(top, boxes, fplan, geo, glue_area, g, errors=None):
+    """Onde fica cada macro do topo: {caminho: (ox, oy, retângulo com o canal)}.
+    boxes: {caminho: (tipo, largura, altura)}; glue_area: área de fileira da
+    lógica solta (mm²), que entra no empacotamento sem floorplan. O editor de
+    floorplan usa a mesma função para mostrar a posição antes de rodar; com
+    errors (lista), um macro que não cabe vira mensagem e é posicionado assim
+    mesmo, para o editor continuar desenhando."""
+    def fail(msg):
+        if errors is None:
+            raise FloorplanError(msg)
+        errors.append(msg)
+
+    spot = {}
+    if fplan is None:
+        sizes = [boxes[m][1:] for m in top]
+        area = sum((w + 2 * RING) * (h + 2 * RING) for w, h in sizes) + glue_area
+        width = max([w + 2 * RING for w, _ in sizes] + [math.sqrt(area) * 1.15])
+        for m, s in zip(top, _pack(sizes, geo.x0, geo.y_top, width, g)):
+            spot[m] = s
+        return spot
+    inside = defaultdict(list)
+    loose = []
+    for m in top:
+        typ, w, h = boxes[m]
+        r = fplan.modules.get(m)
+        if r is not None and r.type in ("fence", "region"):
+            x0, y0, x1, y1 = r.rect
+            if x1 - x0 < w + 2 * RING - 1e-6 or y1 - y0 < h + 2 * RING - 1e-6:
+                fail(f"{fplan.source}: a área de '{m}' ({x1 - x0:g} x {y1 - y0:g} mm) não "
+                                     f"comporta o macro {typ} ({w + 2 * RING:g} x {h + 2 * RING:g} mm "
+                                     "com o canal de acesso aos pinos)")
+            ox, oy = _up(x0 + RING, g), _up(y0 + RING, g)
+            spot[m] = (ox, oy, r.rect)
+            continue
+        anc = [q for q in fplan.modules if m.startswith(q + ".")
+               and fplan.modules[q].type in ("fence", "region")]
+        if anc:
+            inside[max(anc, key=len)].append(m)
+        else:
+            loose.append(m)
+    # macros sem área (nem do módulo que os contém): numa faixa abaixo de tudo
+    # o que o floorplan declara, para não cair em cima de nenhuma área
+    if loose:
+        areas = [r.rect for r in fplan.modules.values() if r.type in ("fence", "region")]
+        areas += [k.rect for k in fplan.keepouts]
+        y0 = max([geo.y_top] + [r[3] for r in areas])
+        sizes = [boxes[m][1:] for m in loose]
+        width = max([w + 2 * RING for w, _ in sizes] +
+                    [math.sqrt(sum((w + 2 * RING) * (h + 2 * RING) for w, h in sizes)) * 1.15])
+        for m, s in zip(loose, _pack(sizes, geo.x0, y0, width, g)):
+            spot[m] = s
+    for q, ms in inside.items():
+        x0, y0, x1, y1 = fplan.modules[q].rect
+        sizes = [boxes[m][1:] for m in ms]
+        packed = _pack(sizes, x0, y0, x1 - x0, g)
+        need_w = max(r[2] for _, _, r in packed) - x0
+        need_h = max(r[3] for _, _, r in packed) - y0
+        if need_w > x1 - x0 + 1e-6 or need_h > y1 - y0 + 1e-6:
+            fail(f"{fplan.source}: os {len(ms)} macro(s) de dentro de '{q}' "
+                                 f"({', '.join(sorted({boxes[m][0] for m in ms}))}) não cabem na área "
+                                 f"dela ({x1 - x0:g} x {y1 - y0:g} mm): empacotados na largura dela, precisam "
+                                 f"de {need_w:g} x {need_h:g} mm (mais o espaço dos blocos soltos do módulo)")
+        for m, s in zip(ms, packed):
+            spot[m] = s
+    return spot
+
+
+def glue_floorplan(fplan, macro_paths, glue_mods, top, spot):
+    """Floorplan para os blocos soltos: as áreas que ainda têm blocos e, como
+    keepout de posicionamento, os macros (com o canal) e as áreas só de macros."""
+    syn = Floorplan(fplan.source if fplan else "(macros)", board=fplan.board if fplan else None)
+    for path, r in (fplan.modules.items() if fplan else ()):
+        if any(path == p or path.startswith(p + ".") for p in macro_paths):
+            continue
+        if any(m == path or m.startswith(path + ".") for m in glue_mods):
+            syn.modules[path] = r
+        elif r.type == "fence":
+            syn.keepouts.append(Keepout(f"área de {path}", r.rect, True, False, LAYERS))
+    syn.keepouts += list(fplan.keepouts) if fplan else []
+    for m in top:
+        syn.keepouts.append(Keepout(f"macro {m}", spot[m][2], True, False, LAYERS))
+    return syn
+
+
 # ------------------------------------------------------------------- topo
 def place_hier(lib, design, params, rules, fplan, types, route_iter, log=print):
     """Placement hierárquico: devolve a placa com os macros já roteados por dentro
@@ -339,76 +432,10 @@ def place_hier(lib, design, params, rules, fplan, types, route_iter, log=print):
     top = children[None]
     glue = [b for i in glue_cells(None) for b in blocks_of[i]]
     glue_design = Design(design.top, design.ports, glue, design.vdd, design.gnd)
-    geo = placemod._measure(lib, glue_design, params, rules).geo
-    spot = {}
-    if fplan is None:
-        sizes = [(tpls[rep[m]].w, tpls[rep[m]].h) for m in top]
-        area = sum((w + 2 * RING) * (h + 2 * RING) for w, h in sizes) + \
-            sum(placemod._measure(lib, glue_design, params, rules).width) * geo.row_pitch
-        width = max([w + 2 * RING for w, _ in sizes] + [math.sqrt(area) * 1.15])
-        for m, s in zip(top, _pack(sizes, geo.x0, geo.y_top, width, g)):
-            spot[m] = s
-    else:
-        inside = defaultdict(list)
-        loose = []
-        for m in top:
-            t = tpls[rep[m]]
-            r = fplan.modules.get(m)
-            if r is not None and r.type in ("fence", "region"):
-                x0, y0, x1, y1 = r.rect
-                if x1 - x0 < t.w + 2 * RING - 1e-6 or y1 - y0 < t.h + 2 * RING - 1e-6:
-                    raise FloorplanError(f"{fplan.source}: a área de '{m}' ({x1 - x0:g} x {y1 - y0:g} mm) não "
-                                         f"comporta o macro {t.type} ({t.w + 2 * RING:g} x {t.h + 2 * RING:g} mm "
-                                         "com o canal de acesso aos pinos)")
-                ox, oy = _up(x0 + RING, g), _up(y0 + RING, g)
-                spot[m] = (ox, oy, r.rect)
-                continue
-            anc = [q for q in fplan.modules if m.startswith(q + ".")
-                   and fplan.modules[q].type in ("fence", "region")]
-            if anc:
-                inside[max(anc, key=len)].append(m)
-            else:
-                loose.append(m)
-        # macros sem área (nem do módulo que os contém): numa faixa abaixo de tudo
-        # o que o floorplan declara, para não cair em cima de nenhuma área
-        if loose:
-            areas = [r.rect for r in fplan.modules.values() if r.type in ("fence", "region")]
-            areas += [k.rect for k in fplan.keepouts]
-            y0 = max([geo.y_top] + [r[3] for r in areas])
-            sizes = [(tpls[rep[m]].w, tpls[rep[m]].h) for m in loose]
-            width = max([w + 2 * RING for w, _ in sizes] +
-                        [math.sqrt(sum((w + 2 * RING) * (h + 2 * RING) for w, h in sizes)) * 1.15])
-            for m, s in zip(loose, _pack(sizes, geo.x0, y0, width, g)):
-                spot[m] = s
-        for q, ms in inside.items():
-            x0, y0, x1, y1 = fplan.modules[q].rect
-            sizes = [(tpls[rep[m]].w, tpls[rep[m]].h) for m in ms]
-            packed = _pack(sizes, x0, y0, x1 - x0, g)
-            need_w = max(r[2] for _, _, r in packed) - x0
-            need_h = max(r[3] for _, _, r in packed) - y0
-            if need_w > x1 - x0 + 1e-6 or need_h > y1 - y0 + 1e-6:
-                raise FloorplanError(f"{fplan.source}: os {len(ms)} macro(s) de dentro de '{q}' "
-                                     f"({', '.join(sorted({tpls[rep[m]].type for m in ms}))}) não cabem na área "
-                                     f"dela ({x1 - x0:g} x {y1 - y0:g} mm): empacotados na largura dela, precisam "
-                                     f"de {need_w:g} x {need_h:g} mm (mais o espaço dos blocos soltos do módulo)")
-            for m, s in zip(ms, packed):
-                spot[m] = s
-
-    # floorplan para os blocos soltos: as áreas que ainda têm blocos e, como
-    # keepout de posicionamento, os macros (com o canal) e as áreas só de macros
-    syn = Floorplan(fplan.source if fplan else "(macros)", board=fplan.board if fplan else None)
-    glue_mods = {b.module for b in glue}
-    macro_paths = set(paths)
-    for path, r in (fplan.modules.items() if fplan else ()):
-        if any(path == p or path.startswith(p + ".") for p in macro_paths):
-            continue
-        if any(m == path or m.startswith(path + ".") for m in glue_mods):
-            syn.modules[path] = r
-        elif r.type == "fence":
-            syn.keepouts.append(Keepout(f"área de {path}", r.rect, True, False, LAYERS))
-    syn.keepouts += list(fplan.keepouts) if fplan else []
-    for m in top:
-        syn.keepouts.append(Keepout(f"macro {m}", spot[m][2], True, False, LAYERS))
+    meas = placemod._measure(lib, glue_design, params, rules)
+    boxes = {m: (tpls[rep[m]].type, tpls[rep[m]].w, tpls[rep[m]].h) for m in top}
+    spot = macro_spots(top, boxes, fplan, meas.geo, sum(meas.width) * meas.geo.row_pitch, g)
+    syn = glue_floorplan(fplan, paths, {b.module for b in glue}, top, spot)
     extra = defaultdict(list)
     for m in top:
         netmap, _ = _maps(info, rep[m], m)
@@ -435,6 +462,14 @@ def place_hier(lib, design, params, rules, fplan, types, route_iter, log=print):
         copies[rep[p]] += 1
     summary = [(t.type, t.path, t.w, t.h, t.cells, copies[t.path], t.unrouted, t.seconds)
                for t in sorted(tpls.values(), key=lambda t: (info[t.path]["depth"], t.path), reverse=True)]
+    # para o editor de floorplan: tamanho de cada molde e onde ficou cada macro do topo
+    board.macro_info = {
+        "types": sorted(types), "ring": RING,
+        "templates": {t.path: {"type": t.type, "w": t.w, "h": t.h, "cells": t.cells, "copies": copies[t.path]}
+                      for t in tpls.values()},
+        "instances": {p: dict({"type": info[p]["type"], "template": rep[p]},
+                              **({"origin": list(spot[p][:2]), "rect": list(spot[p][2])} if p in spot else {}))
+                      for p in paths}}
     return board, summary
 
 

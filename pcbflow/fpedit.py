@@ -20,6 +20,7 @@ Gerar PCB (make pcb). A validação usa as mesmas funções do fluxo.
 import argparse
 import glob
 import json
+import math
 import os
 import re
 import shutil
@@ -33,8 +34,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
-from . import floorplan, place
+from . import floorplan, hier, place
 from .floorplan import FloorplanError
+from .layout import Rules
 
 PKG = Path(__file__).resolve().parent
 REPO = PKG.parents[1]
@@ -78,10 +80,34 @@ def families():
     return sorted(p.name for p in LIBS.iterdir() if (p / "library.json").is_file())
 
 
+def macro_boxes(run, top, mods_w, geo):
+    """Tamanho de cada macro do topo: o do molde medido na rodada (② Placement com
+    estes macros) ou, sem ele, uma estimativa pela largura de fileira do módulo
+    (moldes medidos ocupam ~1,25x a área das fileiras, mais a borda dos pinos)."""
+    got = (run.get("macros") or {})
+    insts, tpls = got.get("instances", {}), got.get("templates", {})
+    g = Rules().grid
+    boxes, measured = {}, {}
+    for p in top:
+        typ = run["module_types"][p]
+        t = tpls.get(insts.get(p, {}).get("template"))
+        if t and t["type"] == typ:
+            boxes[p], measured[p] = (typ, t["w"], t["h"]), True
+            continue
+        w = sum(v for m, v in mods_w.items() if m == p or m.startswith(p + "."))
+        side = math.sqrt(1.25 * w * geo.row_pitch) + 2 * hier.MARGIN + 3
+        side = math.ceil(side / g) * g
+        boxes[p], measured[p] = (typ, side, side), False
+    return boxes, measured
+
+
 def check(data, run, source):
     """Valida o floorplan como o fluxo faria; com uma rodada, refaz as fileiras
-    e confere a capacidade de cada área."""
-    out = {"errors": [], "usage": [], "slots": [], "bands": [], "logic": None, "board": None}
+    e confere a capacidade de cada área. Com macros, faz o que o fluxo
+    hierárquico faz: posiciona os macros (mesma função do hier.py) e confere as
+    fileiras só da lógica solta, com os macros como keepout."""
+    out = {"errors": [], "warnings": [], "usage": [], "slots": [], "bands": [], "logic": None, "board": None,
+           "macros": None}
     try:
         fp = floorplan.parse(data, source)
     except FloorplanError as e:
@@ -95,6 +121,42 @@ def check(data, run, source):
     for path in fp.modules:
         if not any(m == path or m.startswith(path + ".") for m in mods):
             out["errors"].append(f"módulo '{path}' não existe no projeto")
+    # rodada gravada por versão anterior do fluxo com macros: só a lógica solta foi medida
+    unmeasured = [p for p in run.get("module_types", {})
+                  if not any(m == p or m.startswith(p + ".") for m in mods)]
+    if unmeasured:
+        out["warnings"].append(f"Esta rodada não tem a medida de {len(unmeasured)} módulo(s) "
+                               f"({', '.join(sorted(unmeasured)[:3])}{'...' if len(unmeasured) > 3 else ''}): "
+                               "foi gravada por uma versão anterior do fluxo. Rode ① Síntese.")
+    if fp.macros:
+        types = run.get("module_types", {})
+        for t in fp.macros:
+            if t not in set(types.values()):
+                out["errors"].append(f"macro '{t}': o projeto não tem módulo desse tipo")
+        paths, _ = hier.top_macros(types, fp.macros)
+        paths = [p for p in paths if any(m == p or m.startswith(p + ".") for m in mods)]
+        top = [p for p in paths if not any(p.startswith(q + ".") for q in paths)]
+        boxes, measured = macro_boxes(run, top, widths, geo)
+        widths = {m: w for m, w in widths.items()
+                  if not any(m == p or m.startswith(p + ".") for p in paths)}
+        out["macros"] = {"ring": hier.RING, "instances": [
+            {"path": p, "type": boxes[p][0], "w": boxes[p][1], "h": boxes[p][2], "measured": measured[p],
+             "rect": None, "origin": None} for p in top]}
+        # macro que não cabe vira erro, mas continua desenhado onde o fluxo tentaria pô-lo
+        spot = hier.macro_spots(top, boxes, fp, geo, sum(widths.values()) * geo.row_pitch, Rules().grid,
+                                errors=out["errors"])
+        for m in out["macros"]["instances"]:
+            ox, oy, rect = spot[m["path"]]
+            m["origin"], m["rect"] = [ox, oy], list(rect)
+            if fp.board and (rect[2] > fp.board[0] + 1e-6 or rect[3] > fp.board[1] + 1e-6):
+                out["errors"].append(f"o macro '{m['path']}' ({m['type']}) fica fora da placa de "
+                                     f"{fp.board[0]:g} x {fp.board[1]:g} mm: aumente a placa ou mude a área dele")
+        for path in fp.modules:
+            outer = [p for p in top if path.startswith(p + ".")]
+            if outer:
+                out["warnings"].append(f"a área de '{path}' fica dentro do macro '{outer[0]}' e é ignorada: "
+                                       "o macro é montado sozinho, só a área dele no topo conta")
+        fp = hier.glue_floorplan(fp, paths, {m for m in widths}, top, spot)
     need = {}
     for m, w in widths.items():
         o = place.owner_of(fp, m)
