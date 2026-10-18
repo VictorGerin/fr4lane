@@ -20,7 +20,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from . import cache, cellcheck, check, drc, drive, floorplan, hier, kicad, netlist, place, progress, project, route,     sizing, synth
+from . import buffering, cache, cellcheck, check, drc, drive, floorplan, hier, kicad, netlist, place, progress, project, route,     sizing, synth
 from .layout import Rules
 from .library import Library, LibraryError, resolve_family
 
@@ -110,6 +110,8 @@ def main(argv=None):
     ap.add_argument("--place-only", action="store_true",
                     help="para após o placement (grava o placement.json, sem rotear nem gerar o KiCad)")
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--no-buffer", action="store_true",
+                    help="não insere buffers nas nets com fan-out acima do que a saída aguenta (só avisa)")
     ap.add_argument("--no-size", action="store_true",
                     help="não troca as células pelas variantes de fan-out (fica o que o Yosys escolheu)")
     ap.add_argument("--macro", action="append", default=[], metavar="TIPO",
@@ -190,8 +192,9 @@ def main(argv=None):
         clock.stage(f"[0-3/6] Biblioteca, síntese e placement: reaproveitados da rodada de {when} "
                     "(mesmas entradas; --fresh refaz)")
         design, board, fanout, sized = saved["design"], saved["board"], saved["fanout"], saved["sized"]
+        buffered = saved.get("buffered")
         stat_text, sims = saved["stat"], dict(saved.get("sims", {}))
-        _summary(lib, design, sized, fanout, args)
+        _summary(lib, design, sized, fanout, args, buffered)
         lib.write_verilog_models(models)
         _simulate(args, lib, design, out, gates_v, models, sims, clock)
         if sims != saved.get("sims", {}):
@@ -232,8 +235,18 @@ def main(argv=None):
                 sized = sizing.size_design(lib, design, el, drives)
             log(f"      sizing: {len(sized.changed)} instâncias trocadas por variantes de fan-out"
                 + (f", {len(sized.unresolved)} sem variante que atenda" if sized.unresolved else ""))
-        fanout = [n for n in sizing.check_nets(lib, design, el, drives) if not n.ok]
-        _summary(lib, design, sized, fanout, args)
+        buffered = None
+        if not args.no_buffer:
+            with progress.Progress("buffers por fan-out", tick=True):
+                buffered = buffering.buffer_design(lib, design, el, drives)
+            if buffered.trees or buffered.unresolved:
+                deep = max((t[4] for t in buffered.trees), default=0)
+                log(f"      buffers: {buffered.count} {buffered.cell} em {len(buffered.trees)} nets"
+                    + (f" (árvores de até {deep} níveis)" if deep > 1 else "")
+                    + (f"; {len(buffered.unresolved)} net(s) sem solução" if buffered.unresolved else ""))
+        fanout = [n for n in sizing.check_nets(lib, design, el, drives) + buffering.check_inputs(lib, design, el, drives)
+                  if not n.ok]
+        _summary(lib, design, sized, fanout, args, buffered)
         sims = {}
         _simulate(args, lib, design, out, gates_v, models, sims, clock)
 
@@ -271,7 +284,7 @@ def main(argv=None):
         board.group_modules = {inst: m for inst, m in design.inst_module.items() if m}
         board.module_types = design.modules
         with progress.Progress("gravando o placement para reaproveitar", tick=True):
-            cache.save(out, key, design=design, board=board, fanout=fanout, sized=sized,
+            cache.save(out, key, design=design, board=board, fanout=fanout, sized=sized, buffered=buffered,
                        stat=stat_text, sims=sims)
 
     by_cell = Counter(c for c, _ in design.instances.values())
@@ -336,7 +349,7 @@ def main(argv=None):
         except RuntimeError as e:
             log(f"      DRC do KiCad: {e}")
     _write_report(out / "report.md", args, design, board, by_cell, errors, unconnected, lib, fanout, drc_res,
-                  sized)
+                  sized, buffered)
     clock.done()
     log(f"Concluído em {progress.fmt_time(time.time() - t0)}")
     return 0 if not errors and not unconnected and (drc_res is None or drc.ok(drc_res)) else 1
@@ -359,7 +372,7 @@ class _Clock:
         self.t = None
 
 
-def _summary(lib, design, sized, fanout, args):
+def _summary(lib, design, sized, fanout, args, buffered=None):
     by_cell = Counter(c for c, _ in design.instances.values())
     kinds = Counter(lib.parts[p.model]["kind"] for p in design.parts)
     log("      células: " + ", ".join(f"{k}={v}" for k, v in sorted(by_cell.items())))
@@ -453,7 +466,7 @@ def _write_placement(path, args, lib, design, info, board=None, fplan=None):
 
 
 def _write_report(path, args, design, board, by_cell, errors, unconnected, lib, fanout, drc_res=None,
-                  sized=None):
+                  sized=None, buffered=None):
     parts = Counter(fp.value for fp in board.footprints)
     L = [f"# Relatório pcbflow — `{design.top}`", "",
          f"- Fontes: {', '.join(args.src)}",
@@ -529,6 +542,18 @@ def _write_report(path, args, design, board, by_cell, errors, unconnected, lib, 
         if sized.unresolved:
             L.append("")
             L.append("Sem variante que atenda (ficou a de maior folga): " + ", ".join(sized.unresolved))
+    if buffered is not None:
+        L += ["", "## Buffers por fan-out", ""]
+        if buffered.trees:
+            L += [f"{buffered.count} buffers ({buffered.cell}) em {len(buffered.trees)} nets: cada net vira uma árvore "
+                  "balanceada (toda carga à mesma profundidade).", "",
+                  "| Net | Dirigida por | Cargas | Buffers | Níveis |", "|---|---|---:|---:|---:|"]
+            for net, who, n, k, lv in sorted(buffered.trees, key=lambda t: -t[2]):
+                L.append(f"| `{net}` | {who} | {n} | {k} | {lv} |")
+        else:
+            L.append("Nenhum: todas as saídas (e as entradas do topo) alimentam as suas cargas.")
+        if buffered.unresolved:
+            L += ["", "Sem solução com buffers:"] + [f"- `{n}`: {why}" for n, why in buffered.unresolved]
     if fanout:
         L += ["", "## Fan-out acima do que a saída aguenta", "",
               "| Net | Instância | Saída | Entradas | max_fanout | VOH pior caso | Ib / Ib necessária |",

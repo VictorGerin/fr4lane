@@ -18,7 +18,7 @@ Verilog ──Yosys/ABC──▶ células (.lib) ──expansão (.sp)──▶ 
 
 - três famílias de células incluídas: **CMOS** (2N7002 + BSS84), **RTL** (BC548 + resistores) e **relés** (SPDT de 5 V), com portas, flip-flops e latches; e um formato simples para criar outras;
 - verificação de cada célula montada contra a função declarada, e simulação do circuito inteiro em nível de componente com o seu testbench;
-- dimensionamento por fan-out em pior caso elétrico (família RTL);
+- fan-out resolvido: células trocadas por variantes mais fortes e árvores de buffers balanceadas nas nets que ainda estouram (com drive em pior caso elétrico na família RTL);
 - floorplan com fences, regions, guides e keepouts, editado num [editor visual](#editor-visual) no navegador, e [conectores](#conectores) em qualquer borda com a pinagem escolhida (para casar placas vizinhas);
 - placement por anelamento simulado e roteamento por negociação (PathFinder) em grade, compilados com numba;
 - fluxo hierárquico com [macros](#macros-fluxo-hierárquico): blocos repetidos são montados uma vez e copiados;
@@ -110,7 +110,7 @@ Cada rodada passa por seis etapas, que aparecem no log com o tempo de cada uma:
 | Etapa | O que faz | Onde |
 |---|---|---|
 | **[0/6] Biblioteca** | lê a família de células, confere a consistência dos arquivos, simula cada montagem (`.sp`) contra a função declarada (`.lib`) e confere o drive em pior caso | `library.py`, `cellcheck.py`, `drive.py` |
-| **[1/6] Síntese** | o Yosys sintetiza o Verilog e mapeia para as células da família (cada módulo à parte, para a hierarquia chegar à placa); o pcbflow expande cada célula nos seus componentes e troca as que estouram o fan-out por variantes mais fortes | `synth.py`, `netlist.py`, `sizing.py` |
+| **[1/6] Síntese** | o Yosys sintetiza o Verilog e mapeia para as células da família (cada módulo à parte, para a hierarquia chegar à placa); o pcbflow expande cada célula nos seus componentes, troca as que estouram o fan-out por variantes mais fortes e põe árvores de buffers nas nets que ainda estouram | `synth.py`, `netlist.py`, `sizing.py`, `buffering.py` |
 | **[2/6] Simulação** | roda o seu testbench duas vezes: contra o netlist de portas e contra o netlist de componentes (transistores, resistores, relés) | `__main__.py`, `netlist.py` |
 | **[3/6] Placement** | arruma os componentes de cada célula num bloco, distribui os blocos em fileiras (respeitando o floorplan) e minimiza o comprimento de fio por anelamento simulado; com macros, monta e roteia cada bloco repetido à parte | `place.py`, `anneal.py`, `hier.py` |
 | **[4/6] Roteamento** | liga VDD/GND aos planos e roteia os sinais numa grade de 0,5 mm, por negociação entre as nets | `route.py` |
@@ -157,7 +157,7 @@ Cada arquivo tem um papel, sem repetir informação dos outros:
 
 Uma subpasta sem `.lib` vira um subcircuito auxiliar: outras células podem usá-lo, mas o Yosys não o enxerga. `"dont_use": true` no JSON tira a célula da síntese sem impedir que ela seja usada dentro de outras.
 
-### Fan-out: drive em pior caso e variantes
+### Fan-out: drive em pior caso, variantes e buffers
 
 Cada saída aguenta um número finito de entradas. O fluxo controla isso em dois níveis:
 
@@ -174,7 +174,14 @@ Cada saída aguenta um número finito de entradas. O fluxo controla isso em dois
 
 As entradas são divididas em fatias contíguas (por módulo e instância), de peso elétrico parecido. `Y0` fica com o nome da net original; as outras saídas ganham nets novas (`<net>.y1`...). A verificação confere que as saídas da variante fazem a mesma função que a da base, e a simulação de componentes (`--tb`) roda sobre a placa já dimensionada. O `report.md` lista as trocas e as nets que nem a variante mais forte atende. `--no-size` desliga as trocas.
 
-Atenção: o ABC escolhe células por função e área, sem saber de fan-out, e pode montar a lógica com outras portas (ex.: NAND2 + NOR2 em vez de AND2). Nesse caso a net que estoura é de uma célula sem variante, e o fluxo só avisa.
+**Buffers.** O ABC escolhe células por função e área, sem saber de fan-out, e pode montar a lógica com portas que não têm variante mais forte (ex.: NAND2 + NOR2 em vez de AND2), ou uma net pode ter cargas demais para qualquer variante. Depois das trocas, cada net que ainda estoura vira uma **árvore de buffers** (`buffering.py`), como nas ferramentas de chip:
+
+- as cargas são ordenadas por módulo e instância e cortadas em grupos que um buffer da família alimenta (o mesmo critério: `max_fanout` e drive em pior caso); cargas vizinhas ficam no mesmo buffer;
+- se quem dirige a net não alimenta todos esses buffers, eles mesmos ganham outro nível de buffers, até caber. A árvore é **balanceada**: toda carga fica à mesma profundidade, com o mesmo atraso, o que importa no clock (é uma árvore de clock simples);
+- as **entradas do topo** também são conferidas, como se fossem dirigidas por uma saída da família (numa placa por estágio, quem as dirige é uma porta da placa anterior): um clock que chega por um pino e vai a 40 flip-flops ganha a sua árvore;
+- cada buffer fica no módulo que contém quem o alimenta e as cargas dele; dentro de um macro, todas as cópias ganham os mesmos buffers e continuam com o mesmo molde.
+
+A simulação de componentes roda com os buffers no lugar. O log diz quantos foram (`buffers: 31 BUF em 7 nets`), e o `report.md` lista cada árvore (net, quem dirige, cargas, buffers, níveis). `--no-buffer` desliga a inserção, e o fluxo só avisa.
 
 ### Verificações automáticas da biblioteca
 
@@ -505,6 +512,7 @@ python -m pytest -k fpedit -x     # um grupo, parando no primeiro erro
 | `test_liberty.py` | expressões booleanas (operadores, precedência, `to_verilog`) e leitura de células, flip-flops e latches; o que o leitor recusa |
 | `test_floorplan.py` | formato do floorplan: o que é aceito e cada mensagem de recusa |
 | `test_library.py` | as três famílias: consistência `.sp` x `.lib` x `parts.json`, drive em pior caso, latches, `.lib` gerado; leitor SPICE; `cellcheck` de cada família e de montagens sabotadas de propósito (tem de acusar) |
+| `test_buffering.py` | buffers nas três famílias (o fan-out some e a simulação de componentes continua certa), `--no-buffer` só avisa, árvore de dois níveis, entradas do topo, e as cópias de um macro com os mesmos buffers (o mesmo molde) |
 | `test_check_cache_misc.py` | folgas, conectividade e keepouts numa placa feita à mão; cache do placement; valores SPICE, tempos, escopos |
 | `test_project.py` | `pcbflow.json`: fontes com exclusões, testbench e floorplan por top, procura nas pastas de cima, o que é recusado, e o fluxo pegando tudo do projeto (e `--no-tb`/`--no-floorplan`) |
 | `test_connectors.py` | pinagem dos conectores (barramentos, faixas, VDD/GND/NC), conectores automáticos, posição em cada borda, sobreposição, placa pequena e o espaço que a grade abre em cima e embaixo |
@@ -513,7 +521,7 @@ python -m pytest -k fpedit -x     # um grupo, parando no primeiro erro
 | `test_fpedit.py` | validação do editor (capacidade, macros medidos e estimados, avisos), o comando que cada botão monta, uma execução de verdade pelo menu e o cancelamento dela (a árvore de processos termina), e a API HTTP com um servidor de verdade: salvar e conflito, Host não permitido, navegação presa ao projeto, execução só com valores conhecidos |
 | `test_fpedit_ui.py` | a página no Chrome (ou Chromium): macros do arquivo, marcar/desmarcar tipos, clicar e arrastar macros, área pequena e *Ajustar ao macro*, avisos, salvar, barra de progresso, conectores (arrastar, fixar, criar, editar a pinagem, mover com as setas) |
 
-Os testes são marcados por dependência (`pytest.ini`): `tools` (Yosys e Icarus), `slow` (fluxo completo), `kicad` (`kicad-cli`) e `ui` (Selenium e Chrome). O que não está instalado é pulado, com o motivo no resumo. Os projetos de teste ficam em `tests/data/` (`hier8.v`: somador de 8 bits feito de 2 `add4` de 4 `fa`; `latch_demo.v`), e cada rodada do fluxo vai para uma pasta temporária do pytest.
+Os testes são marcados por dependência (`pytest.ini`): `tools` (Yosys e Icarus), `slow` (fluxo completo), `kicad` (`kicad-cli`) e `ui` (Selenium e Chrome). O que não está instalado é pulado, com o motivo no resumo. Os projetos de teste ficam em `tests/data/` (`hier8.v`: somador de 8 bits feito de 2 `add4` de 4 `fa`; `latch_demo.v`; `fan40.v` e `fan2.v`: fan-out alto no clock, numa entrada e numa net interna), e cada rodada do fluxo vai para uma pasta temporária do pytest.
 
 ## Arquitetura do código
 
@@ -529,6 +537,7 @@ pcbflow/
   synth.py        script e execução do Yosys (mapeamento por módulo, latches)
   netlist.py      netlist do Yosys -> células -> componentes; escreve o netlist de componentes
   sizing.py       troca células por variantes conforme o fan-out
+  buffering.py    árvores de buffers balanceadas nas nets que ainda estouram o fan-out
   floorplan.py    formato e validação do floorplan
   connectors.py   conectores de E/S: pinagem, conectores automáticos, posição nas bordas
   place.py        blocos, fileiras, áreas do floorplan e placement
@@ -555,7 +564,7 @@ Os dados passam de uma etapa para outra assim: o Yosys devolve um netlist JSON d
 
 - **Sem análise de tempo:** o `.lib` não tem atrasos; a frequência máxima da placa não é calculada. A simulação de componentes confere a lógica, não o tempo.
 - **Footprints aproximados:** a geometria vem do `footprints.json` e é fiel o bastante para o roteamento; antes de fabricar, confira ou use *Update Footprints from Library* no KiCad. O relé é genérico.
-- **Fan-out:** só a família RTL tem modelo elétrico; nas outras vale o `max_fanout` de cada célula. Quando o ABC usa uma célula sem variante mais forte, o fluxo só avisa (não insere buffers).
+- **Fan-out:** só a família RTL tem modelo elétrico; nas outras vale o `max_fanout` de cada célula. As árvores de buffers são montadas antes do placement, pela ordem lógica das cargas (módulo e instância), não pela posição delas na placa.
 - **Macros:** só em placas de 4 camadas, e os pinos são escolhidos olhando só para dentro do macro.
 - **Tamanho:** placas com dezenas de milhares de componentes levam horas para rotear; o `--max-parts` (padrão 20 000) para o fluxo antes do placement acima disso.
 - **Editor:** o menu do fpedit lista só as famílias incluídas no pcbflow; uma família própria roda pela linha de comando.

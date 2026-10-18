@@ -24,11 +24,11 @@ VERSION = 1
 CODE_DIR = Path(__file__).resolve().parent
 # código que roda até o fim do placement (e as classes que vão no pickle)
 PLACE_CODE = ("library.py", "liberty.py", "spice.py", "netlist.py", "synth.py", "drive.py",
-              "sizing.py", "place.py", "anneal.py", "jit.py", "layout.py", "floorplan.py", "cache.py",
+              "sizing.py", "buffering.py", "connectors.py", "place.py", "anneal.py", "jit.py", "layout.py", "floorplan.py", "cache.py",
               "hier.py", "route.py")       # com macros, o roteamento deles acontece no placement
 # opções do argparse que mudam a síntese ou o placement
 PLACE_ARGS = ("top", "layers", "effort", "seed", "density", "row_gap", "part_gap",
-              "module_weight", "flatten", "no_size", "macro", "route_iter")
+              "module_weight", "flatten", "no_size", "no_buffer", "macro", "route_iter")
 NAMES = {"src": "fontes Verilog", "lib": "biblioteca de células", "floorplan": "floorplan",
          "args": "opções do fluxo", "code": "código do pcbflow"}
 
