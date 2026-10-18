@@ -300,8 +300,12 @@ def write_switch_level_verilog(lib, design, path, module_name=None):
             elif kind == "resistor":
                 lines.append(f"  rtran {inst}({ident(pins['1'])}, {ident(pins['2'])});")
             elif kind == "relay":
-                # contato bidirecional comandado pela bobina: fecha COM-NO energizado, COM-NC solto
-                c = ident(pins["C1"])
+                # contato bidirecional comandado pela bobina: fecha COM-NO energizado, COM-NC solto.
+                # Como no relé real, só uma bobina em 1 puxa o contato; em X ou Z (início da
+                # simulação, nada dirigindo) ele fica em repouso. Com o X direto no tranif o
+                # resultado dependeria da versão do Icarus (a 12 prende laços de flip-flop em X).
+                c = ident(f"{b.name}.{p.name}.coil")
+                lines.append(f"  wire {c} = ({ident(pins['C1'])} === 1'b1);")
                 lines.append(f"  tranif1 {ident(f'{b.name}.{p.name}.no')}({ident(pins['COM'])}, {ident(pins['NO'])}, {c});")
                 lines.append(f"  tranif0 {ident(f'{b.name}.{p.name}.nc')}({ident(pins['COM'])}, {ident(pins['NC'])}, {c});")
             # capacitores e diodos (supressão da bobina) não afetam a lógica
