@@ -22,14 +22,16 @@ def find_yosys():
     raise FileNotFoundError("yosys não encontrado (MSYS2: pacman -S mingw-w64-ucrt-x86_64-yosys)")
 
 
-def run_yosys(sources, top, liberty, outdir, defines=(), flatten=False):
+def run_yosys(sources, top, liberty, outdir, defines=(), flatten=False, latches=None):
     """Sintetiza e mapeia para as células da biblioteca.
 
     Por padrão cada módulo é mapeado separadamente e o netlist só é achatado
     no fim: os nomes das células guardam a instância de origem
     (ex.: "u_fa.$abc$..."), o que permite agrupar a placa por módulo.
     flatten=True achata antes do mapeamento, para o ABC otimizar através das
-    fronteiras dos módulos (menos células, mas sem a hierarquia)."""
+    fronteiras dos módulos (menos células, mas sem a hierarquia).
+    latches: (tipos internos, Verilog do techmap) de Library.latch_techmap();
+    sem ele um latch inferido fica sem mapear e a síntese para com erro."""
     outdir = Path(outdir)
     json_out = outdir / f"{top}_gates.json"
     hier_out = outdir / f"{top}_hier.json"
@@ -37,13 +39,20 @@ def run_yosys(sources, top, liberty, outdir, defines=(), flatten=False):
     stat_out = outdir / "yosys_stat.txt"
     lib = Path(liberty).as_posix()
     defs = " ".join(f"-D{d}" for d in defines)
+    latch_cmds = ""
+    if latches:
+        types, text = latches
+        lmap = outdir / "latch_map.v"
+        lmap.write_text(text)
+        latch_cmds = (f"dfflegalize {' '.join(f'-cell {t} x' for t in types)}\n"
+                      f"techmap -map {lmap.as_posix()}\n")
     reads = "\n".join(f"read_verilog -sv {defs} {Path(s).as_posix()}" for s in sources)
     script = f"""read_liberty -lib {lib}
 {reads}
 hierarchy -check -top {top}
 synth {"-flatten " if flatten else ""}-top {top}
 dfflibmap -liberty {lib}
-abc -liberty {lib}
+{latch_cmds}abc -liberty {lib}
 opt_clean -purge
 {"" if flatten else f'''write_json {hier_out.as_posix()}
 flatten

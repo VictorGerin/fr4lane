@@ -43,6 +43,7 @@ pcbflow/lib/
   footprints.json              geometria dos footprints (compartilhada pelas famílias)
   cmos/                        CMOS estático, 2N7002 + BSS84 (SOT-23)
   rtl/                         RTL, BC548 (TO-92) + resistores de 1/4 W
+  relay/                       relés SPDT de 5 V + diodo 1N4148 de supressão em cada bobina
     library.json               dados gerais: alimentação, cabeçalho Liberty, desacoplamento, folgas
     parts.json                 componentes reais: modelo SPICE -> peça, footprint, pinagem
     cells/NOR2/
@@ -64,7 +65,7 @@ Cada arquivo tem um papel, sem repetir informação dos outros:
   Q2 Y   b2 GND NPN
   .ends NOR2
   ```
-  São aceitos `M` (MOSFET: dreno gate fonte corpo modelo), `Q` (BJT: coletor base emissor modelo), `R`, `C` e `X` (instância de outro subcircuito). Flip-flops e buffers são montados com `X`, a partir das portas.
+  São aceitos `M` (MOSFET: dreno gate fonte corpo modelo), `Q` (BJT: coletor base emissor modelo), `R`, `C`, `D` (diodo: anodo catodo modelo), `K` (relé SPDT: bobina+ bobina- comum NA NF modelo; convenção do pcbflow, com a bobina- no GND) e `X` (instância de outro subcircuito). Flip-flops e buffers são montados com `X`, a partir das portas.
 - **`.json`:** o que nem o `.lib` nem o `.sp` comportam. Por exemplo, `"layout": {"rows": [["RL","R1","R2"], ["Q1","Q2"]]}` arruma resistores numa fileira e transistores na outra dentro do bloco.
 - **`parts.json`:** liga o modelo do `.sp` ao componente físico, por exemplo `"NPN": BC548, footprint TO-92_Inline_Wide, pinos C=1 B=2 E=3`. Para trocar o transistor de uma família inteira, basta mudar este arquivo.
 - **`footprints.json`:** geometria neutra (pads, furos, courtyard). O `kicad.py` traduz para o formato do KiCad ao escrever a placa.
@@ -99,7 +100,7 @@ A cada execução, antes da síntese:
    - todo modelo usado existe no `parts.json`;
    - todo footprint existe;
    - o layout cita exatamente os componentes do `.sp`.
-2. **Função:** cada `.sp` é simulado em nível de componente contra o comportamento do `.lib`. Células combinacionais são testadas em todas as combinações de entrada; flip-flops, com uma sequência aleatória de dados, clock e reset. Uma montagem errada é barrada antes de chegar à placa.
+2. **Função:** cada `.sp` é simulado em nível de componente contra o comportamento do `.lib`. Células combinacionais são testadas em todas as combinações de entrada; flip-flops, com uma sequência aleatória de dados, clock e reset; latches, com dados e enable mudando em passos separados (transparente e travado). Uma montagem errada é barrada antes de chegar à placa.
 
 ### Famílias incluídas
 
@@ -114,11 +115,26 @@ A cada execução, antes da síntese:
 | BUF | 4 | 6 |
 | DFF | 26 (6 NANDs) | 35 (6 NORs + inversor de clock) |
 | DFFR (clear assíncrono ativo baixo) | 32 | 42 |
+| DLAT (latch D, transparente com E = 1) | 16 (4 NANDs) | 23 (4 NORs + inversor) |
+
+A família de relés (`lib/relay`) tem INV, BUF, AND2, NAND2, OR2, NOR2, XOR2, XNOR2 e MUX2 com 1 ou 2 relés (o contato é uma chave bidirecional: o MUX2 sai com 1 relé e o XOR2 com 2), DFF com 4, DFFR com 6 e DLAT com 2, cada bobina com seu diodo. O relé é genérico (5 pinos em grade de 2,54 mm): troque a geometria e a pinagem em `footprints.json` e `parts.json` pelas do relé escolhido antes de fabricar.
 
 Notas:
 - **CMOS sem portas de transmissão:** o diodo de corpo do MOSFET discreto impede que ele funcione como chave bidirecional.
 - **NOR e NAND no RTL:** a NOR é a porta natural dessa família, com transistores em paralelo. A NAND2 empilha dois NPNs em série: a saída só vai a 0 com os dois saturados, e o nível baixo fica em ~2 Vce(sat) (~0,2–0,3 V), ainda abaixo do Vbe que liga a porta seguinte. Não há NAND3: com três NPNs empilhados a margem de ruído no 0 fica pequena demais.
 - **Valores do RTL:** pull-up de 1 kΩ e resistor de base de 10 kΩ, a 5 V. Cada porta com saída em 0 consome cerca de 5 mA, e o fan-out fica limitado a 8 (`max_fanout`); pelo cálculo de pior caso (β ≥ 110, folga 3×) o limite elétrico seria 15 cargas de inversor. O fluxo avisa no relatório as nets que passam do limite.
+
+### Latches
+
+Um `always @*` que não atribui a saída em todos os caminhos vira latch no Yosys. A célula de latch declara um grupo `latch()` no `.lib`:
+
+```
+latch(IQ, IQN) { enable : "E"; data_in : "D"; }
+```
+
+O `dfflibmap` do Yosys só mapeia flip-flops, então o fluxo gera um `latch_map.v` a partir dessas células e roda `dfflegalize` + `techmap` antes do ABC. Enable ativo baixo vira inversor + DLAT; clear e preset viram lógica na entrada. Sem célula de latch na família, um latch inferido fica sem mapear e o fluxo para com erro logo depois da síntese.
+
+Na simulação de componentes, uma entrada de bloco que passa por contato de relé (XOR, MUX, latch) entra por um buffer: com a bobina ainda em X, o Icarus deixaria o X voltar pelo contato até a fonte da entrada, o que pode travar um laço em X. No relé real o contato abre antes de fechar e a entrada não é dirigida de volta.
 
 ### Criar uma família nova
 

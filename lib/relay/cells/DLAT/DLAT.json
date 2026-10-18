@@ -1,0 +1,4 @@
+{
+  "description": "latch D transparente com E = 1: K1 liga a bobina de K2 a D (E energizado) ou à própria saída (E solto), e K2 se autotrava",
+  "max_fanout": 8
+}

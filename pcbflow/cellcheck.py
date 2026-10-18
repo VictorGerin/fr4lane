@@ -1,6 +1,7 @@
 """Confere, por simulação, que a montagem (.sp) de cada célula faz o que o
 Liberty (.lib) declara. Combinacionais: todas as combinações de entrada.
-Sequenciais: sequência aleatória de dados, bordas de clock e resets."""
+Sequenciais: sequência aleatória de dados, bordas de clock (ou enable, nos
+latches) e resets."""
 
 import shutil
 import subprocess
@@ -47,10 +48,38 @@ def check_cells(lib, outdir):
             compare.append(f"      if ({pre}{o}_r !== 1'bx && {pre}{o}_i !== {pre}{o}_r) begin "
                            f"$display(\"CELLFAIL {name}.{o} entradas=%b obtido=%b esperado=%b\", "
                            f"{ins}, {pre}{o}_i, {pre}{o}_r); fails = fails + 1; end")
-        if not cell.ff:
+        if not cell.seq:
             n = len(cell.inputs)
             body.append(f"    for (k = 0; k < {2 ** n}; k = k + 1) begin")
             body.append(f"      {ins} = k; #1;")
+            body += compare
+            body.append("    end")
+        elif cell.latch:
+            # latch: D e enable mudam em passos separados (mudar os dois juntos
+            # é corrida no circuito real); confere transparente e travado
+            lt = cell.latch
+            en = sorted(liberty.expr_vars(liberty.parse_expr(lt["enable"])))[0]
+            asyn = {}
+            for key in ("clear", "preset"):
+                if key in lt:
+                    for v in liberty.expr_vars(liberty.parse_expr(lt[key])):
+                        asyn[v] = _inactive_value(lt[key], v)
+            data = [p for p in cell.inputs if p != en and p not in asyn]
+            body.append(f"    {pre}{en} = 1;")
+            for p in data:
+                body.append(f"    {pre}{p} = 0;")
+            for p, v in asyn.items():
+                body.append(f"    {pre}{p} = {1 - v}; #2; {pre}{p} = {v};")
+            body.append("    #5;")
+            body.append("    for (k = 0; k < 400; k = k + 1) begin")
+            for p in data:
+                body.append(f"      {pre}{p} = $random;")
+            body.append("      #5;")
+            body += compare
+            body.append(f"      {pre}{en} = $random;")
+            for p, v in asyn.items():
+                body.append(f"      {pre}{p} = (($random & 7) == 0) ? {1 - v} : {v};")
+            body.append("      #5;")
             body += compare
             body.append("    end")
         else:

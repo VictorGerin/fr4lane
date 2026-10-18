@@ -205,7 +205,7 @@ class Library:
                 except liberty.LibertyError as e:
                     p.append(f"{name}.lib: {e}")
                     continue
-                allowed = set(cell.inputs) | ({cell.ff["iq"], cell.ff["iqn"]} if cell.ff else set())
+                allowed = set(cell.inputs) | ({cell.seq["iq"], cell.seq["iqn"]} if cell.seq else set())
                 extra = liberty.expr_vars(ast) - allowed
                 if extra:
                     p.append(f"{name}.lib: function de {pin} usa {sorted(extra)}")
@@ -252,6 +252,40 @@ class Library:
         out.append("}")
         Path(path).write_text("\n".join(out) + "\n", encoding="utf-8")
 
+    def latch_techmap(self):
+        """Mapeamento dos latches para as células latch() da biblioteca (o
+        dfflibmap do Yosys só mapeia flip-flops): (tipos internos aceitos pelo
+        dfflegalize, Verilog do techmap) ou None se a família não tem latch.
+        Usa a célula de menor área para cada polaridade de enable; a que faltar
+        o dfflegalize monta com um inversor."""
+        variants = {v for names in self.variants.values() for v in names}
+        best = {}
+        for cell in self.cells.values():
+            lt = cell.latch
+            if not lt or cell.name in variants or "clear" in lt or "preset" in lt:
+                continue
+            en, din = liberty.parse_expr(lt["enable"]), liberty.parse_expr(lt["data_in"])
+            q = [o for o in cell.outputs if cell.pins[o]["function"].strip() == lt["iq"]]
+            if din[0] != "var" or not q:
+                continue
+            if en[0] == "var":
+                kind, pin = "P", en[1]
+            elif en[0] == "not" and en[1][0] == "var":
+                kind, pin = "N", en[1][1]
+            else:
+                continue
+            if kind not in best or cell.area < best[kind][0].area:
+                best[kind] = (cell, pin, din[1], q[0])
+        if not best:
+            return None
+        cells, text = [], ["// latches internos do Yosys -> células latch() da biblioteca (gerado pelo pcbflow)"]
+        for kind, (cell, en, din, q) in sorted(best.items()):
+            cells.append(f"$_DLATCH_{kind}_")
+            text += [f"module \\$_DLATCH_{kind}_ (input E, input D, output Q);",
+                     f"  {cell.name} _TECHMAP_REPLACE_ (.{en}(E), .{din}(D), .{q}(Q));",
+                     "endmodule"]
+        return cells, "\n".join(text) + "\n"
+
     def write_verilog_models(self, path):
         """Modelos comportamentais (a partir do Liberty) para a simulação gate-level."""
         out = ["// Modelos das células gerados do Liberty pelo pcbflow", "`timescale 1ns/1ps"]
@@ -281,6 +315,19 @@ class Library:
                     sens.append(f"posedge {k}_")
                     body.append(f"if ({k}_) {iq} <= {val}; else ")
             out.append(f"  always @({' or '.join(sens)}) {''.join(body)}{iq} <= {nxt};")
+        elif cell.latch:
+            lt = cell.latch
+            iq, iqn = lt["iq"], lt["iqn"]
+            en = liberty.to_verilog(liberty.parse_expr(lt["enable"]))
+            din = liberty.to_verilog(liberty.parse_expr(lt["data_in"]))
+            body = []
+            for k, val in (("clear", "1'b0"), ("preset", "1'b1")):
+                if k in lt:
+                    body.append(f"if ({liberty.to_verilog(liberty.parse_expr(lt[k]))}) {iq} = {val}; else ")
+            out.append(f"  reg {iq};")
+            out.append(f"  wire {iqn} = ~{iq};")
+            # transparente enquanto enable = 1; com enable = 0 guarda o último valor
+            out.append(f"  always @* {''.join(body)}if ({en}) {iq} = {din};")
         for o in cell.outputs:
             expr = liberty.to_verilog(liberty.parse_expr(cell.pins[o]["function"]))
             out.append(f"  assign #0.01 {o} = {expr};")

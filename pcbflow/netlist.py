@@ -162,7 +162,7 @@ def load_yosys_json(path, top, lib, hier_path=None):
             raise ValueError(f"célula {ctype} ({yname}) não está na biblioteca — "
                              "o Yosys deixou algo sem mapear")
         pins = {p: net_of(b[0]) for p, b in c["connections"].items()}
-        if lib.cells[ctype].ff:
+        if lib.cells[ctype].seq:
             counters["ff"] += 1
             inst = f"FF{counters['ff']}"
         else:
@@ -272,11 +272,27 @@ def write_switch_level_verilog(lib, design, path, module_name=None):
             lines.append(f"  reg {dly};")
             lines.append(f"  always @({raw}) {dly} <= #0.01 {raw};")
             lines.append(f"  assign {ident(out)} = {dly};")
+    # Contato de relé que passa uma ENTRADA do bloco adiante (XOR, MUX, latch):
+    # na simulação ela entra por um buffer. Com a bobina em X a chave conduz
+    # "talvez" e o Icarus deixaria o X voltar pela entrada até quem a dirige,
+    # o que pode travar um laço (latch -> XOR -> entrada do latch) em X. No relé
+    # real o contato abre antes de fechar e a entrada não é dirigida de volta.
+    # Um buffer por bloco: um bloco não contamina os outros que leem a mesma net.
     for b in design.blocks:
         outs = set(b.outputs)
+        ins = set()
+        for p in b.parts:
+            if lib.parts[p.model]["kind"] == "relay":
+                ins |= {p.pins[r] for r in ("COM", "NO", "NC")
+                        if p.pins[r] in b.inputs and p.pins[r] not in (design.vdd, design.gnd)}
+        for n in sorted(ins):
+            lines.append(f"  wire {ident(f'{n}$in.{b.name}')};")
+            lines.append(f"  assign {ident(f'{n}$in.{b.name}')} = {ident(n)};")
         for p in b.parts:
             kind = lib.parts[p.model]["kind"]
             pins = {r: (n + "$raw" if n in outs and r not in CONTROL_ROLES else n) for r, n in p.pins.items()}
+            if kind == "relay":
+                pins.update({r: f"{pins[r]}$in.{b.name}" for r in ("COM", "NO", "NC") if pins[r] in ins})
             inst = ident(f"{b.name}.{p.name}")
             if kind in SIM_PRIMITIVE:
                 prim, o, i, c = SIM_PRIMITIVE[kind]

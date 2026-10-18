@@ -179,7 +179,8 @@ def main(argv=None):
         lib.write_verilog_models(models)
 
         clock.stage(f"[1/6] Síntese Yosys de '{args.top}'")
-        json_path, gates_v, stat, hier_json = synth.run_yosys(args.src, args.top, liberty, out, flatten=args.flatten)
+        json_path, gates_v, stat, hier_json = synth.run_yosys(args.src, args.top, liberty, out, flatten=args.flatten,
+                                                                latches=lib.latch_techmap())
         stat_text = stat.read_text()
         with progress.Progress("leitura do netlist e expansão em componentes", tick=True):
             design = netlist.load_yosys_json(json_path, args.top, lib, hier_json)

@@ -1,0 +1,13 @@
+/* DLAT — latch D transparente com E = 1: K1 liga a bobina de K2 a D (E energizado) ou à própria saída (E solto), e K2 se autotrava */
+library(relay_DLAT) {
+  cell(DLAT) {
+    area : 4;
+    latch(IQ, IQN) {
+      enable : "E";
+      data_in : "D";
+    }
+    pin(D) { direction : input; }
+    pin(E) { direction : input; }
+    pin(Q) { direction : output; function : "IQ"; }
+  }
+}

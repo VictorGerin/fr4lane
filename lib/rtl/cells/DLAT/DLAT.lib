@@ -1,0 +1,13 @@
+/* DLAT — latch D transparente com E = 1 (latch SR de NORs com entrada controlada; 4 NORs + inversor) */
+library(rtl_DLAT) {
+  cell(DLAT) {
+    area : 23;
+    latch(IQ, IQN) {
+      enable : "E";
+      data_in : "D";
+    }
+    pin(D) { direction : input; }
+    pin(E) { direction : input; }
+    pin(Q) { direction : output; function : "IQ"; }
+  }
+}

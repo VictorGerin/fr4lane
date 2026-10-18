@@ -1,6 +1,6 @@
 """Leitura de arquivos Liberty (.lib) e das expressões booleanas de 'function'.
 
-Só o necessário para o pcbflow: grupos, atributos, células, pinos e ff().
+Só o necessário para o pcbflow: grupos, atributos, células, pinos, ff() e latch().
 Os trechos de texto de cada cell() são preservados para montar a biblioteca
 unificada que o Yosys lê, sem reformatar o que o usuário escreveu.
 """
@@ -109,6 +109,12 @@ class LibCell:
     ff: dict = None       # clocked_on, next_state, clear, preset, iq, iqn
     text: str = ""
     source: str = ""
+    latch: dict = None    # enable, data_in, clear, preset, iq, iqn
+
+    @property
+    def seq(self):
+        """Estado interno da célula sequencial (ff ou latch), ou None."""
+        return self.ff or self.latch
 
     @property
     def inputs(self):
@@ -139,15 +145,20 @@ def read_cells(path):
                 pins[pname] = {"direction": p.attrs.get("direction", ""),
                                "function": p.attrs.get("function", ""),
                                "clock": p.attrs.get("clock", "false") == "true"}
-        if g.groups("bus") or g.groups("latch"):
-            raise LibertyError(f"{path}: célula {g.args[0]}: bus/latch não suportados")
-        ff = None
-        if g.groups("ff"):
-            f = g.groups("ff")[0]
-            ff = dict(f.attrs)
-            ff["iq"], ff["iqn"] = (f.args + ["", ""])[:2]
-        cells.append(LibCell(g.args[0], float(g.attrs.get("area", 0)), pins, ff,
-                             text[g.start:g.end], str(path)))
+        if g.groups("bus"):
+            raise LibertyError(f"{path}: célula {g.args[0]}: bus não suportado")
+        state = {}
+        for kind in ("ff", "latch"):
+            if g.groups(kind):
+                f = g.groups(kind)[0]
+                state[kind] = dict(f.attrs)
+                state[kind]["iq"], state[kind]["iqn"] = (f.args + ["", ""])[:2]
+        if len(state) > 1:
+            raise LibertyError(f"{path}: célula {g.args[0]}: ff() e latch() na mesma célula")
+        if "latch" in state and not {"enable", "data_in"} <= set(state["latch"]):
+            raise LibertyError(f"{path}: célula {g.args[0]}: latch() precisa de enable e data_in")
+        cells.append(LibCell(g.args[0], float(g.attrs.get("area", 0)), pins, state.get("ff"),
+                             text[g.start:g.end], str(path), state.get("latch")))
     return cells
 
 
@@ -256,17 +267,19 @@ def eval_expr(ast, env):
 
 def same_function(a, pin_a, b, pin_b):
     """As saídas pin_a de a e pin_b de b computam a mesma coisa? Combinacionais:
-    tabela-verdade. Flip-flops: o mesmo ff() e a mesma função do estado interno."""
+    tabela-verdade. Flip-flops e latches: o mesmo ff()/latch() e a mesma função
+    do estado interno."""
     ren_a, ren_b = {}, {}
-    if bool(a.ff) != bool(b.ff):
+    if bool(a.ff) != bool(b.ff) or bool(a.latch) != bool(b.latch):
         return False
-    if a.ff:
-        ren_a = {a.ff["iq"]: "$IQ", a.ff["iqn"]: "$IQN"}
-        ren_b = {b.ff["iq"]: "$IQ", b.ff["iqn"]: "$IQN"}
-        for key in ("clocked_on", "next_state", "clear", "preset"):
-            if (key in a.ff) != (key in b.ff):
+    sa, sb = a.seq, b.seq
+    if sa:
+        ren_a = {sa["iq"]: "$IQ", sa["iqn"]: "$IQN"}
+        ren_b = {sb["iq"]: "$IQ", sb["iqn"]: "$IQN"}
+        for key in ("clocked_on", "next_state", "enable", "data_in", "clear", "preset"):
+            if (key in sa) != (key in sb):
                 return False
-            if key in a.ff and not _same_expr(a.ff[key], {}, b.ff[key], {}):
+            if key in sa and not _same_expr(sa[key], {}, sb[key], {}):
                 return False
     return _same_expr(a.pins[pin_a]["function"], ren_a, b.pins[pin_b]["function"], ren_b)
 
