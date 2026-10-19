@@ -1,0 +1,12 @@
+{
+  "_comment": "Floorplan do exemplo demo_top (família RTL). Abra com: pcbflow-fpedit demo_top.floorplan.json --lib rtl",
+  "board": { "width": 256, "height": 258 },
+  "modules": {
+    "u_add": { "type": "region", "rect": [20, 5, 215, 110] },
+    "u_cnt": { "type": "fence",  "rect": [20, 131, 120, 124] },
+    "u_reg": { "type": "fence",  "rect": [145, 131, 95, 124] }
+  },
+  "keepouts": [
+    { "name": "furo_fixacao", "rect": [137, 117, 10, 10], "what": ["place", "route"] }
+  ]
+}

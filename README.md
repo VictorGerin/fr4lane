@@ -12,7 +12,11 @@ Verilog ──Yosys/ABC──▶ células (.lib) ──expansão (.sp)──▶ 
 
 É um fluxo de projeto de chip (síntese, biblioteca de células, floorplan, placement, roteamento, verificação) aplicado a uma PCB. Serve para construir computadores e circuitos digitais "à moda antiga", com portas lógicas visíveis, a partir de um RTL comum.
 
-**Exemplo de resultado:** a ALU de 32 bits do [riscv-pipelined](https://github.com/VictorGerin/riscv-pipelined) na família RTL vira uma placa de 860 x 681 mm com 3 234 transistores BC548 e 4 908 resistores, totalmente roteada em 4 camadas (66 mil trilhas, 6 mil vias), com 0 erros no DRC do KiCad. A geração leva cerca de 17 minutos, com os somadores e os estágios do shifter montados como [macros](#macros-fluxo-hierárquico).
+<p align="center">
+  <img src="docs/img/pcb_3d.jpg" alt="Placa do exemplo demo_top na família RTL, no visualizador 3D do KiCad" width="820">
+</p>
+
+**Exemplo de resultado:** o [`demo_top`](#exemplo-completo) (somador de 8 bits, contador e registrador) na família RTL vira a placa acima, de 256 x 258 mm, com 340 transistores BC548 e 518 resistores, 100 % roteada em 4 camadas, com 0 erros no DRC do KiCad, em pouco mais de 1 minuto. Em escala maior, uma ALU de 32 bits na família RTL vira uma placa de 860 x 681 mm com 3 234 transistores BC548 e 4 908 resistores, totalmente roteada em 4 camadas (66 mil trilhas, 6 mil vias), com 0 erros no DRC do KiCad. A geração leva cerca de 17 minutos, com os somadores e os estágios do shifter montados como [macros](#macros-fluxo-hierárquico).
 
 **O que tem:**
 
@@ -25,7 +29,7 @@ Verilog ──Yosys/ABC──▶ células (.lib) ──expansão (.sp)──▶ 
 - placas de 4 camadas (VDD e GND em planos) ou de [2 camadas](#placa-de-2-camadas);
 - projeto KiCad com grupos por módulo, modelos 3D, lista de materiais e DRC.
 
-**Sumário:** [Instalação](#instalação) · [Uso](#uso) · [Como funciona](#como-funciona) · [Bibliotecas de células](#bibliotecas-de-células) · [Saídas](#saídas) · [Revisar no KiCad](#como-revisar-no-kicad) · [Módulos e macros](#módulos-na-placa) · [Montagem da placa](#como-a-placa-é-montada) · [Floorplan](#floorplan-posição-dos-módulos-e-keepouts) · [Editor visual](#editor-visual) · [2 camadas](#placa-de-2-camadas) · [Testes](#testes) · [Arquitetura](#arquitetura-do-código) · [Limitações](#limitações-conhecidas) · [Licença](#licença)
+**Sumário:** [Instalação](#instalação) · [Uso](#uso) · [Exemplo completo](#exemplo-completo) · [Como funciona](#como-funciona) · [Bibliotecas de células](#bibliotecas-de-células) · [Saídas](#saídas) · [Revisar no KiCad](#como-revisar-no-kicad) · [Módulos e macros](#módulos-na-placa) · [Montagem da placa](#como-a-placa-é-montada) · [Floorplan](#floorplan-posição-dos-módulos-e-keepouts) · [Editor visual](#editor-visual) · [2 camadas](#placa-de-2-camadas) · [Testes](#testes) · [Arquitetura](#arquitetura-do-código) · [Limitações](#limitações-conhecidas) · [Licença](#licença)
 
 ## Instalação
 
@@ -102,6 +106,34 @@ Opções úteis: `--effort` (esforço do placement), `--row-gap`/`--part-gap` (d
 **Roteamento retomável.** Ao fim de cada iteração o roteador grava um ponto de controle (`route_state.pkl`: os caminhos de cada net e o histórico de disputa). Se a rodada for interrompida (Ctrl+C, o *Cancelar* do editor, queda), rodar de novo com as mesmas entradas reaproveita o placement e **continua da última iteração completa** (`retomado do ponto de controle: 3 iteração(ões) já feita(s)`), com o mesmo resultado de uma rodada sem interrupção. Com o roteamento já concluído (ex.: o DRC falhou depois), a rodada seguinte o reaproveita inteiro. O ponto de controle só vale para a mesma placa e a mesma versão do roteador; `--fresh` começa do zero. A retomada é entre iterações: uma iteração interrompida no meio é refeita.
 
 **Progresso.** As etapas longas mostram o andamento: no terminal, uma linha reescrita no lugar; num arquivo ou pipe, uma linha a cada ~30 s. O anelamento do placement e cada iteração do roteamento têm porcentagem e estimativa do que falta (no roteamento, cada net pesa pelo tamanho, porque as maiores ficam por último); a síntese mostra o passo do Yosys (ex.: `passo 16/25: ABC`) e a simulação, a última linha do testbench. Cada etapa termina com o seu tempo (`etapa: 2 min 10 s`).
+
+## Exemplo completo
+
+A pasta [`examples/demo`](examples/demo) tem um projeto pronto: o `demo_top` junta um somador de 8 bits (dois `add4`, cada um com quatro somadores completos `fa`), um contador de 4 bits com reset assíncrono e um registrador de 4 bits, sem fios em comum, de modo que cada bloco ganha a sua área na placa. O `pcbflow.json` aponta os fontes e o floorplan, então basta:
+
+```sh
+cd examples/demo
+pcbflow --top demo_top --lib rtl                      # placa completa em build/pcb/demo_top_rtl/
+pcbflow-fpedit demo_top.floorplan.json --lib rtl      # abre o floorplan no editor visual
+```
+
+**Floorplan no editor.** O somador fica numa *region* em cima, o contador e o registrador em *fences* lado a lado embaixo, e um keepout (hachurado em vermelho) reserva o lugar de um furo de fixação. Por baixo das áreas aparecem as fileiras e os componentes da última rodada; à direita, quanto cada módulo precisa e quanto a área oferece:
+
+<p align="center">
+  <img src="docs/img/fpedit.png" alt="Editor de floorplan (pcbflow-fpedit) com o demo_top: region do somador, fences do contador e do registrador e um keepout" width="900">
+</p>
+
+**Roteamento.** As camadas de cobre de sinal no KiCad: trilhas horizontais na F.Cu (vermelho) e verticais na B.Cu (azul); VDD e GND ficam nos planos internos. Os contornos tracejados são as áreas dos módulos, com o nome da instância:
+
+<p align="center">
+  <img src="docs/img/pcb_cobre.png" alt="Camadas F.Cu e B.Cu da placa do demo_top, com as áreas dos módulos" width="820">
+</p>
+
+**Montagem.** Cada porta RTL é um ou mais BC548 com resistores de base (10k) e um resistor de coletor (1k), arrumados em fileiras; os modelos 3D são os oficiais do KiCad:
+
+<p align="center">
+  <img src="docs/img/pcb_3d_detalhe.jpg" alt="Detalhe 3D das portas montadas com transistores BC548 e resistores" width="820">
+</p>
 
 ## Como funciona
 
@@ -274,7 +306,7 @@ A hierarquia do Verilog é mantida até a placa:
 - **KiCad:** grupos aninhados (módulo > submódulo > célula), um contorno tracejado com o nome do módulo na camada *User.Drawings* e a propriedade `Module` em cada componente.
 - **Referências** numeradas por módulo: cada módulo tem uma faixa contínua (`u_and: Q1–Q4, R1–R7`), listada no `report.md`.
 
-Para ver cada módulo isolado na placa, instancie-os num topo sem fios em comum (ex.: o `basic_top` do projeto [riscv-pipelined](https://github.com/VictorGerin/riscv-pipelined), que junta portas, somadores e flip-flops).
+Para ver cada módulo isolado na placa, instancie-os num topo sem fios em comum (ex.: o [`demo_top`](#exemplo-completo), que junta um somador, um contador e um registrador).
 
 ### Macros (fluxo hierárquico)
 
@@ -292,7 +324,7 @@ ou, no floorplan, `"macros": ["adder", "adder_16bit"]`. Um macro é um **tipo** 
 4. **Montagem:** cada instância recebe uma cópia do seu molde (componentes, trilhas e vias, com nets e instâncias renomeadas), num retângulo reservado com um canal livre de 1,5 mm em volta para chegar aos pinos. O resto do circuito ("cola") é posicionado normalmente, puxado pelos pinos dos macros, e o roteamento de cima só liga os pinos e os pads da cola: muito menos nets e buscas menores.
 5. **Onde fica cada macro:** sem floorplan, os macros vão para o alto da placa, em prateleiras, e a cola vai para as fileiras de baixo. Com floorplan, uma fence/region com o caminho da instância (ex.: `add_comp_inst.main_adder`) diz onde ela fica (a área tem de comportar o macro mais o canal; o erro diz o tamanho necessário); sem isso, o macro vai para dentro da área do módulo que o contém (empacotado a partir do canto superior esquerdo) ou, se nenhum módulo acima dele tem área, para uma faixa abaixo das áreas declaradas. O log mostra o tamanho de cada molde para dimensionar as áreas.
 
-Instâncias do mesmo tipo podem ganhar moldes diferentes: no `fanout_test` do riscv-pipelined, a `u_and2` alimenta 16 NOTs, o sizing a troca por `AND2_X2` e ela fica com molde próprio, maior. O cobre de um macro pronto é obstáculo para as rotas de fora (até da própria net, que só entra pelo pino), mas o espaço livre dentro dele continua disponível para elas.
+Instâncias do mesmo tipo podem ganhar moldes diferentes: se uma instância `u_and2` alimenta 16 NOTs, o sizing a troca por `AND2_X2` e ela fica com molde próprio, maior. O cobre de um macro pronto é obstáculo para as rotas de fora (até da própria net, que só entra pelo pino), mas o espaço livre dentro dele continua disponível para elas.
 
 A simulação de componentes, a verificação de conectividade e o DRC continuam sobre a placa inteira, então um erro de montagem aparece. O editor de floorplan escolhe os macros e mostra onde cada um fica (veja [Macros no editor](#macros-no-editor)). Limites: só placas de 4 camadas (VDD/GND nos planos internos); e os pinos são escolhidos só pelo lado de dentro do macro (o topo não opina).
 
@@ -403,12 +435,12 @@ Ajuste avançado: `"density"` numa fence/region fixa uma densidade **acima** da 
 
 Fora das fences/regions, os módulos sem área se agrupam a 80% das fileiras livres (`--density` muda isso; 1 = compacto). Sem floorplan, as regiões automáticas já saem justas (8% de folga), e a densidade só reparte essa folga dentro das fileiras.
 
-No `basic_top` do riscv-pipelined em CMOS (com o floorplan de lá), as duas formas saem 100% roteadas:
+No [`demo_top`](#exemplo-completo) em RTL (com o floorplan do exemplo), as duas formas saem 100% roteadas:
 
 | | HPWL | Trilhas / vias |
 |---|---:|---:|
-| densidade calculada (padrão) | 5171 mm | 1302 / 398 |
-| `"density": 1` em todas as áreas e `--density 1` (comportamento antigo) | 4686 mm | 1361 / 373 |
+| densidade calculada (padrão) | 15 019 mm | 5272 / 346 |
+| `"density": 1` em todas as áreas e `--density 1` (comportamento antigo) | 14 072 mm | 5210 / 357 |
 
 **Verificação.** O passo 5/6 confere por conta própria que todo componente de um módulo está na sua fence/region, que nenhum de fora invadiu uma fence e que nada caiu num keepout.
 
@@ -417,8 +449,8 @@ No `basic_top` do riscv-pipelined em CMOS (com o floorplan de lá), as duas form
 ### Editor visual
 
 ```sh
-pcbflow-fpedit rtl/basic/basic_top.floorplan.json             # abre um floorplan (criado ao salvar se não existir)
-pcbflow-fpedit rtl/basic/basic_top.floorplan.json --lib rtl   # já com a família RTL no menu
+pcbflow-fpedit examples/demo/demo_top.floorplan.json           # abre um floorplan (criado ao salvar se não existir)
+pcbflow-fpedit examples/demo/demo_top.floorplan.json --lib rtl # já com a família RTL no menu
 pcbflow-fpedit                                                # sem arquivo: escolhe o top pelo Abrir…
 ```
 
@@ -435,13 +467,13 @@ Abre um servidor local (só em `127.0.0.1`; `--host`/`--port` mudam isso) e o na
 
 Antes de rodar, o editor salva o floorplan. Ao lado do estado da execução, uma barra mostra a etapa em andamento, com porcentagem e estimativa quando a etapa as tem. Depois de um ② Placement, o ③ Gerar PCB reaproveita o placement se o floorplan e o resto não mudaram. O log aparece ao vivo no painel de baixo (clique para abrir), e uma execução por vez pode ser cancelada: o cancelamento derruba a árvore inteira de processos (`python`, `yosys`, `iverilog`, `vvp`), e ela também morre se o editor for fechado. O comando é montado pelo servidor a partir de listas fechadas (ação, família, camadas), nunca de texto vindo da página.
 
-Para desenhar as fileiras, o placement e a capacidade de cada área, o editor lê o `placement.json` que toda rodada grava. A grade e o quanto cada módulo precisa vêm da síntese e não dependem do floorplan, então basta a ① Síntese para começar; o placement por baixo aparece depois da ② ou da ③. Pelo terminal, o mesmo ciclo é:
+Para desenhar as fileiras, o placement e a capacidade de cada área, o editor lê o `placement.json` que toda rodada grava. A grade e o quanto cada módulo precisa vêm da síntese e não dependem do floorplan, então basta a ① Síntese para começar; o placement por baixo aparece depois da ② ou da ③ (veja a [imagem do editor](#exemplo-completo) no exemplo). Pelo terminal, dentro de `examples/demo`, o mesmo ciclo é:
 
 ```sh
-pcbflow --top basic_top --lib rtl --synth-only               # síntese: mede os módulos
-pcbflow-fpedit rtl/basic/basic_top.floorplan.json             # desenha vendo o tamanho mínimo
-pcbflow --top basic_top --lib rtl --place-only               # placement com o floorplan, sem rotear
-pcbflow --top basic_top --lib rtl                            # fluxo completo com o floorplan
+pcbflow --top demo_top --lib rtl --synth-only               # síntese: mede os módulos
+pcbflow-fpedit demo_top.floorplan.json                      # desenha vendo o tamanho mínimo
+pcbflow --top demo_top --lib rtl --place-only               # placement com o floorplan, sem rotear
+pcbflow --top demo_top --lib rtl                            # fluxo completo com o floorplan
 ```
 
 As três rodadas gravam na mesma pasta, então cada um substitui o `placement.json` do anterior; a rodada só de síntese mostra fileiras e capacidade, sem o placement por baixo. O editor avisa quando um fonte Verilog mudou depois da rodada. A verificação usa as mesmas funções do fluxo: o que o editor aprova o `pcbflow` aceita. Sem rodada, ele só confere o formato.
@@ -472,14 +504,14 @@ Os canais entre fileiras ficam 2,5 mm mais largos para caber os trilhos, e a fam
 
 | | 4 camadas | 2 camadas |
 |---|---|---|
-| `adder`, RTL | 135 x 97 mm | 143 x 112 mm |
-| `basic_top`, RTL | 156 x 149 mm | 174 x 175 mm |
+| `counter4`, RTL | 169 x 117 mm | 177 x 135 mm |
+| `demo_top`, RTL, sem floorplan | 204 x 356 mm | 215 x 383 mm |
 
 Os trilhos de 0,8 mm levam cerca de 2 A em cobre de 1 oz, folga suficiente para as placas deste tamanho. Para projetos com muitas centenas de portas RTL (5 mA por porta com saída em 0), vale conferir a corrente total.
 
 ## Escala (família CMOS)
 
-Módulos do processador do [riscv-pipelined](https://github.com/VictorGerin/riscv-pipelined):
+Módulos de um processador RISC-V de 32 bits com pipeline de 5 estágios:
 
 | Módulo | Transistores |
 |---|---:|
@@ -554,7 +586,7 @@ pcbflow/
   fpedit.py       editor de floorplan: servidor HTTP local e validação
   fpedit.html     a página do editor (sem dependências externas)
   lib/            famílias de células: cmos, rtl, relay e footprints.json
-examples/         counter4.v e o seu testbench
+examples/         counter4.v e o seu testbench; demo/: projeto com vários módulos, pcbflow.json e floorplan
 tests/            suíte pytest (veja Testes)
 ```
 

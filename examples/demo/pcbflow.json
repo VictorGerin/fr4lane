@@ -1,0 +1,5 @@
+{
+  "src":       ["*.v"],
+  "floorplan": ["{top}.floorplan.json"],
+  "out":       "build/pcb"
+}
