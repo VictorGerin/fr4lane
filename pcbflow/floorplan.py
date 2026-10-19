@@ -42,6 +42,13 @@ implementados à parte, uma vez por estrutura, e copiados em cada instância
 ela fica; sem isso, o macro vai para dentro da área do módulo que o contém ou,
 sem nenhuma, para uma faixa abaixo das áreas declaradas (sem floorplan: o alto
 da placa).
+"macro_keepout": true proíbe as trilhas e vias de fora (as do roteamento de
+cima e as do macro que contém outro) no retângulo de cada macro: elas só
+chegam aos pinos, pela borda. Sem ele, o espaço livre de dentro do macro fica
+disponível para as rotas de fora.
+"macro_channel": 4 é a largura (mm) do canal livre em volta de cada macro
+(padrão 1,5): entre dois macros vizinhos ficam dois canais. Mais largo, mais
+espaço para as rotas que passam entre eles, sobretudo com "macro_keepout".
 
 Conectores: "connectors" fixa a borda, a posição e a pinagem das barras de
 pinos de E/S (o que permite casar os conectores de placas vizinhas):
@@ -114,6 +121,8 @@ class Floorplan:
     modules: dict = field(default_factory=dict)   # caminho -> ModuleRule
     keepouts: list = field(default_factory=list)
     macros: list = field(default_factory=list)    # tipos de módulo implementados como macro
+    macro_keepout: bool = False                    # nenhuma rota de fora por cima dos macros
+    macro_channel: float = None                    # canal em volta de cada macro, mm (None: o padrão)
     connectors: list = field(default_factory=list)  # Connector, na ordem do arquivo
 
     def rule_of(self, module_path):
@@ -175,12 +184,20 @@ def parse(data, path="floorplan"):
     """Valida um floorplan já lido do JSON (path só aparece nas mensagens)."""
     if not isinstance(data, dict):
         raise FloorplanError(f"{path}: esperado um objeto JSON")
-    _keys(data, ("board", "modules", "keepouts", "macros", "connectors", "_comment"), path)
+    _keys(data, ("board", "modules", "keepouts", "macros", "macro_keepout", "macro_channel", "connectors", "_comment"), path)
     fp = Floorplan(str(path))
     macros = data.get("macros", [])
     if not isinstance(macros, list) or not all(isinstance(m, str) and m for m in macros):
         raise FloorplanError(f"{path}: 'macros' deve ser uma lista de tipos de módulo (ex.: [\"adder\"])")
     fp.macros = list(macros)
+    if not isinstance(data.get("macro_keepout", False), bool):
+        raise FloorplanError(f"{path}: 'macro_keepout' deve ser true ou false")
+    fp.macro_keepout = data.get("macro_keepout", False)
+    if "macro_channel" in data:
+        v = data["macro_channel"]
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not 0.5 <= v <= 50:
+            raise FloorplanError(f"{path}: 'macro_channel' deve ser a largura do canal em mm, de 0,5 a 50")
+        fp.macro_channel = float(v)
 
     if "board" in data:
         b = data["board"]

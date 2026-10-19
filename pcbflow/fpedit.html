@@ -269,6 +269,7 @@ function ensure() {
 // conectores: os do arquivo ("connectors") e, da verificação, todos os montados
 // (inclusive os automáticos) com a posição de cada pino
 let selConn = null;          // nome do conector selecionado (fora de 'sel', que é de áreas/keepouts)
+let selMacro = null;         // caminho do macro sem fence selecionado (só mostra; não mexe no floorplan)
 const CONN_STEP = 1.27;      // passo de arrasto/setas: meio passo da barra de pinos
 function declared() { return Array.isArray(data.connectors) ? data.connectors : []; }
 function declIdx(name) { return declared().findIndex(c => c.name === name); }
@@ -282,7 +283,8 @@ function fixConn(name) {
                          at: c.at, pins: c.pins.map(p => p[0]) });
   return data.connectors[data.connectors.length - 1].name;
 }
-function selectConn(name) { sel = null; selConn = name; renderAreas(); renderHandles(); renderConns(); renderPanel(); }
+function selectConn(name) { sel = null; selMacro = null; selConn = name; renderAreas(); renderHandles(); renderConns(); renderPanel(); }
+const MACRO_CHANNEL = 1.5;      // canal padrão em volta de cada macro (RING do hier.py)
 function macroTypes() { return Array.isArray(data.macros) ? data.macros : []; }
 function macroOf(path) { return result && result.macros ? result.macros.instances.find(m => m.path === path) || null : null; }
 // o macro (do topo) que contém este caminho, sem ser ele mesmo
@@ -427,10 +429,11 @@ function renderMacros() {
     if (!m.rect) continue;
     const [x0, y0, x1, y1] = m.rect, [ox, oy] = m.origin;
     const grp = el("g", { "data-kind": "macro", "data-key": m.path, style: "cursor: pointer" }, g);
+    const on = selMacro === m.path || (sel && sel.kind === "mod" && sel.key === m.path);
     el("rect", { x: x0, y: y0, width: x1 - x0, height: y1 - y0, fill: "none", stroke: "var(--macro)",
                  "stroke-width": 0.2, "stroke-dasharray": "0.8 0.6" }, grp);
     el("rect", { x: ox, y: oy, width: m.w, height: m.h, fill: "var(--macro)", "fill-opacity": 0.28,
-                 stroke: "var(--macro)", "stroke-width": Math.max(0.35, 2 * mmPerPx()),
+                 stroke: on ? "var(--sel)" : "var(--macro)", "stroke-width": Math.max(0.35, (on ? 3 : 2) * mmPerPx()),
                  "stroke-dasharray": m.measured ? "" : "4 2" }, grp);
     const fs = Math.max(1.6, Math.min(9, m.w / 12));
     const t = el("text", { x: ox + 1, y: oy + fs + 0.6, "font-size": fs, fill: "var(--macro)", "font-weight": 600,
@@ -440,7 +443,7 @@ function renderMacros() {
     t2.textContent = `${fmt(m.w)} x ${fmt(m.h)} mm${m.measured ? "" : " (estimado)"}`;
     el("title", {}, grp).textContent = `macro ${m.path} (${m.type}): ${fmt(m.w)} x ${fmt(m.h)} mm` +
       (m.measured ? "" : " — estimado; rode ② Placement para medir") +
-      (data.modules[m.path] ? "" : "\nClique para criar uma fence do tamanho dele e posicioná-lo");
+      (data.modules[m.path] ? "" : "\nClique para ver as configurações; arraste para fixar a posição (cria uma fence do tamanho dele)");
   }
 }
 
@@ -583,6 +586,8 @@ function renderPanel() {
   const it = selected();
   if (selConn) {
     p.append(connProps(selConn));
+  } else if (selMacro && !data.modules[selMacro] && macroOf(selMacro)) {
+    p.append(macroProps(selMacro));
   } else if (!it) {
     p.className = "hint";
     p.textContent = "Clique numa área ou keepout. Arraste para mover, pelos cantos para redimensionar; setas movem 0,5 mm (Shift: 5 mm), Delete apaga. Arraste o fundo para mover a vista e use a roda para zoom.";
@@ -678,9 +683,9 @@ function renderPanel() {
     const rule = data.modules[path];
     const mac = macroOf(path), outer = insideMacro(path);
     const title = outer ? `Dentro do macro ${outer}: montado junto com ele` : rule ? "Selecionar a área"
-                : mac ? "Criar uma fence do tamanho do macro" : "Criar uma fence para este módulo";
+                : mac ? "Ver o macro (a fence só é criada pelo botão Fixar posição ou arrastando-o)" : "Criar uma fence para este módulo";
     md.append(h("div", { class: "item", style: `padding-left: ${6 + depth * 14}px${outer ? "; opacity: .55" : ""}`, title,
-                         onclick: () => outer ? toast(title) : rule ? select({ kind: "mod", key: path }) : addArea("fence", path) },
+                         onclick: () => outer ? toast(title) : rule ? select({ kind: "mod", key: path }) : mac ? selectMacro(path) : addArea("fence", path) },
       h("span", { class: "swatch", style: `background: ${rule ? COLORS[rule.type] : "transparent"}; border: 1px solid var(--line)` }),
       h("span", {}, path), mac ? h("span", { class: "tag" }, "macro") : null,
       h("span", { class: "muted" }, `${run.module_types[path] || ""} · ${fmt(w)} mm`)));
@@ -714,9 +719,58 @@ function renderMacroPanel() {
       h("b", {}, type), h("span", { class: "muted" }, `${n} instância(s)`),
       size ? h("span", { class: "sz" }, size) : null));
   }
+  box.append(h("label", { class: "mrow", style: "margin-top: 4px",
+                          title: "Grava \"macro_keepout\": true no floorplan. Os canais em volta dos macros têm de comportar as rotas: " +
+                                 "afaste os macros com fences se o roteamento não fechar" },
+    h("input", { type: "checkbox", checked: data.macro_keepout === true, disabled: !chosen.length,
+                 onchange: e => edit(() => { if (e.target.checked) data.macro_keepout = true; else delete data.macro_keepout; }) }),
+    h("b", {}, "Sem rotas por cima dos macros"),
+    h("span", { class: "sz" }, "as trilhas de fora só chegam aos pinos, pela borda")));
+  const channel = h("input", { type: "number", step: 0.5, min: 0.5, max: 50, style: "width: 5em", disabled: !chosen.length,
+    value: data.macro_channel == null ? "" : fmtIn(data.macro_channel), placeholder: fmtIn(MACRO_CHANNEL),
+    onchange: e => edit(() => {
+      const v = parseFloat(e.target.value);
+      if (isNaN(v) || v === MACRO_CHANNEL) delete data.macro_channel;
+      else data.macro_channel = Math.min(50, Math.max(0.5, Math.round(v * 2) / 2));
+    }) });
+  box.append(h("div", { class: "row", style: "margin-top: 4px",
+                        title: "Grava \"macro_channel\" no floorplan: canal livre em volta de cada macro (entre dois vizinhos ficam dois). " +
+                               "Mais largo, mais espaço para as rotas que passam entre eles" },
+    h("label", {}, "Canal em volta"), channel, h("span", { class: "muted" }, `mm (padrão ${fmt(MACRO_CHANNEL)})`)));
   box.append(h("div", { class: "hint", style: "margin-top: 4px" },
     "Macro: posicionado e roteado uma vez e copiado em cada instância. Fica no canto superior esquerdo da fence com o caminho da instância; " +
     "sem fence, dentro da área do módulo que o contém ou numa faixa abaixo das áreas."));
+}
+
+function selectMacro(path) { sel = null; selConn = null; selMacro = path; renderAreas(); renderHandles(); renderMacros(); renderPanel(); }
+// fence do tamanho exato do macro (com o canal), onde ele está agora; false se ele não tem posição
+function fenceForMacro(path) {
+  const mac = macroOf(path);
+  if (!mac || !mac.rect) return false;
+  const [aw, ah] = macroArea(mac);
+  data.modules[path] = { type: "fence", rect: [snap(mac.rect[0]), snap(mac.rect[1]), aw, ah] };
+  return true;
+}
+// configurações de um macro sem fence: só leitura, com o botão para fixar a posição
+function macroProps(path) {
+  const mac = macroOf(path);
+  if (!mac) return h("div", { class: "hint" }, "Macro não encontrado.");
+  const [aw, ah] = macroArea(mac);
+  const tpl = run && run.macros && Object.values(run.macros.templates || {}).filter(t => t.type === mac.type);
+  return h("div", {},
+    h("div", { class: "row" }, h("label", {}, "Macro"), h("b", {}, path), h("span", { class: "tag" }, mac.type)),
+    h("div", { class: "row" }, h("label", {}, "Tamanho"),
+      h("span", {}, `${fmt(mac.w)} x ${fmt(mac.h)} mm`), h("span", { class: "muted" }, mac.measured ? "medido" : "estimado")),
+    h("div", { class: "row" }, h("label", {}, "Com o canal"), h("span", {}, `${fmt(aw)} x ${fmt(ah)} mm`),
+      h("span", { class: "muted" }, `canal de ${fmt(result.macros.ring)} mm`)),
+    mac.origin ? h("div", { class: "row" }, h("label", {}, "Posição"), h("span", {}, `x ${fmt(mac.origin[0])}, y ${fmt(mac.origin[1])} mm`),
+      h("span", { class: "muted" }, "automática")) : null,
+    tpl && tpl.length ? h("div", { class: "row" }, h("label", {}, "Moldes"),
+      h("span", {}, tpl.map(t => `${t.cells} portas · ${t.copies} cópia(s)`).join("; "))) : null,
+    h("div", { class: "hint" }, "Sem fence: o fluxo empacota este macro junto com os outros. Fixar a posição cria uma fence do tamanho dele " +
+      "onde ele está; a partir daí os outros macros sem fence são reempacotados sem ele."),
+    h("div", { class: "row" }, h("button", { onclick: () => edit(() => { if (fenceForMacro(path)) { selMacro = null; sel = { kind: "mod", key: path }; } }) },
+      "Fixar posição (criar fence)")));
 }
 
 // área de uma instância de macro: o tamanho que ela precisa e um botão para ajustar
@@ -815,7 +869,7 @@ function pickRun() {
 function runInfo() { return state && runName ? state.runs.find(r => r.name === runName) || null : null; }
 
 // ---------------------------------------------------------------- edição
-function select(it) { selConn = null; sel = it ? (it.kind === "mod" ? { kind: "mod", key: it.key } : { kind: "ko", idx: it.idx }) : null; renderAreas(); renderHandles(); renderPanel(); }
+function select(it) { selConn = null; selMacro = null; sel = it ? (it.kind === "mod" ? { kind: "mod", key: it.key } : { kind: "ko", idx: it.idx }) : null; renderAreas(); renderHandles(); renderMacros(); renderPanel(); }
 function setType(key, t) {
   const m = data.modules[key]; m.type = t;
   if (t !== "guide" && m.near) { m.rect = [m.near[0] - 15, m.near[1] - 10, 30, 20].map(snap); delete m.near; }
@@ -891,14 +945,16 @@ $("svg").addEventListener("mousedown", ev => {
              grp: $("gConns").querySelector(`[data-key="${CSS.escape(c.name)}"]`) };
     ev.preventDefault(); return;
   } else if (ev.button === 0 && grp && grp.getAttribute("data-kind") === "macro") {
-    // arrastar o macro move a fence dele; sem fence, cria uma do tamanho dele ali mesmo
-    const key = grp.getAttribute("data-key"), mac = macroOf(key);
-    const before = snapshot();
-    if (!data.modules[key] && mac && mac.rect) {
-      const [aw, ah] = macroArea(mac);
-      data.modules[key] = { type: "fence", rect: [snap(mac.rect[0]), snap(mac.rect[1]), aw, ah] };
+    // arrastar o macro move a fence dele. Sem fence, o clique só seleciona (mostra as
+    // configurações): a fence, que tira o macro do empacotamento automático e
+    // reposiciona os outros, só nasce quando ele é arrastado de fato
+    const key = grp.getAttribute("data-key");
+    if (!data.modules[key]) {
+      selectMacro(key);
+      drag = { mode: "macro", start: p, cx: ev.clientX, cy: ev.clientY, key, before: snapshot() };
+      ev.preventDefault(); return;
     }
-    if (!data.modules[key]) { ev.preventDefault(); return; }
+    const before = snapshot();
     select({ kind: "mod", key });
     const it = selected();
     drag = { mode: "move", start: p, pos0: [...it.obj.rect], before, obj: it.obj, macro: key };
@@ -921,6 +977,14 @@ window.addEventListener("mousemove", ev => {
     const k = mmPerPx();
     view.x = drag.view0.x - (ev.clientX - drag.cx) * k; view.y = drag.view0.y - (ev.clientY - drag.cy) * k;
     applyView(); return;
+  }
+  if (drag.mode === "macro") {
+    if (Math.hypot(ev.clientX - drag.cx, ev.clientY - drag.cy) < 4) return;
+    const { key, start, before } = drag;
+    if (!fenceForMacro(key)) { drag = null; return; }
+    select({ kind: "mod", key });
+    const it = selected();
+    drag = { mode: "move", start, pos0: [...it.obj.rect], before, obj: it.obj, macro: key };
   }
   const p = toMM(ev), dx = p.x - drag.start.x, dy = p.y - drag.start.y;
   const o = drag.obj;

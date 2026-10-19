@@ -293,6 +293,7 @@ class Router:
                     self.via_static[iy * self.nx + ix] = BLOCK
         self._fixed_copper()
         self._keepouts()
+        self._macro_keepouts()
         for pad in self.b.pads():
             if not pad.net:
                 # pad sem ligação (pino NC de conector): obstáculo para todas as nets
@@ -409,6 +410,26 @@ class Router:
                     if name in k.layers and self.static[i] == FREE:
                         self.static[i] = BLOCK
             for ix, iy, _ in self._points_near(k.rect, r.clearance + r.via_size / 2):
+                self.via_static[iy * self.nx + ix] = BLOCK
+
+    def _macro_keepouts(self):
+        """Com board.macro_keepout, o espaço livre dentro de cada macro também é
+        proibido: trilha nenhuma de fora com o centro no retângulo dele, nem via
+        cujo cobre o alcance. A rota só chega ao pino, que fica na borda: o
+        add_pin, que roda depois, reabre o ponto dele."""
+        if not getattr(self.b, "macro_keepout", False):
+            return
+        g = self.g
+        for x0, y0, x1, y1 in getattr(self.b, "macro_rects", ()):
+            ix0, ix1 = max(0, math.ceil(x0 / g - 1e-9)), min(self.nx - 1, math.floor(x1 / g + 1e-9))
+            iy0, iy1 = max(0, math.ceil(y0 / g - 1e-9)), min(self.ny - 1, math.floor(y1 / g + 1e-9))
+            for iy in range(iy0, iy1 + 1):
+                for ix in range(ix0, ix1 + 1):
+                    for layer in (0, 1):
+                        i = self.node(layer, ix, iy)
+                        if self.static[i] == FREE:
+                            self.static[i] = BLOCK
+            for ix, iy, _ in self._points_near((x0, y0, x1, y1), self.r.via_size / 2):
                 self.via_static[iy * self.nx + ix] = BLOCK
 
     def _halo(self, p):
@@ -918,6 +939,7 @@ def board_key(board):
     for v in board.vias:
         h.update(repr((v.x, v.y, v.net)).encode())
     h.update(repr((getattr(board, "pins", []), getattr(board, "macro_rects", []),
+                   getattr(board, "macro_keepout", False),
                    [(k.rect, k.route, k.layers) for k in getattr(board, "keepouts", [])])).encode())
     return h.hexdigest()
 

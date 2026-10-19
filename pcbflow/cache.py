@@ -28,7 +28,8 @@ PLACE_CODE = ("library.py", "liberty.py", "spice.py", "netlist.py", "synth.py", 
               "hier.py", "route.py")       # com macros, o roteamento deles acontece no placement
 # opções do argparse que mudam a síntese ou o placement
 PLACE_ARGS = ("top", "layers", "effort", "seed", "density", "row_gap", "part_gap",
-              "module_weight", "flatten", "no_size", "no_buffer", "macro", "route_iter")
+              "module_weight", "flatten", "no_size", "no_buffer", "macro", "macro_keepout", "macro_channel",
+              "route_iter")
 NAMES = {"src": "fontes Verilog", "lib": "biblioteca de células", "floorplan": "floorplan",
          "args": "opções do fluxo", "code": "código do pcbflow"}
 

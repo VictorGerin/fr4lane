@@ -99,6 +99,7 @@ class Track:
     net: str
     width: float
     uuid: str = field(default_factory=new_uuid)
+    macro: bool = False  # cobre de um macro já roteado (copiado do molde)
 
 
 @dataclass
@@ -109,6 +110,7 @@ class Via:
     size: float
     drill: float
     uuid: str = field(default_factory=new_uuid)
+    macro: bool = False  # cobre de um macro já roteado (copiado do molde)
 
 
 @dataclass

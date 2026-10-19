@@ -111,6 +111,7 @@ def check_board(board):
             comps[it.net].add(find(i))
     unconnected = {net: len(c) for net, c in comps.items() if len(c) > 1}
     errors += _floorplan_errors(board, items)
+    errors += _macro_errors(board, items)
     return errors, unconnected
 
 
@@ -152,4 +153,22 @@ def _floorplan_errors(board, items):
         for k in fp.keepouts:
             if k.route and set(it.layers) & set(k.layers) and _overlaps(it.rect, k.rect, it.half):
                 errors.append(f"floorplan: {it.ref} [{it.net}] dentro do keepout de roteamento '{k.name}'")
+    return errors
+
+
+def _macro_errors(board, items):
+    """Com macro_keepout, nenhuma trilha ou via de fora (sem a marca de cobre do
+    macro) dentro do retângulo de um macro; a que só encosta na borda, no pino,
+    vale."""
+    if not getattr(board, "macro_keepout", False):
+        return []
+    errors = []
+    for it in items:
+        if it.kind == "pad" or it.obj.macro:
+            continue
+        for r in getattr(board, "macro_rects", ()):
+            if _overlaps(it.rect, r):
+                errors.append(f"macro: {it.ref} [{it.net}] por cima do macro em "
+                              f"({r[0]:g},{r[1]:g})-({r[2]:g},{r[3]:g}) (macro_keepout)")
+                break
     return errors

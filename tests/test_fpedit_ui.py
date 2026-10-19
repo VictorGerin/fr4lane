@@ -138,19 +138,50 @@ def test_marcar_e_desmarcar_tipos(page):
     assert js("return data.macros") == ["fa"]
 
 
-def test_clique_no_macro_cria_fence_do_tamanho_dele(page):
+def test_clique_no_macro_so_mostra_e_botao_fixa(page):
+    """Clicar num macro sem fence só mostra as configurações: nada muda no
+    floorplan nem na posição dos macros. O botão Fixar posição cria a fence."""
     page.open({"macros": ["add4", "fa"]})
     js, d = page.js, page.d
     m = js("return macroOf('hi')")
+    before = js("return result.macros.instances.map(i => [i.path, i.origin])")
     from selenium.webdriver import ActionChains
     g = d.find_element("css selector", "#gMacros [data-key='hi'] rect:nth-child(2)")
     ActionChains(d).move_to_element(g).click().perform()
+    page.settle()
+    assert js("return selMacro") == "hi"
+    assert js("return Object.keys(data.modules || {}).length") == 0 and js("return undoStack.length") == 0
+    assert js("return result.macros.instances.map(i => [i.path, i.origin])") == before
+    props = d.find_element("id", "props").text
+    assert "hi" in props and "automática" in props and "Fixar posição" in props
+    btn = next(b for b in d.find_elements("css selector", "#props button") if b.text.startswith("Fixar posição"))
+    btn.click()
     page.settle()
     r = js("return data.modules.hi.rect")
     ring = js("return result.macros.ring")
     assert r[2] == pytest.approx(m["w"] + 2 * ring, abs=0.5) and r[3] == pytest.approx(m["h"] + 2 * ring, abs=0.5)
     assert js("return result.errors.length") == 0
     assert "Ajustar ao macro" in d.find_element("id", "props").text
+
+
+def test_rotas_por_cima_e_canal_dos_macros(page):
+    page.open({"macros": ["add4", "fa"]})
+    js, d = page.js, page.d
+    box = d.find_element("id", "macros")
+    keep = next(l for l in box.find_elements("css selector", "label.mrow") if "Sem rotas por cima" in l.text)
+    keep.find_element("tag name", "input").click()
+    page.settle()
+    assert js("return data.macro_keepout") is True
+    w0 = js("return result.macros.instances.map(i => i.rect[2] - i.rect[0])")
+    ch = d.find_element("css selector", "#macros input[type=number]")
+    ch.clear()
+    ch.send_keys("4")
+    js("arguments[0].dispatchEvent(new Event('change'))", ch)
+    page.settle()
+    assert js("return data.macro_channel") == 4 and js("return result.macros.ring") == 4
+    w1 = js("return result.macros.instances.map(i => i.rect[2] - i.rect[0])")
+    assert all(b - a == pytest.approx(5, abs=0.01) for a, b in zip(w0, w1))     # 2 x (4 - 1,5)
+    assert js("return result.errors.length") == 0
 
 
 def test_arrastar_macro_move_a_fence(page):

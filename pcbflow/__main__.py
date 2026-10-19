@@ -118,6 +118,12 @@ def main(argv=None):
                     help="tipo de módulo implementado como macro (posicionado e roteado uma vez por "
                          "estrutura e copiado em cada instância); repita para vários. Também pode vir "
                          "em \"macros\" no floorplan")
+    ap.add_argument("--macro-keepout", action="store_true",
+                    help="nenhuma trilha ou via de fora por cima dos macros: as rotas só chegam aos pinos, "
+                         "pela borda (também \"macro_keepout\": true no floorplan)")
+    ap.add_argument("--macro-channel", type=float, metavar="MM",
+                    help=f"largura do canal livre em volta de cada macro (padrão {hier.RING:g} mm, ou "
+                         "\"macro_channel\" do floorplan): canais mais largos dão espaço às rotas entre os macros")
     ap.add_argument("--keep-placement", action="store_true",
                     help="reaproveita o placement salvo mesmo se o código do pcbflow mudou (ex.: um ajuste "
                          "no roteador); fontes, biblioteca, floorplan e opções ainda têm de ser os mesmos")
@@ -264,12 +270,21 @@ def main(argv=None):
             return 2
 
         macros = sorted(set(args.macro) | set(fplan.macros if fplan else ()))
-        clock.stage("[3/6] Placement" + (f" hierárquico (macros: {', '.join(macros)})" if macros else ""))
+        macro_keepout = args.macro_keepout or bool(fplan and fplan.macro_keepout)
+        ring = args.macro_channel or (fplan and fplan.macro_channel) or hier.RING
+        if not 0.5 <= ring <= 50:
+            log("ERRO: --macro-channel deve ser a largura do canal em mm, de 0,5 a 50")
+            return 3
+        clock.stage("[3/6] Placement" + (f" hierárquico (macros: {', '.join(macros)}"
+                                         + ("; sem rotas de fora por cima deles" if macro_keepout else "")
+                                         + (f"; canal de {ring:g} mm" if ring != hier.RING else "") + ")"
+                                         if macros else ""))
         rules = Rules()
         params = _place_params(args)
         try:
             if macros:
-                board, summary = hier.place_hier(lib, design, params, rules, fplan, macros, args.route_iter, log)
+                board, summary = hier.place_hier(lib, design, params, rules, fplan, macros, args.route_iter, log,
+                                                 macro_keepout=macro_keepout, ring=ring)
                 for typ, path, w, h, cells, n_copies, unrouted, secs in summary:
                     log(f"      macro {typ} (molde {path}): {w:g} x {h:g} mm, {cells} portas, "
                         f"{n_copies} cópia(s), {progress.fmt_time(secs)}"

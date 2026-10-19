@@ -17,7 +17,8 @@ compartilham um MOLDE:
      retângulo reservado com um canal livre em volta; o resto ("cola") é
      posicionado normalmente, e o roteador de cima liga os pinos dos macros e
      os pads da cola. O cobre dos macros é obstáculo para ele (até para a
-     própria net, que entra pelo pino); o espaço livre dentro deles, não.
+     própria net, que entra pelo pino); o espaço livre dentro deles, não,
+     a não ser com macro_keepout (--macro-keepout ou no floorplan).
 
 A simulação de componentes, a verificação e o DRC continuam sobre a placa
 inteira. Só para placas de 4 camadas (VDD/GND nos planos internos).
@@ -39,7 +40,7 @@ from .layout import Board, Footprint, Pad, Track, Via
 from .netlist import Design
 from .route import FREE, Router
 
-RING = 1.5        # canal livre em volta de cada macro (acesso aos pinos), mm
+RING = 1.5        # canal livre em volta de cada macro (acesso aos pinos), mm; padrão do "macro_channel"
 MARGIN = 1.5      # borda interna do macro, entre a lógica e os pinos
 LAYERS = ("F.Cu", "B.Cu")
 
@@ -146,16 +147,16 @@ def _maps(info, src, dst):
 
 
 # --------------------------------------------------------------- geometria
-def _pack(sizes, x0, y0, width, g):
-    """Prateleiras: cada macro (w, h) com o canal RING em volta, da esquerda para
+def _pack(sizes, x0, y0, width, g, ring=RING):
+    """Prateleiras: cada macro (w, h) com o canal ring em volta, da esquerda para
     a direita e de cima para baixo. Devolve [(ox, oy, retângulo com o canal)]."""
     out = []
     x, y, shelf = x0, y0, 0.0
     for w, h in sizes:
-        if x > x0 and x + w + 2 * RING > x0 + width + 1e-6:
+        if x > x0 and x + w + 2 * ring > x0 + width + 1e-6:
             x, y, shelf = x0, y + shelf, 0.0
-        ox, oy = _up(x + RING, g), _up(y + RING, g)
-        rect = (ox - RING, oy - RING, ox + w + RING, oy + h + RING)
+        ox, oy = _up(x + ring, g), _up(y + ring, g)
+        rect = (ox - ring, oy - ring, ox + w + ring, oy + h + ring)
         out.append((ox, oy, rect))
         x = rect[2]
         shelf = max(shelf, rect[3] - y)
@@ -181,9 +182,10 @@ def _copy(board, tpl, ox, oy, netmap, cellmap):
                                net=net(p.net) if p.net else "", function=p.function, fp=nf, macro=True))
         board.footprints.append(nf)
     for t in tpl.tracks:
-        board.tracks.append(Track(t.x1 + ox, t.y1 + oy, t.x2 + ox, t.y2 + oy, t.layer, net(t.net), t.width))
+        board.tracks.append(Track(t.x1 + ox, t.y1 + oy, t.x2 + ox, t.y2 + oy, t.layer, net(t.net), t.width,
+                                  macro=True))
     for v in tpl.vias:
-        board.vias.append(Via(v.x + ox, v.y + oy, net(v.net), v.size, v.drill))
+        board.vias.append(Via(v.x + ox, v.y + oy, net(v.net), v.size, v.drill, macro=True))
     if not hasattr(board, "macro_rects"):
         board.macro_rects = []
     board.macro_rects.append((ox, oy, ox + tpl.w, oy + tpl.h))
@@ -246,13 +248,14 @@ def build_template(job):
     blocks = job["blocks"]
     sub = Design(job["path"], [], blocks, job["vdd"], job["gnd"])
     children = job["children"]                      # [(caminho, Template, netmap, cellmap)]
+    ring = job["ring"]
 
     row_pitch = placemod._measure(lib, sub, bare, rules).geo.row_pitch if blocks else 0.0
     glue_w = sum(placemod._measure(lib, sub, bare, rules).width) if blocks else 0.0
-    area = sum((t.w + 2 * RING) * (t.h + 2 * RING) for _, t, _, _ in children) + glue_w * row_pitch
-    width = max([t.w + 2 * RING for _, t, _, _ in children] + [math.sqrt(area) * 1.15, 10.0])
+    area = sum((t.w + 2 * ring) * (t.h + 2 * ring) for _, t, _, _ in children) + glue_w * row_pitch
+    width = max([t.w + 2 * ring for _, t, _, _ in children] + [math.sqrt(area) * 1.15, 10.0])
     origin = _up(MARGIN, g)
-    spots = _pack([(t.w, t.h) for _, t, _, _ in children], origin, origin, width, g)
+    spots = _pack([(t.w, t.h) for _, t, _, _ in children], origin, origin, width, g, ring)
     extra = defaultdict(list)
     for (_, t, netmap, _), (ox, oy, _) in zip(children, spots):
         for n, x, y, _layer in t.pins:
@@ -274,6 +277,7 @@ def build_template(job):
     for (_, t, netmap, cellmap), (ox, oy, _) in zip(children, spots):
         board.pins += _copy(board, t, ox, oy, netmap, cellmap)
 
+    board.macro_keepout = job["macro_keepout"]
     rt = Router(board, log=lambda m: None, edge=False, label=f"macro {job['type']}: ")
     pins = _choose_pins(rt, job["boundary"])
     failed_power = rt.fanout_power()
@@ -291,13 +295,14 @@ def top_macros(modules, types):
     return paths, top
 
 
-def macro_spots(top, boxes, fplan, geo, glue_area, g, errors=None):
+def macro_spots(top, boxes, fplan, geo, glue_area, g, errors=None, ring=RING):
     """Onde fica cada macro do topo: {caminho: (ox, oy, retângulo com o canal)}.
     boxes: {caminho: (tipo, largura, altura)}; glue_area: área de fileira da
     lógica solta (mm²), que entra no empacotamento sem floorplan. O editor de
     floorplan usa a mesma função para mostrar a posição antes de rodar; com
     errors (lista), um macro que não cabe vira mensagem e é posicionado assim
-    mesmo, para o editor continuar desenhando."""
+    mesmo, para o editor continuar desenhando. ring: o canal em volta de cada
+    macro (mm)."""
     def fail(msg):
         if errors is None:
             raise FloorplanError(msg)
@@ -306,9 +311,9 @@ def macro_spots(top, boxes, fplan, geo, glue_area, g, errors=None):
     spot = {}
     if fplan is None:
         sizes = [boxes[m][1:] for m in top]
-        area = sum((w + 2 * RING) * (h + 2 * RING) for w, h in sizes) + glue_area
-        width = max([w + 2 * RING for w, _ in sizes] + [math.sqrt(area) * 1.15])
-        for m, s in zip(top, _pack(sizes, geo.x0, geo.y_top, width, g)):
+        area = sum((w + 2 * ring) * (h + 2 * ring) for w, h in sizes) + glue_area
+        width = max([w + 2 * ring for w, _ in sizes] + [math.sqrt(area) * 1.15])
+        for m, s in zip(top, _pack(sizes, geo.x0, geo.y_top, width, g, ring)):
             spot[m] = s
         return spot
     inside = defaultdict(list)
@@ -318,11 +323,11 @@ def macro_spots(top, boxes, fplan, geo, glue_area, g, errors=None):
         r = fplan.modules.get(m)
         if r is not None and r.type in ("fence", "region"):
             x0, y0, x1, y1 = r.rect
-            if x1 - x0 < w + 2 * RING - 1e-6 or y1 - y0 < h + 2 * RING - 1e-6:
+            if x1 - x0 < w + 2 * ring - 1e-6 or y1 - y0 < h + 2 * ring - 1e-6:
                 fail(f"{fplan.source}: a área de '{m}' ({x1 - x0:g} x {y1 - y0:g} mm) não "
-                                     f"comporta o macro {typ} ({w + 2 * RING:g} x {h + 2 * RING:g} mm "
+                                     f"comporta o macro {typ} ({w + 2 * ring:g} x {h + 2 * ring:g} mm "
                                      "com o canal de acesso aos pinos)")
-            ox, oy = _up(x0 + RING, g), _up(y0 + RING, g)
+            ox, oy = _up(x0 + ring, g), _up(y0 + ring, g)
             spot[m] = (ox, oy, r.rect)
             continue
         anc = [q for q in fplan.modules if m.startswith(q + ".")
@@ -338,14 +343,14 @@ def macro_spots(top, boxes, fplan, geo, glue_area, g, errors=None):
         areas += [k.rect for k in fplan.keepouts]
         y0 = max([geo.y_top] + [r[3] for r in areas])
         sizes = [boxes[m][1:] for m in loose]
-        width = max([w + 2 * RING for w, _ in sizes] +
-                    [math.sqrt(sum((w + 2 * RING) * (h + 2 * RING) for w, h in sizes)) * 1.15])
-        for m, s in zip(loose, _pack(sizes, geo.x0, y0, width, g)):
+        width = max([w + 2 * ring for w, _ in sizes] +
+                    [math.sqrt(sum((w + 2 * ring) * (h + 2 * ring) for w, h in sizes)) * 1.15])
+        for m, s in zip(loose, _pack(sizes, geo.x0, y0, width, g, ring)):
             spot[m] = s
     for q, ms in inside.items():
         x0, y0, x1, y1 = fplan.modules[q].rect
         sizes = [boxes[m][1:] for m in ms]
-        packed = _pack(sizes, x0, y0, x1 - x0, g)
+        packed = _pack(sizes, x0, y0, x1 - x0, g, ring)
         need_w = max(r[2] for _, _, r in packed) - x0
         need_h = max(r[3] for _, _, r in packed) - y0
         if need_w > x1 - x0 + 1e-6 or need_h > y1 - y0 + 1e-6:
@@ -377,9 +382,13 @@ def glue_floorplan(fplan, macro_paths, glue_mods, top, spot):
 
 
 # ------------------------------------------------------------------- topo
-def place_hier(lib, design, params, rules, fplan, types, route_iter, log=print):
+def place_hier(lib, design, params, rules, fplan, types, route_iter, log=print, macro_keepout=False,
+               ring=RING):
     """Placement hierárquico: devolve a placa com os macros já roteados por dentro
-    (o roteamento de cima liga os pinos deles) e um resumo para o log."""
+    (o roteamento de cima liga os pinos deles) e um resumo para o log.
+    macro_keepout: a cola de um molde não roteia por cima dos macros de dentro
+    dele (o roteamento de cima recebe a mesma opção em board.macro_keepout).
+    ring: canal livre em volta de cada macro (mm), no topo e dentro dos moldes."""
     if params.layers != 4:
         raise HierError("macros só em placas de 4 camadas (VDD/GND nos planos internos)")
     paths, info, rep = analyze(design, types)
@@ -411,6 +420,7 @@ def place_hier(lib, design, params, rules, fplan, types, route_iter, log=print):
                     kids.append((c, tpls[rep[c]], netmap, cellmap))
                 jobs.append({"lib": lib, "params": params, "rules": rules, "route_iter": route_iter,
                              "path": p, "type": info[p]["type"], "vdd": design.vdd, "gnd": design.gnd,
+                             "macro_keepout": macro_keepout, "ring": ring,
                              "blocks": [b for i in glue_cells(p) for b in blocks_of[i]],
                              "children": kids, "boundary": info[p]["boundary"],
                              "n_cells": len(info[p]["cells"])})
@@ -435,7 +445,7 @@ def place_hier(lib, design, params, rules, fplan, types, route_iter, log=print):
     glue_design = Design(design.top, design.ports, glue, design.vdd, design.gnd)
     meas = placemod._measure(lib, glue_design, params, rules, fplan)
     boxes = {m: (tpls[rep[m]].type, tpls[rep[m]].w, tpls[rep[m]].h) for m in top}
-    spot = macro_spots(top, boxes, fplan, meas.geo, sum(meas.width) * meas.geo.row_pitch, g)
+    spot = macro_spots(top, boxes, fplan, meas.geo, sum(meas.width) * meas.geo.row_pitch, g, ring=ring)
     syn = glue_floorplan(fplan, paths, {b.module for b in glue}, top, spot)
     extra = defaultdict(list)
     for m in top:
@@ -452,6 +462,7 @@ def place_hier(lib, design, params, rules, fplan, types, route_iter, log=print):
         board.pins += _copy(board, tpls[rep[m]], ox, oy, netmap, cellmap)
     board.keepouts = list(fplan.keepouts) if fplan else []
     board.floorplan = fplan
+    board.macro_keepout = macro_keepout
     board.groups = {}
     for f in board.footprints:
         if f.group:
@@ -465,7 +476,7 @@ def place_hier(lib, design, params, rules, fplan, types, route_iter, log=print):
                for t in sorted(tpls.values(), key=lambda t: (info[t.path]["depth"], t.path), reverse=True)]
     # para o editor de floorplan: tamanho de cada molde e onde ficou cada macro do topo
     board.macro_info = {
-        "types": sorted(types), "ring": RING,
+        "types": sorted(types), "ring": ring,
         "templates": {t.path: {"type": t.type, "w": t.w, "h": t.h, "cells": t.cells, "copies": copies[t.path]}
                       for t in tpls.values()},
         "instances": {p: dict({"type": info[p]["type"], "template": rep[p]},

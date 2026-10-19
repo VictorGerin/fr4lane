@@ -156,12 +156,13 @@ def check(data, run, source):
         boxes, measured = macro_boxes(run, top, widths, geo)
         widths = {m: w for m, w in widths.items()
                   if not any(m == p or m.startswith(p + ".") for p in paths)}
-        out["macros"] = {"ring": hier.RING, "instances": [
+        ring = fp.macro_channel or hier.RING
+        out["macros"] = {"ring": ring, "instances": [
             {"path": p, "type": boxes[p][0], "w": boxes[p][1], "h": boxes[p][2], "measured": measured[p],
              "rect": None, "origin": None} for p in top]}
         # macro que não cabe vira erro, mas continua desenhado onde o fluxo tentaria pô-lo
         spot = hier.macro_spots(top, boxes, fp, geo, sum(widths.values()) * geo.row_pitch, Rules().grid,
-                                errors=out["errors"])
+                                errors=out["errors"], ring=ring)
         for m in out["macros"]["instances"]:
             ox, oy, rect = spot[m["path"]]
             m["origin"], m["rect"] = [ox, oy], list(rect)
