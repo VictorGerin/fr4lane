@@ -5,7 +5,7 @@
     "height": 350
   },
   "buffer_ports": true,
-  "bus_pullups": false,
+  "bus_termination": false,
   "connectors": [
     {
       "name": "J_STACK",

@@ -18,6 +18,12 @@ Verilog ──Yosys/ABC──▶ células (.lib) ──expansão (.sp)──▶ 
 
 **Exemplo de resultado:** o [`demo_top`](https://github.com/VictorGerin/pcbflow/wiki/Exemplo-completo) (somador de 8 bits, contador e registrador) na família RTL vira a placa acima, de 256 x 258 mm, com 340 transistores BC548 e 518 resistores, 100 % roteada em 4 camadas, com 0 erros no DRC do KiCad, em pouco mais de 1 minuto. Em escala maior, uma ALU de 32 bits na família RTL vira uma placa de 860 x 681 mm com 3 234 transistores BC548 e 4 908 resistores, totalmente roteada em 4 camadas (66 mil trilhas, 6 mil vias), com 0 erros no DRC do KiCad. A geração leva cerca de 17 minutos, com os somadores e os estágios do shifter montados como [macros](https://github.com/VictorGerin/pcbflow/wiki/Módulos-e-macros#macros-fluxo-hierárquico).
 
+**Um computador inteiro:** o [SAP-1](examples/sap1) do Ben Eater, em SystemVerilog, vira uma pilha de 6 placas de 400 x 350 mm (controle, ALU e 4 de RAM) ligadas por um barramento tri-state, com 13 587 componentes, 5 363 deles BC548. Cada placa sai 100 % roteada e com 0 erros no DRC do KiCad, e o testbench roda contra as 6 placas montadas.
+
+<p align="center">
+  <img src="docs/img/sap1_pilha.jpg" alt="As 6 placas do SAP-1 empilhadas" width="620">
+</p>
+
 **O que tem:**
 
 - três famílias de células incluídas: **CMOS** (2N7002 + BSS84), **RTL** (BC548 + resistores) e **relés** (SPDT de 5 V), com portas, flip-flops e latches; e um formato simples para criar outras;
@@ -26,6 +32,7 @@ Verilog ──Yosys/ABC──▶ células (.lib) ──expansão (.sp)──▶ 
 - floorplan com fences, regions, guides e keepouts, editado num [editor visual](https://github.com/VictorGerin/pcbflow/wiki/Editor-visual) no navegador, e [conectores](https://github.com/VictorGerin/pcbflow/wiki/Floorplan#conectores) em qualquer borda com a pinagem escolhida (para casar placas vizinhas);
 - placement por anelamento simulado e roteamento por negociação (PathFinder) em grade, compilados com numba;
 - fluxo hierárquico com [macros](https://github.com/VictorGerin/pcbflow/wiki/Módulos-e-macros#macros-fluxo-hierárquico): blocos repetidos são montados uma vez e copiados;
+- barramentos tri-state (drivers de coletor aberto e a terminação do barramento) e sistemas de várias placas ligadas por um conector comum, conferidos juntos pelo `pcbflow-system` (drive entre placas e simulação do conjunto);
 - placas de 4 camadas (VDD e GND em planos) ou de [2 camadas](https://github.com/VictorGerin/pcbflow/wiki/Placa-de-2-camadas);
 - projeto KiCad com grupos por módulo, modelos 3D, lista de materiais e DRC.
 
@@ -59,6 +66,8 @@ cd examples/demo
 pcbflow --top demo_top --lib rtl                      # placa completa
 pcbflow-fpedit demo_top.floorplan.json --lib rtl      # abre o floorplan no editor visual
 ```
+
+O SAP-1 em [`examples/sap1`](examples/sap1) mostra um sistema de várias placas: cada placa é um `pcbflow --top <placa>`, e o `pcbflow-system` confere a pilha montada.
 
 ## Documentação
 

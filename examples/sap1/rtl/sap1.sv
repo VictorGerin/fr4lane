@@ -6,14 +6,14 @@
 //
 // O computador é uma pilha de placas ligadas por um conector comum, e este
 // módulo é o "backplane": só liga as placas, sem lógica própria.
-//   sap1_ctrl_board  controle, IR, PC, MAR e o painel de programação (pull-ups do barramento)
+//   sap1_ctrl_board  controle, IR, PC, MAR e o painel de programação (terminação do barramento)
 //   sap1_alu_board   A, B, ALU, flags e saída
 //   sap1_ram_board   4 bytes de RAM; a mesma placa 4 vezes, com o banco nos jumpers
 //
 // Diferenças em relação ao original, para virar placas de componentes discretos:
 // - cada fonte põe o seu dado no barramento por um driver tri-state
 //   (sap1_bus_driver), como os 74LS245 do original; na família RTL o driver é
-//   de coletor aberto e cada linha do barramento tem um pull-up;
+//   de coletor aberto e cada linha do barramento tem uma terminação (um pull-up);
 // - o microcódigo, que no original fica em EEPROMs, vira lógica combinacional;
 // - tudo roda num clock só: o contador de passos e os registradores mudam na
 //   borda de subida, e o HLT congela o contador de passos em vez de cortar o clock;

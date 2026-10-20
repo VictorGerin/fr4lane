@@ -1,10 +1,13 @@
 {
-  "_comment": "Placa de controle: leva os pull-ups do barramento da pilha. J_PANEL é o painel de programação. Conector J_STACK igual em todas as placas da pilha. Todas as placas da pilha têm 400 x 350 mm.",
+  "_comment": "Placa de controle: leva a terminação do barramento da pilha. J_PANEL é o painel de programação. Conector J_STACK igual em todas as placas da pilha. Todas as placas da pilha têm 400 x 350 mm.",
   "board": {
     "width": 400,
     "height": 350
   },
   "buffer_ports": true,
+  "bus_termination": [
+    "bus"
+  ],
   "connectors": [
     {
       "name": "J_STACK",

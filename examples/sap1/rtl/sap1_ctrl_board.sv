@@ -1,6 +1,6 @@
 // Placa de controle: contador de passos e microcódigo, registrador de
 // instrução, contador de programa, registrador de endereço da memória (MAR) e o
-// painel de programação. Leva os pull-ups do barramento da pilha.
+// painel de programação. Leva a terminação do barramento da pilha.
 //
 // Programação (prog = 1): a CPU fica parada e o painel usa a própria pilha
 // para gravar a RAM: prog_addr vai para as linhas do MAR, prog_data para o
