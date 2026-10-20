@@ -31,10 +31,11 @@ pcbflow = "pcbflow.__main__:main"
 pcbflow-fpedit = "pcbflow.fpedit:main"
 pcbflow-drc = "pcbflow.drc:main"
 pcbflow-system = "pcbflow.system:main"
+pcbflow-cellsim = "pcbflow.cellsim:main"
 
 [tool.setuptools]
 packages = ["pcbflow"]
 
 [tool.setuptools.package-data]
 # a página do editor e as famílias de células (cmos, rtl, relay) vão junto com o pacote
-pcbflow = ["fpedit.html", "lib/footprints.json", "lib/*/*.json", "lib/*/cells/*/*"]
+pcbflow = ["fpedit.html", "lib/footprints.json", "lib/*/*.json", "lib/*/cells/*/*", "lib/*/spice/*"]

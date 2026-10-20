@@ -6,6 +6,7 @@ Camadas (marcadores do pytest.ini):
   slow          fluxo completo (síntese, placement, roteamento)
   kicad         precisam do kicad-cli
   ui            página do fpedit no Chrome (Selenium)
+  spice         simulação analógica das células (ngspice)
 Um teste cuja ferramenta não está instalada é pulado, com o motivo no resumo.
 """
 
@@ -77,6 +78,10 @@ def pytest_collection_modifyitems(config, items):
             ui = _have_ui() if ui is None else ui
             if not ui:
                 item.add_marker(pytest.mark.skip(reason="Selenium ou Chrome não encontrados"))
+        if "spice" in item.keywords:
+            from pcbflow.cellsim import find_ngspice
+            if not find_ngspice():
+                item.add_marker(pytest.mark.skip(reason="ngspice não encontrado"))
 
 
 class FlowRun:

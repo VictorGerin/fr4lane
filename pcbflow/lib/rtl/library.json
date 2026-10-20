@@ -17,7 +17,10 @@
     "pulling_resistance_unit : \"1kohm\";"
   ],
   "electrical": {
-    "vdd": [4.75, 5.25],
+    "vdd": [
+      4.75,
+      5.25
+    ],
     "resistor_tol": 0.05,
     "overdrive": 3,
     "voh_min": 1.5,
@@ -30,5 +33,53 @@
   "placement": {
     "part_gap": 1.0,
     "row_gap": 6.0
+  },
+  "spice": {
+    "_comment": "Simulação analógica das células (pcbflow-cellsim): modelo de cada componente do parts.json e os cantos de pior caso. Resistores: 'pull_up' escala os ligados ao VDD, 'base' os outros. 'lento': frio e β mínimo (atrasos maiores); 'rápido': quente e β alto (saturação mais funda); 'quente': β mínimo e Vbe baixo (menor margem do nível 0).",
+    "models": {
+      "NPN": "spice/BC548B.lib"
+    },
+    "corners": {
+      "típico": {
+        "vdd": 5.0,
+        "temp": 27,
+        "pull_up": 1.0,
+        "base": 1.0,
+        "params": {}
+      },
+      "lento": {
+        "vdd": 4.75,
+        "temp": 0,
+        "pull_up": 1.05,
+        "base": 1.05,
+        "params": {
+          "NPN": {
+            "Bf": 110
+          }
+        }
+      },
+      "rápido": {
+        "vdd": 5.25,
+        "temp": 70,
+        "pull_up": 0.95,
+        "base": 0.95,
+        "params": {
+          "NPN": {
+            "Bf": 450
+          }
+        }
+      },
+      "quente": {
+        "vdd": 4.75,
+        "temp": 70,
+        "pull_up": 1.05,
+        "base": 1.05,
+        "params": {
+          "NPN": {
+            "Bf": 110
+          }
+        }
+      }
+    }
   }
 }
