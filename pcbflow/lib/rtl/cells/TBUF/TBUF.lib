@@ -4,6 +4,6 @@ library(rtl_TBUF) {
     area : 7;
     pin(A) { direction : input; }
     pin(E) { direction : input; }
-    pin(Y) { direction : output; function : "A"; three_state : "!E"; }
+    pin(Y) { direction : output; function : "A"; three_state : "!E"; driver_type : open_drain; }
   }
 }

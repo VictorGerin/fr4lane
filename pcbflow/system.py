@@ -16,8 +16,8 @@ de cada uma antes; --synth-only basta):
 
   - drive elétrico de cada ligação entre placas: o que uma placa dirige
     alimenta as cargas de TODAS as placas na mesma linha (cada placa só vê as
-    suas). Num barramento, conta o pull-up (de uma placa só) contra as cargas
-    de todas;
+    suas). Num barramento, conta a terminação (de uma placa só) contra as
+    cargas de todas;
   - corrente estimada de cada placa e da pilha (para dimensionar os pinos de
     alimentação do conector);
   - simulação do testbench do sistema contra os netlists de portas e de
@@ -63,8 +63,8 @@ def write_ports(path, lib, design):
             cell = design.instances[inst][0]
             if lib.tristate and cell == lib.tristate["cell"]:
                 drivers.append({"kind": "open", "inst": inst})
-            elif lib.pullup and cell == lib.pullup[0]:
-                drivers.append({"kind": "pullup", "inst": inst,
+            elif lib.terminator and cell == lib.terminator["cell"]:
+                drivers.append({"kind": "termination", "inst": inst,
                                 "g_up": drives[cell].pins[pin].g_up if drives else 0.0})
             else:
                 drivers.append({"kind": "cell", "inst": inst, "cell": cell, "pin": pin,
@@ -131,7 +131,7 @@ def check_lines(lib, insts, conns, sys_ports, summaries):
         if net in ("0", "1", "x", "z"):
             continue                                  # placa com a porta presa (jumper)
         label = ext[net][0] if net in ext else f"{users[0][0]}.{users[0][1]}"
-        loads, sinks, cells, opens, pulls = [], 0, [], [], []
+        loads, sinks, cells, opens, terms = [], 0, [], [], []
         for inst, port in users:
             info = summaries[by_inst[inst]]["ports"].get(port)
             if info is None:
@@ -145,8 +145,8 @@ def check_lines(lib, insts, conns, sys_ports, summaries):
                     cells.append(d)
                 elif d["kind"] == "open":
                     opens.append(d)
-                elif d["kind"] == "pullup":
-                    pulls.append(d)
+                elif d["kind"] == "termination":
+                    terms.append(d)
         if net in ext and ext[net][1] == "input":
             # entrada do sistema: dirigida de fora, como por um buffer da família
             cells.append({"kind": "cell", "board": "(entrada)", "cell": buf, "pin": lib.cells[buf].outputs[0],
@@ -157,16 +157,16 @@ def check_lines(lib, insts, conns, sys_ports, summaries):
             out.append((net, label, False, "dirigida por várias placas: " + ", ".join(boards_)))
             continue
         if opens:
-            pull_boards = sorted({d["board"] for d in pulls})
-            if not pulls:
-                out.append((net, label, False, f"barramento sem pull-up ({len(opens)} drivers em "
-                                               f"{', '.join(boards_)}): uma placa deve tê-los"))
+            term_boards = sorted({d["board"] for d in terms})
+            if not terms:
+                out.append((net, label, False, f"barramento sem terminação ({len(opens)} drivers em "
+                                               f"{', '.join(boards_)}): uma placa deve tê-la"))
                 continue
-            if len(pull_boards) > 1:
-                out.append((net, label, False, f"pull-ups em {len(pull_boards)} placas ({', '.join(pull_boards)}): "
-                                               "só uma deve tê-los (\"bus_pullups\": false nas outras)"))
+            if len(term_boards) > 1:
+                out.append((net, label, False, f"terminação em {len(term_boards)} placas ({', '.join(term_boards)}): "
+                                               "só uma deve tê-la (\"bus_termination\" no floorplan das placas)"))
                 continue
-            g, who = sum(d["g_up"] for d in pulls), f"pull-up ({pull_boards[0]}), {len(opens)} drivers"
+            g, who = sum(d["g_up"] for d in terms), f"terminação ({term_boards[0]}), {len(opens)} drivers"
             limit = None
         elif cells:
             g, who, limit = cells[0]["g_up"], f"{cells[0]['board']} {cells[0]['cell']}.{cells[0]['pin']}", \

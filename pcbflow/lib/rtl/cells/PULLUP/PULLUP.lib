@@ -1,7 +1,7 @@
-/* PULLUP — pull-up de uma linha de barramento */
+/* PULLUP — terminação de uma linha de barramento (pull-up) */
 library(rtl_PULLUP) {
   cell(PULLUP) {
     area : 1;
-    pin(Y) { direction : output; function : "1"; }
+    pin(Y) { direction : output; function : "1"; driver_type : pull_up; }
   }
 }

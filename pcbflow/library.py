@@ -17,13 +17,16 @@ variante mais econômica que ainda alimenta as suas cargas (sizing.py). Uma
 variante pode ter várias saídas para uma saída da base, cada uma com uma parte
 das cargas: "outputs": {"Y": ["Y0", "Y1"]}.
 
-Barramentos (tri-state): uma célula cuja saída declara "three_state" no .lib
-(ex.: function "A", three_state "!E") é o driver de barramento da família. Ela
-é de coletor (ou dreno) aberto: só puxa a linha para 0, e uma célula com
-"pullup": true no .json (um resistor para o VDD, function "1") leva a linha a 1.
+Barramentos (tri-state): os papéis vêm do atributo driver_type do Liberty.
+  driver     saída com three_state e driver_type open_drain (só força o 0:
+             coletor ou dreno aberto) ou open_source (só força o 1), ex.:
+             function "A", three_state "!E", driver_type open_drain;
+  terminação célula sem entradas com driver_type pull_up (function "1") ou
+             pull_down (function "0"): segura a linha no nível que o driver
+             não força (na família RTL, um resistor de 1k para o VDD).
 O Yosys mapeia cada "assign bus = en ? d : 'z" para $_TBUF_; o pcbflow troca
-cada um pelo driver da família e põe um pull-up em cada net de barramento
-(netlist.py). As duas ficam fora da síntese do ABC.
+cada um pelo driver da família e põe a terminação em cada linha de barramento
+(netlist.py). As duas células ficam fora da síntese do ABC.
 """
 
 import json
@@ -48,6 +51,10 @@ SPICE_LETTER = {"nmos": "M", "pmos": "M", "npn": "Q", "pnp": "Q", "resistor": "R
 CONTROL_ROLES = {"G", "B", "C1", "C2"}
 KIND_ROW = {"pmos": 0, "pnp": 0, "resistor": 1, "capacitor": 1, "diode": 1, "nmos": 2, "npn": 2, "relay": 2}
 PASSIVE_KINDS = ("resistor", "capacitor", "diode")   # não dirigem a saída de um bloco
+
+# driver_type do Liberty nos barramentos: o nível que o driver força e o da terminação
+OPEN = {"open_drain": 0, "open_source": 1}
+PULL = {"pull_up": 1, "pull_down": 0}
 
 
 # famílias que vêm com o pcbflow (cmos, rtl, relay): --lib aceita o nome de uma
@@ -116,8 +123,8 @@ class Library:
             base = self.meta_of(name).get("variant_of")
             if base:
                 self.variants.setdefault(base, []).append(name)
-        self.tristate = None      # driver de barramento: {"cell", "data", "enable", "out"}
-        self.pullup = None        # (célula, pino) do pull-up de barramento
+        self.tristate = None      # driver de barramento: {"cell", "data", "enable", "out", "drives"}
+        self.terminator = None    # terminação de barramento: {"cell", "pin", "level"}
         problems = self._find_bus_cells() + self.check()
         if problems:
             raise LibraryError("biblioteca inconsistente:\n  " + "\n  ".join(problems))
@@ -128,26 +135,27 @@ class Library:
 
     def usable(self, cell):
         """A célula é oferecida ao Yosys? (variantes nunca: entram no sizing; driver
-        e pull-up de barramento também não: o pcbflow os põe depois da síntese)"""
+        e terminação de barramento também não: o pcbflow os põe depois da síntese)"""
         meta = self.meta_of(cell)
         return not (meta.get("dont_use", False) or meta.get("variant_of") or self.is_bus_cell(cell))
 
     def is_bus_cell(self, cell):
-        """Driver de barramento (coletor aberto) ou pull-up: a saída pode dividir a
-        net com outras dessas duas."""
+        """Driver ou terminação de barramento: a saída pode dividir a net com
+        outras dessas duas."""
         return ((self.tristate is not None and cell == self.tristate["cell"])
-                or (self.pullup is not None and cell == self.pullup[0]))
+                or (self.terminator is not None and cell == self.terminator["cell"]))
 
     def _find_bus_cells(self):
-        """Acha o driver de barramento (saída com three_state) e o pull-up da família."""
+        """Acha o driver (saída com three_state) e a terminação de barramento da
+        família, pelo driver_type do Liberty."""
         p = []
-        drivers, pullups = [], []
+        drivers, terms = [], []
         for name, cell in self.cells.items():
             ts = [o for o in cell.outputs if cell.pins[o].get("three_state")]
             if ts:
                 drivers.append((name, ts))
-            if self.meta_of(name).get("pullup"):
-                pullups.append(name)
+            elif any(cell.pins[o].get("driver_type") in PULL for o in cell.outputs):
+                terms.append(name)
         for name, ts in drivers:
             cell = self.cells[name]
             try:
@@ -163,25 +171,34 @@ class Library:
                 p.append(f"{name}.lib: driver de barramento deve ter duas entradas e uma saída com "
                          "function \"A\" e three_state \"!E\" (enable ativo alto)")
                 continue
-            if not self.meta_of(name).get("open_collector"):
-                p.append(f"{name}.json: o driver de barramento só puxa a linha para 0 "
-                         "(coletor aberto): declare \"open_collector\": true")
+            drives = OPEN.get(cell.pins[ts[0]].get("driver_type"))
+            if drives is None:
+                p.append(f"{name}.lib: o driver de barramento só força um nível na linha: declare "
+                         "driver_type : open_drain (coletor ou dreno aberto, força o 0) ou open_source (força o 1)")
                 continue
             if self.tristate:
                 p.append(f"dois drivers de barramento: {self.tristate['cell']} e {name}")
                 continue
-            self.tristate = {"cell": name, "data": f[1], "enable": t[1][1], "out": ts[0]}
-        for name in pullups:
+            self.tristate = {"cell": name, "data": f[1], "enable": t[1][1], "out": ts[0], "drives": drives}
+        for name in terms:
             cell = self.cells[name]
-            if cell.inputs or len(cell.outputs) != 1 or cell.pins[cell.outputs[0]]["function"].strip() != "1":
-                p.append(f"{name}: o pull-up deve ter só uma saída, com function \"1\"")
-            elif self.pullup:
-                p.append(f"dois pull-ups de barramento: {self.pullup[0]} e {name}")
+            pin = cell.outputs[0]
+            level = PULL.get(cell.pins[pin]["driver_type"])
+            if cell.inputs or len(cell.outputs) != 1 or cell.pins[pin]["function"].strip() != str(level):
+                p.append(f"{name}.lib: a terminação de barramento não tem entradas e tem uma saída só, com "
+                         "function \"1\" (driver_type : pull_up) ou \"0\" (pull_down)")
+            elif self.terminator:
+                p.append(f"duas células de terminação de barramento: {self.terminator['cell']} e {name}")
             else:
-                self.pullup = (name, cell.outputs[0])
-        if self.tristate and not self.pullup:
-            p.append(f"{self.tristate['cell']}: driver de barramento sem célula de pull-up "
-                     "(uma célula com \"pullup\": true no .json)")
+                self.terminator = {"cell": name, "pin": pin, "level": level}
+        if self.tristate:
+            want = {0: "pull_up", 1: "pull_down"}[self.tristate["drives"]]
+            if not self.terminator:
+                p.append(f"{self.tristate['cell']}: driver de barramento sem célula de terminação "
+                         f"(uma célula sem entradas com driver_type : {want})")
+            elif self.terminator["level"] == self.tristate["drives"]:
+                p.append(f"{self.terminator['cell']}: a terminação deve segurar o nível que o driver "
+                         f"({self.tristate['cell']}) não força: driver_type : {want}")
         return p
 
     def variant_group(self, base):
@@ -418,8 +435,9 @@ class Library:
             out.append(f"  always @* {''.join(body)}if ({en}) {iq} = {din};")
         for o in cell.outputs:
             expr = liberty.to_verilog(liberty.parse_expr(cell.pins[o]["function"]))
-            if self.meta_of(cell.name).get("pullup"):
-                out.append(f"  pullup ({o});")           # fraco: perde para quem puxa a 0
+            if cell.pins[o].get("driver_type") in PULL and not cell.pins[o].get("three_state"):
+                # fraco: perde para o driver que força o outro nível
+                out.append(f"  {'pullup' if PULL[cell.pins[o]['driver_type']] else 'pulldown'} ({o});")
             elif cell.pins[o].get("three_state"):
                 off = liberty.to_verilog(liberty.parse_expr(cell.pins[o]["three_state"]))
                 out.append(f"  assign #0.01 {o} = {off} ? 1'bz : {expr};")

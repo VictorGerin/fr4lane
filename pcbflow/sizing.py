@@ -105,8 +105,8 @@ def _sinks_by_net(lib, design):
 
 
 def _bus_driver(lib, cell):
-    """Driver de barramento (coletor aberto): não leva a linha a 1, quem alimenta
-    as cargas é o pull-up da linha, avaliado no lugar dele."""
+    """Driver de barramento: só força um nível; quem alimenta as cargas é a
+    terminação da linha, avaliada no lugar dele."""
     return lib.tristate is not None and cell == lib.tristate["cell"]
 
 

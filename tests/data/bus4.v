@@ -1,6 +1,6 @@
 // Barramento de 4 bits com três fontes tri-state em submódulos diferentes e um
 // registrador que lê dele: na família RTL, cada fonte vira drivers de coletor
-// aberto (TBUF) e cada linha ganha um pull-up (PULLUP).
+// aberto (TBUF) e cada linha ganha a terminação (PULLUP).
 module bus_src (input en, input [3:0] d, output [3:0] bus);
     assign bus = en ? d : 4'bz;
 endmodule

@@ -106,6 +106,23 @@ def _expand(text, buses, scalars, vdd, gnd, where):
     raise FloorplanError(f"{where}: '{text}' não é uma porta do topo{hint}")
 
 
+def select_ports(ports, names, where):
+    """Portas citadas por uma lista no formato dos pinos dos conectores ("bus",
+    "bus[*]", "bus[7:4]", "ack"): nomes dos bits. Um barramento pelo nome
+    sozinho vale inteiro."""
+    buses, scalars = _bus(ports)
+    out = []
+    for text in names:
+        if text in buses and text not in scalars:
+            text = f"{text}[*]"
+        if text in POWER or text == NC:
+            raise FloorplanError(f"{where}: '{text}' não é uma porta")
+        for _, label in _expand(text, buses, scalars, None, None, where):
+            if label not in out:
+                out.append(label)
+    return out
+
+
 def starts(geo):
     """Onde começa o primeiro conector automático de cada borda: nas laterais,
     junto da borda de cima; em cima e embaixo, no início da lógica (longe dos

@@ -39,13 +39,14 @@ def check_cells(lib, outdir):
         for o in cell.outputs:
             tb.append(f"  wire {pre}{o}_i, {pre}{o}_r;")
             if cell.pins[o].get("three_state"):
-                # coletor aberto: solta a linha, e o pull-up do barramento a leva a 1
-                tb.append(f"  pullup ({pre}{o}_i); pullup ({pre}{o}_r);")
+                # o driver só força um nível; o outro vem da terminação do barramento
+                pull = "pulldown" if lib.tristate and lib.tristate["drives"] == 1 else "pullup"
+                tb.append(f"  {pull} ({pre}{o}_i); {pull} ({pre}{o}_r);")
         conn_i = ", ".join([f".{p}({pre}{p})" for p in cell.inputs] + [f".{o}({pre}{o}_i)" for o in cell.outputs])
         conn_r = ", ".join([f".{p}({pre}{p})" for p in cell.inputs] + [f".{o}({pre}{o}_r)" for o in cell.outputs])
         tb.append(f"  impl_{name} i_{name}({conn_i});")
         tb.append(f"  ref_{name} r_{name}({conn_r});")
-        # sem entradas (pull-up), a concatenação vazia derrubaria o Icarus
+        # sem entradas (terminação), a concatenação vazia derrubaria o Icarus
         ins = "{" + ", ".join(f"{pre}{p}" for p in cell.inputs) + "}" if cell.inputs else "1'b0"
         compare = []
         for o in cell.outputs:

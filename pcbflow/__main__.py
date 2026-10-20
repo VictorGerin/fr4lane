@@ -112,9 +112,10 @@ def main(argv=None):
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--no-buffer", action="store_true",
                     help="não insere buffers nas nets com fan-out acima do que a saída aguenta (só avisa)")
-    ap.add_argument("--no-bus-pullups", action="store_true",
-                    help="sem pull-up nas linhas de barramento (tri-state): numa pilha de placas, só uma "
-                         "delas leva os pull-ups (também \"bus_pullups\": false no floorplan)")
+    ap.add_argument("--no-bus-termination", action="store_true",
+                    help="sem terminação (na família RTL, o pull-up) nas linhas de barramento que saem da "
+                         "placa: numa pilha, cada linha tem a terminação numa placa só (também "
+                         "\"bus_termination\" no floorplan, que aceita uma lista de portas)")
     ap.add_argument("--buffer-ports", action="store_true",
                     help="um buffer na entrada de cada porta de entrada e inout: a placa pesa uma carga só "
                          "em cada linha (placas de uma pilha; também \"buffer_ports\": true no floorplan)")
@@ -241,27 +242,30 @@ def main(argv=None):
         stat_text = stat.read_text()
         try:
             with progress.Progress("leitura do netlist e expansão em componentes", tick=True):
-                design = netlist.load_yosys_json(json_path, args.top, lib, hier_json, pullups=_pullups(args, fplan))
-        except ValueError as e:
+                design = netlist.load_yosys_json(json_path, args.top, lib, hier_json,
+                                                 termination=_termination(args, fplan))
+        except (ValueError, floorplan.FloorplanError) as e:
             log(f"ERRO: {e}")
             return 3
         bus = Counter(cell for cell, _ in design.instances.values())
         if lib.tristate and bus[lib.tristate["cell"]]:
-            if _pullups(args, fplan):
-                log(f"      barramentos: {bus[lib.pullup[0]]} linha(s) com {bus[lib.tristate['cell']]} drivers "
-                    f"de coletor aberto ({lib.tristate['cell']}) e um pull-up ({lib.pullup[0]}) em cada")
-            else:
-                log(f"      barramentos: {bus[lib.tristate['cell']]} drivers de coletor aberto "
-                    f"({lib.tristate['cell']}), sem pull-ups nesta placa")
+            t = lib.terminator["cell"]
+            log(f"      barramentos: {bus[lib.tristate['cell']]} drivers ({lib.tristate['cell']}), "
+                + (f"terminação ({t}) em {bus[t]} linha(s)" if bus[t] else "sem terminação nesta placa"))
         sized = None
         if lib.variants and not args.no_size:
             with progress.Progress("sizing por fan-out", tick=True):
                 sized = sizing.size_design(lib, design, el, drives)
             log(f"      sizing: {len(sized.changed)} instâncias trocadas por variantes de fan-out"
                 + (f", {len(sized.unresolved)} sem variante que atenda" if sized.unresolved else ""))
-        if args.buffer_ports or (fplan and fplan.buffer_ports):
-            with progress.Progress("buffers nas portas", tick=True):
-                ported = buffering.buffer_ports(lib, design, el, drives)
+        which = True if args.buffer_ports else (fplan.buffer_ports if fplan else False)
+        if which:
+            try:
+                with progress.Progress("buffers nas portas", tick=True):
+                    ported = buffering.buffer_ports(lib, design, el, drives, which)
+            except (ValueError, floorplan.FloorplanError) as e:
+                log(f"ERRO: {e}")
+                return 3
             if ported:
                 log(f"      buffers nas portas: {len(ported)} (cada linha de entrada pesa uma carga)")
         buffered = None
@@ -467,9 +471,12 @@ def _simulate(args, lib, design, out, gates_v, models, sims, clock):
     sims[th] = (ok, ok2)
 
 
-def _pullups(args, fplan):
-    """Esta placa leva os pull-ups das linhas de barramento?"""
-    return not args.no_bus_pullups and (fplan is None or fplan.bus_pullups)
+def _termination(args, fplan):
+    """Em quais linhas de barramento que saem da placa ela põe a terminação:
+    True (todas), False ou uma lista de portas."""
+    if args.no_bus_termination:
+        return False
+    return fplan.bus_termination if fplan else True
 
 
 def _place_params(args):

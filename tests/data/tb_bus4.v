@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 // Com uma fonte habilitada, o barramento tem o valor dela e o registrador o lê.
-// Sem fonte, o barramento fica solto (z no RTL, 1 pelo pull-up na placa) e o
+// Sem fonte, o barramento fica solto (z no RTL, 1 pela terminação na placa) e o
 // registrador guarda o valor.
 module tb_bus4;
     reg        clk = 0;
@@ -25,7 +25,7 @@ module tb_bus4;
                 $display("[ERRO] ciclo %0d: sel=%0d bus=%b esperado=%b", i, sel, bus, want);
                 errors = errors + 1;
             end
-            // solto: z no RTL e no gate-level; 1111 na placa, pelos pull-ups
+            // solto: z no RTL e no gate-level; 1111 na placa, pela terminação
             if (sel == 0 && bus !== 4'bzzzz && bus !== 4'b1111) begin
                 $display("[ERRO] ciclo %0d: barramento solto = %b", i, bus);
                 errors = errors + 1;

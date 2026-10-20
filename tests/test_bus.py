@@ -1,20 +1,22 @@
-"""Barramentos tri-state: driver de coletor aberto (TBUF) e pull-up (PULLUP) da
-família RTL, o check do Yosys com vários drivers, a troca de $_TBUF_ pelo
-driver da família, os pull-ups por linha e o fluxo completo num barramento.
-Pilha de placas: porta inout, placa sem pull-ups, buffers nas portas e o
-pcbflow-system (drive entre placas e simulação do sistema)."""
+"""Barramentos tri-state: driver (TBUF, driver_type open_drain) e terminação
+(PULLUP, driver_type pull_up) da família RTL, o check do Yosys com vários
+drivers, a troca de $_TBUF_ pelo driver da família, a terminação por linha e o
+fluxo completo num barramento. Pilha de placas: porta inout, terminação só em
+algumas linhas, buffers nas portas e o pcbflow-system (drive entre placas e
+simulação do sistema)."""
 
 import os
 import re
+import shutil
 import subprocess
 import sys
 
 import pytest
 
-from conftest import PCBFLOW, data, lib_path, run_flow
+from conftest import LIB, PCBFLOW, data, lib_path, run_flow
 from pcbflow import buffering, drive, floorplan, synth
-from pcbflow.library import Library
-from pcbflow.netlist import Design, Port, add_pullups, elaborate, write_switch_level_verilog
+from pcbflow.library import Library, LibraryError
+from pcbflow.netlist import Design, Port, add_termination, elaborate, write_switch_level_verilog
 
 BUS = ["--top", "bus4", "--src", data("bus4.v"), "--tb", data("tb_bus4.v")]
 
@@ -25,22 +27,22 @@ def rtl():
 
 
 def test_familias_com_e_sem_barramento(rtl):
-    assert rtl.tristate == {"cell": "TBUF", "data": "A", "enable": "E", "out": "Y"}
-    assert rtl.pullup == ("PULLUP", "Y")
+    assert rtl.tristate == {"cell": "TBUF", "data": "A", "enable": "E", "out": "Y", "drives": 0}
+    assert rtl.terminator == {"cell": "PULLUP", "pin": "Y", "level": 1}
     # o Yosys não escolhe nenhuma das duas: o pcbflow as põe depois da síntese
     assert not rtl.usable("TBUF") and not rtl.usable("PULLUP")
     for family in ("cmos", "relay"):
         lib = Library(lib_path(family))
-        assert lib.tristate is None and lib.pullup is None
+        assert lib.tristate is None and lib.terminator is None
 
 
-def test_driver_puxa_a_corrente_do_pullup(rtl):
+def test_driver_puxa_a_corrente_da_terminacao(rtl):
     el, drives = drive.library_drive(rtl)
     tb = drives["TBUF"]
-    # o enable alimenta a base de um NPN que afunda a corrente do pull-up da linha
+    # o enable alimenta a base de um NPN que afunda a corrente da terminação (pull-up) da linha
     assert tb.pins["E"].loads[0].ic == pytest.approx(drives["PULLUP"].pins["Y"].g_up
                                                      * (el.vdd_max - 2 * el.vce_sat) / (1 - el.tol))
-    assert tb.pins["Y"].g_up == 0                 # coletor aberto: não leva a linha a 1
+    assert tb.pins["Y"].g_up == 0                 # open_drain: não leva a linha a 1
     assert drive.check_internal(rtl, el, drives) == []
 
 
@@ -65,17 +67,17 @@ def _design(rtl, cells):
     return d
 
 
-def test_um_pullup_por_linha(rtl):
+def test_uma_terminacao_por_linha(rtl):
     d = _design(rtl, {
         "U1": ("TBUF", "u0.a.$t1", {"A": "x", "E": "e1", "Y": "bus"}, "u0.a"),
         "U2": ("TBUF", "u0.b.$t2", {"A": "y", "E": "e2", "Y": "bus"}, "u0.b"),
         "U3": ("NAND2", "u0.$g", {"A": "bus", "B": "e1", "Y": "z"}, "u0"),
     })
-    add_pullups(rtl, d)
+    add_termination(rtl, d)
     pu = [i for i, (c, _) in d.instances.items() if c == "PULLUP"]
     assert len(pu) == 1
     # no módulo que contém os dois drivers, com nome tirado do primeiro (igual nas cópias de um macro)
-    assert d.inst_module[pu[0]] == "u0" and d.instances[pu[0]][1] == "u0.$pullup$a/$t1"
+    assert d.inst_module[pu[0]] == "u0" and d.instances[pu[0]][1] == "u0.$busterm$a/$t1"
     assert d.conns[pu[0]] == {"Y": "bus"}
 
 
@@ -85,20 +87,20 @@ def test_driver_comum_nao_divide_net(rtl):
         "U2": ("NAND2", "$g", {"A": "x", "B": "e1", "Y": "bus"}, ""),
     })
     with pytest.raises(ValueError, match="só drivers de barramento"):
-        add_pullups(rtl, d)
+        add_termination(rtl, d)
 
 
-def test_netlist_de_componentes_liga_drivers_e_pullup(rtl, tmp_path):
+def test_netlist_de_componentes_liga_drivers_e_terminacao(rtl, tmp_path):
     d = _design(rtl, {
         "U1": ("TBUF", "$t1", {"A": "x", "E": "e1", "Y": "bus"}, ""),
         "U2": ("TBUF", "$t2", {"A": "y", "E": "e2", "Y": "bus"}, ""),
     })
-    add_pullups(rtl, d)
+    add_termination(rtl, d)
     elaborate(rtl, d)
     f = tmp_path / "sw.v"
     write_switch_level_verilog(rtl, d, f)
     text = f.read_text()
-    # um só nó $raw e um só atraso para a linha, com os dois drivers e o pull-up nele
+    # um só nó $raw e um só atraso para a linha, com os dois drivers e a terminação nele
     assert text.count("reg \\n:bus$d ") == 1
     assert text.count("\\n:bus$raw ") >= 4
 
@@ -114,7 +116,7 @@ def test_familia_sem_driver_recusa_tri_state(tmp_path):
 def test_barramento_simulado(tmp_path):
     r = run_flow(tmp_path / "out", *BUS, "--lib", lib_path("rtl"), "--synth-only")
     assert r.rc == 0, r
-    assert re.search(r"barramentos: 4 linha\(s\) com 12 drivers de coletor aberto", r.log), r
+    assert "barramentos: 12 drivers (TBUF), terminação (PULLUP) em 4 linha(s)" in r.log, r
     assert re.search(r"gate-level:\s+OK", r.log) and re.search(r"componentes:\s+OK", r.log), r
 
 
@@ -129,12 +131,15 @@ def test_barramento_placa_completa(tmp_path):
 
 # ------------------------------------------------------------ pilha de placas
 def test_floorplan_da_placa_da_pilha():
-    fp = floorplan.parse({"bus_pullups": False, "buffer_ports": True})
-    assert fp.bus_pullups is False and fp.buffer_ports is True
+    fp = floorplan.parse({"bus_termination": False, "buffer_ports": True})
+    assert fp.bus_termination is False and fp.buffer_ports is True
     fp = floorplan.parse({})
-    assert fp.bus_pullups is True and fp.buffer_ports is False
-    with pytest.raises(floorplan.FloorplanError, match="bus_pullups"):
-        floorplan.parse({"bus_pullups": "não"})
+    assert fp.bus_termination is True and fp.buffer_ports is False
+    fp = floorplan.parse({"bus_termination": ["bus_a", "ack"], "buffer_ports": ["d[3:0]"]})
+    assert fp.bus_termination == ["bus_a", "ack"] and fp.buffer_ports == ["d[3:0]"]
+    for bad in ("não", [], ["ok", ""], [3]):
+        with pytest.raises(floorplan.FloorplanError, match="bus_termination"):
+            floorplan.parse({"bus_termination": bad})
 
 
 def test_porta_inout_liga_nos_dois_sentidos(rtl, tmp_path):
@@ -144,7 +149,7 @@ def test_porta_inout_liga_nos_dois_sentidos(rtl, tmp_path):
     })
     d.ports = [Port("bus", "inout", "bus"), Port("x", "input", "x"), Port("e1", "input", "e1"),
                Port("y", "output", "y")]
-    add_pullups(rtl, d, pullups=False)
+    add_termination(rtl, d, termination=False)
     assert "PULLUP" not in {c for c, _ in d.instances.values()}
     elaborate(rtl, d)
     f = tmp_path / "sw.v"
@@ -196,15 +201,82 @@ def test_sistema_de_placas(tmp_path):
     rc, log = _run_system(proj, *SYSTEM)
     assert rc == 3 and "falta a rodada da placa ctl" in log, log
     assert run_flow(None, "--top", "ctl", "--lib", "rtl", "--synth-only", cwd=proj).rc == 0
-    r = run_flow(None, "--top", "card", "--lib", "rtl", "--synth-only", "--no-bus-pullups", cwd=proj)
-    assert r.rc == 0 and "sem pull-ups nesta placa" in r.log, r
+    r = run_flow(None, "--top", "card", "--lib", "rtl", "--synth-only", "--no-bus-termination", cwd=proj)
+    assert r.rc == 0 and "sem terminação nesta placa" in r.log, r
     rc, log = _run_system(proj, *SYSTEM)
     assert rc == 0, log
     assert "placas montadas: card ×2, ctl" in log
     assert "com problema: 0" in log
     assert re.search(r"gate-level:\s+OK", log) and re.search(r"componentes:\s+OK", log), log
     assert (proj / "build" / "stack_rtl_sistema" / "report.md").is_file()
-    # com pull-ups também nos cartões, cada linha teria três: o sistema acusa
+    # com terminação também nos cartões, cada linha teria três: o sistema acusa
     assert run_flow(None, "--top", "card", "--lib", "rtl", "--synth-only", cwd=proj).rc == 0
     rc, log = _run_system(proj, *SYSTEM)
-    assert rc == 1 and "pull-ups em 3 placas" in log, log
+    assert rc == 1 and "terminação em 3 placas" in log, log
+
+
+def _two_buses(rtl):
+    """Placa com dois barramentos que saem dela (bus_a e bus_b, 2 bits cada)."""
+    d = _design(rtl, {
+        f"U{k}": ("TBUF", f"$t{k}", {"A": "x", "E": "e", "Y": net}, "")
+        for k, net in enumerate(("a0", "a1", "b0", "b1"), 1)
+    })
+    d.ports = [Port("bus_a[0]", "inout", "a0"), Port("bus_a[1]", "inout", "a1"),
+               Port("bus_b[0]", "inout", "b0"), Port("bus_b[1]", "inout", "b1"),
+               Port("x", "input", "x"), Port("e", "input", "e")]
+    return d
+
+
+def _terminated(d):
+    return sorted(d.conns[i]["Y"] for i, (c, _) in d.instances.items() if c == "PULLUP")
+
+
+def test_terminacao_so_em_algumas_portas(rtl):
+    # dois barramentos independentes: a terminação de cada um pode ficar numa placa
+    for which, want in ((True, ["a0", "a1", "b0", "b1"]), (False, []), (["bus_a"], ["a0", "a1"]),
+                        (["bus_b[1]"], ["b1"]), (["bus_a[0]", "bus_b"], ["a0", "b0", "b1"])):
+        d = _two_buses(rtl)
+        add_termination(rtl, d, termination=which)
+        assert _terminated(d) == want, which
+
+
+def test_terminacao_em_porta_que_nao_e_barramento(rtl):
+    with pytest.raises(ValueError, match="'x' não é uma linha de barramento"):
+        add_termination(rtl, _two_buses(rtl), termination=["x"])
+    with pytest.raises(floorplan.FloorplanError, match="não é uma porta"):
+        add_termination(rtl, _two_buses(rtl), termination=["bus_c"])
+
+
+def test_buffer_so_em_algumas_portas(rtl):
+    d = _design(rtl, {
+        "U1": ("NAND2", "$g", {"A": "a", "B": "b", "Y": "y"}, ""),
+        "U2": ("INV", "$i", {"A": "a", "Y": "z"}, ""),
+    })
+    d.ports = [Port("a", "input", "a"), Port("b", "input", "b"), Port("y", "output", "y"), Port("z", "output", "z")]
+    el, drives = drive.library_drive(rtl)
+    assert buffering.buffer_ports(rtl, d, el, drives, ["a"]) == [("a", 2)]
+    assert d.conns["U1"]["B"] == "b"                 # b ficou sem buffer
+    with pytest.raises(ValueError, match="é uma saída"):
+        buffering.buffer_ports(rtl, d, el, drives, ["y"])
+
+
+def _rtl_copy(tmp_path, cell, old, new):
+    dst = tmp_path / "lib" / "rtl"
+    shutil.copytree(lib_path("rtl"), dst)
+    shutil.copy(LIB / "footprints.json", tmp_path / "lib")
+    f = dst / "cells" / cell / f"{cell}.lib"
+    text = f.read_text(encoding="utf-8")
+    assert old in text
+    f.write_text(text.replace(old, new), encoding="utf-8")
+    return dst
+
+
+@pytest.mark.parametrize("cell, old, new, msg", [
+    ("TBUF", "driver_type : open_drain; ", "", "declare driver_type : open_drain"),
+    ("PULLUP", "driver_type : pull_up;", "driver_type : pull_down;", "function"),
+    ("PULLUP", 'function : "1"; driver_type : pull_up;', 'function : "0"; driver_type : pull_down;',
+     "a terminação deve segurar o nível que o driver"),
+])
+def test_papeis_de_barramento_pelo_liberty(tmp_path, cell, old, new, msg):
+    with pytest.raises(LibraryError, match=msg):
+        Library(_rtl_copy(tmp_path, cell, old, new))

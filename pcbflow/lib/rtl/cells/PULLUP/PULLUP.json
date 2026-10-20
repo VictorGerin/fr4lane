@@ -1,4 +1,3 @@
 {
-  "description": "pull-up de barramento (1k para o VDD), um por linha",
-  "pullup": true
+  "description": "terminação de barramento: pull-up de 1k para o VDD, uma por linha"
 }

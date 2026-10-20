@@ -133,7 +133,7 @@ def _bit_names(module):
     return names
 
 
-def load_yosys_json(path, top, lib, hier_path=None, pullups=True):
+def load_yosys_json(path, top, lib, hier_path=None, termination=True):
     with open(path) as f:
         data = json.load(f)
     module = data["modules"][top]
@@ -179,7 +179,7 @@ def load_yosys_json(path, top, lib, hier_path=None, pullups=True):
         design.instances[inst] = (ctype, _clean(yname))
         design.conns[inst] = pins
         design.inst_module[inst] = _clean(scope_of(yname))
-    add_pullups(lib, design, pullups)
+    add_termination(lib, design, termination)
     elaborate(lib, design)
     return design
 
@@ -195,15 +195,19 @@ def drivers_by_net(lib, design):
     return out
 
 
-def add_pullups(lib, design, pullups=True):
-    """Confere quem dirige cada net e põe um pull-up (PU1, PU2...) em cada
-    barramento, isto é, em cada net dirigida por drivers de coletor aberto.
-    Várias saídas numa net só valem se forem todas de drivers de barramento.
-    pullups=False só confere: numa pilha de placas, os pull-ups do barramento
-    ficam em outra placa.
+def add_termination(lib, design, termination=True):
+    """Confere quem dirige cada net e põe a terminação de barramento da família
+    (BT1, BT2...; na RTL, um pull-up) nas linhas de barramento: nets dirigidas
+    por drivers tri-state e portas inout sem outro driver. Várias saídas numa
+    net só valem se forem todas de drivers de barramento.
 
-    O pull-up vai para o módulo que contém todos os drivers da linha, com um nome
-    tirado do primeiro deles: as cópias de um macro ganham o mesmo pull-up."""
+    As linhas que não saem da placa sempre ganham a terminação. As que saem
+    (portas inout) dependem de termination: True em todas, False em nenhuma, ou
+    uma lista de portas (como nos pinos dos conectores): numa pilha de placas,
+    cada linha tem a terminação numa placa só.
+
+    A terminação vai para o módulo que contém todos os drivers da linha, com um
+    nome tirado do primeiro deles: as cópias de um macro ganham a mesma."""
     inputs = {p.net for p in design.ports if p.direction == "input"}
     bus = []
     drivers = drivers_by_net(lib, design)
@@ -219,16 +223,30 @@ def add_pullups(lib, design, pullups=True):
                 raise ValueError(f"net {net}: barramento ligado a uma entrada do topo")
             bus.append((net, drv))
     # porta inout sem driver nesta placa: é uma linha do barramento da pilha
-    # que a placa só lê (ou só leva os pull-ups)
+    # que a placa só lê (ou na qual só põe a terminação)
     for p in design.ports:
         if (p.direction == "inout" and p.net not in drivers and p.net not in (design.vdd, design.gnd)
                 and all(n != p.net for n, _ in bus)):
             bus.append((p.net, []))
-    if not bus or not pullups:
+    port_net = {p.name: p.net for p in design.ports if p.direction == "inout"}
+    if isinstance(termination, (list, tuple)):
+        from .connectors import select_ports
+        lines = {n for n, _ in bus}
+        chosen = set()
+        for name in select_ports(design.ports, termination, "bus_termination"):
+            if name not in port_net or port_net[name] not in lines:
+                raise ValueError(f"bus_termination: '{name}' não é uma linha de barramento que sai da "
+                                 "placa (porta inout de um barramento tri-state)")
+            chosen.add(port_net[name])
+    else:
+        chosen = set(port_net.values()) if termination else set()
+    outside = set(port_net.values())
+    bus = [(n, d) for n, d in bus if n not in outside or n in chosen]
+    if not bus:
         return
-    if lib.pullup is None:
-        raise ValueError(f"a família '{lib.name}' não tem pull-up de barramento")
-    cell, pin = lib.pullup
+    if lib.terminator is None:
+        raise ValueError(f"a família '{lib.name}' não tem célula de terminação de barramento")
+    cell, pin = lib.terminator["cell"], lib.terminator["pin"]
     for k, (net, drv) in enumerate(bus, 1):
         if drv:
             mod = common_module([design.inst_module.get(i, "") for i, _ in drv])
@@ -237,8 +255,8 @@ def add_pullups(lib, design, pullups=True):
             local = "/".join(design.instances[first][1].split(".")[depth:])
         else:
             mod, local = "", net
-        inst = f"PU{k}"
-        design.instances[inst] = (cell, (f"{mod}." if mod else "") + f"$pullup${local}")
+        inst = f"BT{k}"
+        design.instances[inst] = (cell, (f"{mod}." if mod else "") + f"$busterm${local}")
         design.conns[inst] = {pin: net}
         design.inst_module[inst] = mod
 
@@ -345,8 +363,8 @@ def write_switch_level_verilog(lib, design, path, module_name=None):
     # passa por um atraso de TRANSPORTE pequeno. Com atraso inercial (nas
     # primitivas ou num assign #d) um glitch X de tempo zero fica preso na
     # saída no Icarus; sem atraso nenhum os latches dos flip-flops entram em corrida.
-    # Num barramento, os drivers de coletor aberto e o pull-up ligam ao mesmo nó
-    # $raw: o transistor que conduz (forte) vence o pull-up (rtran, fraco). Num
+    # Num barramento, os drivers e a terminação ligam ao mesmo nó $raw: o
+    # transistor que conduz (forte) vence a terminação (rtran, fraca). Num
     # barramento que sai pela porta inout, ligam direto na net (sem o atraso):
     # o nó é o mesmo em todas as placas, e um atraso só desta placa não o representa.
     driven = {}

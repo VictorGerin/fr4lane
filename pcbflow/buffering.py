@@ -87,12 +87,13 @@ def _groups(model, cell, pin, sinks, cell_of):
     return groups
 
 
-def buffer_ports(lib, design, el, drives):
+def buffer_ports(lib, design, el, drives, which=True):
     """Um buffer da família na entrada de cada porta de entrada e inout (B1,
     B2...): as cargas da placa passam para a saída dele, e a placa pesa uma
-    carga só em cada linha. Numa pilha de placas, é o que deixa um sinal (ou o
-    pull-up de um barramento) alimentar todas as placas. Os drivers de
+    carga só em cada linha. Numa pilha de placas, é o que deixa um sinal (ou a
+    terminação de um barramento) alimentar todas as placas. Os drivers de
     barramento ficam na linha; só as cargas vão para trás do buffer.
+    which: True (todas) ou uma lista de portas (como nos pinos dos conectores).
     Devolve [(porta, cargas movidas)]."""
     buf = buffer_cell(lib, _Model(lib, el, drives))
     if buf is None:
@@ -102,9 +103,16 @@ def buffer_ports(lib, design, el, drives):
     power = set(lib.supplies())
     used = set(design.nets()) | set(sinks)
     n_buf = sum(1 for i in design.instances if i.startswith("B") and i[1:].isdigit())
+    names = None
+    if isinstance(which, (list, tuple)):
+        from .connectors import select_ports
+        names = set(select_ports(design.ports, which, "buffer_ports"))
+        for p in design.ports:
+            if p.name in names and p.direction == "output":
+                raise ValueError(f"buffer_ports: '{p.name}' é uma saída (só entradas e inout ganham buffer)")
     out = []
     for p in design.ports:
-        if p.direction not in ("input", "inout") or p.net in power:
+        if p.direction not in ("input", "inout") or p.net in power or (names is not None and p.name not in names):
             continue
         real = [s for s in sinks.get(p.net, []) if s[0]]
         if not real:
@@ -152,7 +160,7 @@ def buffer_design(lib, design, el, drives, inputs=True):
     drivers = []
     for inst, (cell, _) in sorted(design.instances.items(), key=lambda kv: _natural(kv[0])):
         if _bus_driver(lib, cell):
-            continue                     # o barramento é dirigido pelo pull-up dele
+            continue                     # o barramento é dirigido pela terminação dele
         for pin in lib.cells[cell].outputs:
             net = design.conns[inst].get(pin)
             if net is not None and net not in power:
