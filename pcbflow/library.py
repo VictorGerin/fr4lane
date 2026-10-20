@@ -264,6 +264,14 @@ class Library:
             if key not in self.parts:
                 p.append(f"library.json: decoupling usa '{key}', que não está no parts.json")
         for name, sub in self.subckts.items():
+            # o SPICE não diferencia maiúsculas: "R" e "r" seriam o mesmo nó num simulador
+            by_case = {}
+            for n in set(sub.pins) | {n for e in sub.elements for n in e.nodes}:
+                by_case.setdefault(n.lower(), set()).add(n)
+            for same in by_case.values():
+                if len(same) > 1:
+                    p.append(f"{name}: os nós {' e '.join(sorted(same))} só diferem na caixa, e para o "
+                             "SPICE são o mesmo nó: renomeie um deles")
             for el in sub.elements:
                 if el.letter == "X":
                     if el.model not in self.subckts:
