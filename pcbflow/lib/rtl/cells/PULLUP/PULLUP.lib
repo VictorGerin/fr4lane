@@ -1,0 +1,7 @@
+/* PULLUP — pull-up de uma linha de barramento */
+library(rtl_PULLUP) {
+  cell(PULLUP) {
+    area : 1;
+    pin(Y) { direction : output; function : "1"; }
+  }
+}

@@ -38,11 +38,15 @@ def check_cells(lib, outdir):
             tb.append(f"  reg {pre}{p};")
         for o in cell.outputs:
             tb.append(f"  wire {pre}{o}_i, {pre}{o}_r;")
+            if cell.pins[o].get("three_state"):
+                # coletor aberto: solta a linha, e o pull-up do barramento a leva a 1
+                tb.append(f"  pullup ({pre}{o}_i); pullup ({pre}{o}_r);")
         conn_i = ", ".join([f".{p}({pre}{p})" for p in cell.inputs] + [f".{o}({pre}{o}_i)" for o in cell.outputs])
         conn_r = ", ".join([f".{p}({pre}{p})" for p in cell.inputs] + [f".{o}({pre}{o}_r)" for o in cell.outputs])
         tb.append(f"  impl_{name} i_{name}({conn_i});")
         tb.append(f"  ref_{name} r_{name}({conn_r});")
-        ins = "{" + ", ".join(f"{pre}{p}" for p in cell.inputs) + "}"
+        # sem entradas (pull-up), a concatenação vazia derrubaria o Icarus
+        ins = "{" + ", ".join(f"{pre}{p}" for p in cell.inputs) + "}" if cell.inputs else "1'b0"
         compare = []
         for o in cell.outputs:
             compare.append(f"      if ({pre}{o}_r !== 1'bx && {pre}{o}_i !== {pre}{o}_r) begin "
@@ -51,7 +55,7 @@ def check_cells(lib, outdir):
         if not cell.seq:
             n = len(cell.inputs)
             body.append(f"    for (k = 0; k < {2 ** n}; k = k + 1) begin")
-            body.append(f"      {ins} = k; #1;")
+            body.append(f"      {ins + ' = k; ' if n else ''}#1;")
             body += compare
             body.append("    end")
         elif cell.latch:

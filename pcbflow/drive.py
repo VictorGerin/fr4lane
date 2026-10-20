@@ -98,8 +98,13 @@ class CellDrive:
     static_ma: float                  # corrente se todos os pull-ups estiverem em 0 (custo)
 
 
-def analyze_cell(lib, el, cell):
-    """Pull-ups e cargas de cada pino e de cada net interna da célula."""
+def analyze_cell(lib, el, cell, ext=None):
+    """Pull-ups e cargas de cada pino e de cada net interna da célula.
+
+    ext: {pino: condutância} de pull-ups de fora da célula (o do barramento numa
+    saída de coletor aberto). Só entram na corrente de coletor dos NPNs que puxam
+    esse pino; a célula não dirige o pino para 1 nem gasta essa corrente."""
+    ext = ext or {}
     sub = lib.subckts[cell]
     pins = [p for p in sub.pins if p not in lib.supplies()]
     d = Design(cell, [], [], lib.vdd, lib.gnd)
@@ -125,10 +130,12 @@ def analyze_cell(lib, el, cell):
         elif a in bases and b not in bases:
             base_res.append((b, a, r))
 
+    pull = {**{p: g for p, g in ext.items() if p in pins}, **g_up}
+
     def stack(t):
         """(Ic máxima, Ve) do NPN t saturado, seguindo a pilha série até o pull-up e o GND."""
         n, c, seen = 1, t.pins["C"], {id(t)}
-        while c not in g_up:
+        while c not in pull:
             up = [u for u in npns if u.pins["E"] == c and id(u) not in seen]
             if not up:
                 return 0.0, 0.0
@@ -141,7 +148,7 @@ def analyze_cell(lib, el, cell):
                 break
             seen.add(id(dn[0]))
             n, ve, e = n + 1, ve + el.vce_sat, dn[0].pins["E"]
-        ic = max(0.0, el.vdd_max - n * el.vce_sat) * g_up[c] / (1 - el.tol)
+        ic = max(0.0, el.vdd_max - n * el.vce_sat) * pull[c] / (1 - el.tol)
         return ic, ve
 
     out = {}
@@ -206,7 +213,13 @@ def library_drive(lib):
     el = electrical_of(lib)
     if el is None:
         return None, {}
-    return el, {name: analyze_cell(lib, el, name) for name in lib.cells}
+    drives = {name: analyze_cell(lib, el, name) for name in lib.cells}
+    if lib.tristate:
+        # o driver de barramento puxa a corrente do pull-up da linha
+        pu, pin = lib.pullup
+        ts = lib.tristate
+        drives[ts["cell"]] = analyze_cell(lib, el, ts["cell"], {ts["out"]: drives[pu].pins[pin].g_up})
+    return el, drives
 
 
 def check_internal(lib, el, drives):
@@ -238,7 +251,8 @@ def capacity_table(lib, el, drives):
         base = lib.meta_of(name).get("variant_of", name)
         for pin in lib.cells[name].outputs:
             pd = cd.pins[pin]
-            cap = capacity(el, pd.g_up, pd.loads, ref) if ref is not None else None
+            # o driver de barramento não leva a linha a 1: quem alimenta as cargas é o pull-up
+            cap = capacity(el, pd.g_up, pd.loads, ref) if ref is not None and pd.g_up else None
             rows.append((name, base, pin, cap, cd.static_ma))
     return rows
 

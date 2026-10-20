@@ -47,9 +47,14 @@ def run_yosys(sources, top, liberty, outdir, defines=(), flatten=False, latches=
         latch_cmds = (f"dfflegalize {' '.join(f'-cell {t} x' for t in types)}\n"
                       f"techmap -map {lmap.as_posix()}\n")
     reads = "\n".join(f"read_verilog -sv {defs} {Path(s).as_posix()}" for s in sources)
+    check_out = outdir / "yosys_check.txt"
+    # tribuf: "assign bus = en ? d : 'z" vira $_TBUF_, que fica no netlist até o
+    # pcbflow trocá-lo pelo driver de barramento da família (netlist.py)
     script = f"""read_liberty -lib {lib}
 {reads}
 hierarchy -check -top {top}
+proc
+tribuf
 synth {"-flatten " if flatten else ""}-top {top}
 dfflibmap -liberty {lib}
 {latch_cmds}abc -liberty {lib}
@@ -59,7 +64,7 @@ flatten
 opt_clean -purge
 '''}setundef -zero
 tee -q -o {stat_out.as_posix()} stat -liberty {lib}
-check -assert
+tee -q -o {check_out.as_posix()} check
 write_json {json_out.as_posix()}
 write_verilog -noattr -noexpr {v_out.as_posix()}
 """
@@ -92,4 +97,31 @@ write_verilog -noattr -noexpr {v_out.as_posix()}
     if rc != 0:
         tail = log.read_text(encoding="utf-8", errors="replace").splitlines()[-30:]
         raise RuntimeError("Yosys falhou:\n" + "\n".join(tail))
+    problems = check_problems(check_out.read_text(encoding="utf-8", errors="replace"))
+    if problems:
+        raise RuntimeError(f"o check do Yosys achou {len(problems)} problema(s) no netlist "
+                           f"(veja {check_out.name}):\n" + "\n".join(problems[:20]))
     return json_out, v_out, stat_out, (None if flatten else hier_out)
+
+
+_DRIVER = re.compile(r"^\s+port \S+ of cell .* \((\S+)\)$")
+
+
+def check_problems(text):
+    """Avisos do 'check' do Yosys que contam como erro (o que o 'check -assert'
+    barraria). Vários drivers numa net só são aceitos quando todos são $_TBUF_:
+    é um barramento, e o pcbflow confere de novo ao montar o netlist."""
+    blocks = []
+    for line in text.splitlines():
+        if line.startswith("Warning:"):
+            blocks.append([line])
+        elif blocks and line.startswith(" "):
+            blocks[-1].append(line)
+    out = []
+    for b in blocks:
+        if "multiple conflicting drivers" in b[0]:
+            types = [m.group(1) for m in (_DRIVER.match(l) for l in b[1:]) if m]
+            if types and all(t == "$_TBUF_" for t in types):
+                continue
+        out.append("\n".join(b))
+    return out

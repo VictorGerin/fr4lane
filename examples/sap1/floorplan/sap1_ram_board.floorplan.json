@@ -1,0 +1,78 @@
+{
+  "_comment": "Placa de RAM (4 bytes), montada 4 vezes. Jumpers J_BANK0/J_BANK1: o número do banco (bank[0] e bank[1] no VDD = 1, no GND = 0). Conector J_STACK igual em todas as placas da pilha. Todas as placas da pilha têm 400 x 350 mm.",
+  "board": {
+    "width": 400,
+    "height": 350
+  },
+  "buffer_ports": true,
+  "bus_pullups": false,
+  "connectors": [
+    {
+      "name": "J_STACK",
+      "side": "left",
+      "at": 5.08,
+      "pins": [
+        "VDD",
+        "GND",
+        "bus[0]",
+        "bus[1]",
+        "bus[2]",
+        "bus[3]",
+        "GND",
+        "bus[4]",
+        "bus[5]",
+        "bus[6]",
+        "bus[7]",
+        "VDD",
+        "GND",
+        "mar[0]",
+        "mar[1]",
+        "mar[2]",
+        "mar[3]",
+        "GND",
+        "ri",
+        "ro",
+        "VDD",
+        "GND",
+        "NC",
+        "NC",
+        "NC",
+        "NC",
+        "NC",
+        "NC",
+        "NC",
+        "GND",
+        "NC",
+        "NC",
+        "VDD",
+        "GND",
+        "clk",
+        "GND",
+        "NC",
+        "VDD",
+        "GND",
+        "VDD"
+      ]
+    },
+    {
+      "name": "J_BANK0",
+      "side": "right",
+      "at": 5.08,
+      "pins": [
+        "VDD",
+        "bank[0]",
+        "GND"
+      ]
+    },
+    {
+      "name": "J_BANK1",
+      "side": "right",
+      "at": 15.24,
+      "pins": [
+        "VDD",
+        "bank[1]",
+        "GND"
+      ]
+    }
+  ]
+}

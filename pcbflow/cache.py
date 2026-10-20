@@ -29,7 +29,7 @@ PLACE_CODE = ("library.py", "liberty.py", "spice.py", "netlist.py", "synth.py", 
 # opções do argparse que mudam a síntese ou o placement
 PLACE_ARGS = ("top", "layers", "effort", "seed", "density", "row_gap", "part_gap",
               "module_weight", "flatten", "no_size", "no_buffer", "macro", "macro_keepout", "macro_channel",
-              "route_iter")
+              "route_iter", "no_bus_pullups", "buffer_ports")
 NAMES = {"src": "fontes Verilog", "lib": "biblioteca de células", "floorplan": "floorplan",
          "args": "opções do fluxo", "code": "código do pcbflow"}
 

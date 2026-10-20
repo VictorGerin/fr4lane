@@ -1,0 +1,10 @@
+{
+  "description": "driver de barramento de coletor aberto: inversor de A + dois NPNs em série (E e !A), sem pull-up",
+  "open_collector": true,
+  "layout": {
+    "rows": [
+      ["RLI", "RI", "R1", "R2"],
+      ["QI", "Q1", "Q2"]
+    ]
+  }
+}

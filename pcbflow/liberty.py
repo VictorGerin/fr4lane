@@ -105,7 +105,7 @@ def parse(text):
 class LibCell:
     name: str
     area: float
-    pins: dict            # nome -> {"direction", "function", "clock"}
+    pins: dict            # nome -> {"direction", "function", "clock", "three_state"}
     ff: dict = None       # clocked_on, next_state, clear, preset, iq, iqn
     text: str = ""
     source: str = ""
@@ -144,7 +144,8 @@ def read_cells(path):
             for pname in p.args:
                 pins[pname] = {"direction": p.attrs.get("direction", ""),
                                "function": p.attrs.get("function", ""),
-                               "clock": p.attrs.get("clock", "false") == "true"}
+                               "clock": p.attrs.get("clock", "false") == "true",
+                               "three_state": p.attrs.get("three_state", "")}
         if g.groups("bus"):
             raise LibertyError(f"{path}: célula {g.args[0]}: bus não suportado")
         state = {}

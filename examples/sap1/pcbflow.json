@@ -1,0 +1,12 @@
+{
+  "_comment": "sap1_pkg.sv primeiro: os outros módulos usam os tipos dele",
+  "src": [
+    "rtl/sap1_pkg.sv",
+    "rtl/*.sv"
+  ],
+  "tb": "tb/tb_{top}.sv",
+  "out": "build/pcb",
+  "floorplan": [
+    "floorplan/{top}.floorplan.json"
+  ]
+}

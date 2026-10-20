@@ -7,15 +7,16 @@ import pytest
 
 from conftest import FAMILIES, data, lib_path, run_flow
 from pcbflow import buffering
+from pcbflow.netlist import common_module
 
 FAN = ["--top", "fan40", "--src", data("fan40.v"), "--tb", data("tb_fan40.v"), "--synth-only"]
 
 
 def test_lca():
-    assert buffering._lca(["u0.a", "u0.b.c"]) == "u0"
-    assert buffering._lca(["u0", "u1"]) == ""
-    assert buffering._lca(["", "u0"]) == ""
-    assert buffering._lca(["u0.a"]) == "u0.a"
+    assert common_module(["u0.a", "u0.b.c"]) == "u0"
+    assert common_module(["u0", "u1"]) == ""
+    assert common_module(["", "u0"]) == ""
+    assert common_module(["u0.a"]) == "u0.a"
 
 
 @pytest.mark.slow

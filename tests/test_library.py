@@ -126,6 +126,7 @@ def _mutated(tmp_path, family, cell, old, new):
     ("cmos", "DLAT", "X1 D  E  sb", "X1 D  D  sb"),                          # latch sem enable
     ("rtl", "DLAT", "X1 D  eb r", "X1 eb D r"),                              # pinos trocados: mesma coisa (NOR comuta)
     ("relay", "DLAT", "K1 E GND x D Q RELAY", "K1 E GND x Q D RELAY"),       # contatos NA/NF trocados
+    ("rtl", "TBUF", "R1  E   b1 10k", "R1  A   b1 10k"),                     # driver de barramento sem enable
 ])
 def test_cellcheck_pega_montagem_errada(tmp_path, family, cell, old, new):
     fails = cellcheck.check_cells(_mutated(tmp_path, family, cell, old, new), tmp_path / "out")

@@ -1,0 +1,67 @@
+{
+  "_comment": "Placa da ALU. J_OUT vai para o display. Conector J_STACK igual em todas as placas da pilha. Todas as placas da pilha têm 400 x 350 mm.",
+  "board": {
+    "width": 400,
+    "height": 350
+  },
+  "buffer_ports": true,
+  "bus_pullups": false,
+  "connectors": [
+    {
+      "name": "J_STACK",
+      "side": "left",
+      "at": 5.08,
+      "pins": [
+        "VDD",
+        "GND",
+        "bus[0]",
+        "bus[1]",
+        "bus[2]",
+        "bus[3]",
+        "GND",
+        "bus[4]",
+        "bus[5]",
+        "bus[6]",
+        "bus[7]",
+        "VDD",
+        "GND",
+        "NC",
+        "NC",
+        "NC",
+        "NC",
+        "GND",
+        "NC",
+        "NC",
+        "VDD",
+        "GND",
+        "ai",
+        "ao",
+        "bi",
+        "eo",
+        "su",
+        "fi",
+        "oi",
+        "GND",
+        "cf",
+        "zf",
+        "VDD",
+        "GND",
+        "clk",
+        "GND",
+        "rst_n",
+        "VDD",
+        "GND",
+        "VDD"
+      ]
+    },
+    {
+      "name": "J_OUT",
+      "side": "right",
+      "at": 5.08,
+      "pins": [
+        "out[*]",
+        "GND"
+      ]
+    }
+  ]
+}
