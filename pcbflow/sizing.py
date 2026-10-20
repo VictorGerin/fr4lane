@@ -104,12 +104,20 @@ def _sinks_by_net(lib, design):
     return sinks
 
 
+def _bus_driver(lib, cell):
+    """Driver de barramento (coletor aberto): não leva a linha a 1, quem alimenta
+    as cargas é o pull-up da linha, avaliado no lugar dele."""
+    return lib.tristate is not None and cell == lib.tristate["cell"]
+
+
 def check_nets(lib, design, el, drives):
     """Avalia toda net dirigida por uma instância (depois do sizing, se houve)."""
     m = _Model(lib, el, drives)
     sinks = _sinks_by_net(lib, design)
     out = []
     for inst, (cell, _) in design.instances.items():
+        if _bus_driver(lib, cell):
+            continue
         for pin in lib.cells[cell].outputs:
             net = design.conns[inst].get(pin)
             if net is None or net in lib.supplies():

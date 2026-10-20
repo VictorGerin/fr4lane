@@ -1,0 +1,9 @@
+/* TBUF — driver de barramento de coletor aberto (como o 74LS03) */
+library(rtl_TBUF) {
+  cell(TBUF) {
+    area : 7;
+    pin(A) { direction : input; }
+    pin(E) { direction : input; }
+    pin(Y) { direction : output; function : "A"; three_state : "!E"; }
+  }
+}

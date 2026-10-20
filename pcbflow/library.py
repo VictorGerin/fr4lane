@@ -16,6 +16,14 @@ Yosys só vê a base; depois da síntese o pcbflow troca cada instância pela
 variante mais econômica que ainda alimenta as suas cargas (sizing.py). Uma
 variante pode ter várias saídas para uma saída da base, cada uma com uma parte
 das cargas: "outputs": {"Y": ["Y0", "Y1"]}.
+
+Barramentos (tri-state): uma célula cuja saída declara "three_state" no .lib
+(ex.: function "A", three_state "!E") é o driver de barramento da família. Ela
+é de coletor (ou dreno) aberto: só puxa a linha para 0, e uma célula com
+"pullup": true no .json (um resistor para o VDD, function "1") leva a linha a 1.
+O Yosys mapeia cada "assign bus = en ? d : 'z" para $_TBUF_; o pcbflow troca
+cada um pelo driver da família e põe um pull-up em cada net de barramento
+(netlist.py). As duas ficam fora da síntese do ABC.
 """
 
 import json
@@ -108,7 +116,9 @@ class Library:
             base = self.meta_of(name).get("variant_of")
             if base:
                 self.variants.setdefault(base, []).append(name)
-        problems = self.check()
+        self.tristate = None      # driver de barramento: {"cell", "data", "enable", "out"}
+        self.pullup = None        # (célula, pino) do pull-up de barramento
+        problems = self._find_bus_cells() + self.check()
         if problems:
             raise LibraryError("biblioteca inconsistente:\n  " + "\n  ".join(problems))
 
@@ -117,9 +127,62 @@ class Library:
         return self.cell_meta.get(cell, {})
 
     def usable(self, cell):
-        """A célula é oferecida ao Yosys? (variantes nunca: entram no sizing)"""
+        """A célula é oferecida ao Yosys? (variantes nunca: entram no sizing; driver
+        e pull-up de barramento também não: o pcbflow os põe depois da síntese)"""
         meta = self.meta_of(cell)
-        return not meta.get("dont_use", False) and not meta.get("variant_of")
+        return not (meta.get("dont_use", False) or meta.get("variant_of") or self.is_bus_cell(cell))
+
+    def is_bus_cell(self, cell):
+        """Driver de barramento (coletor aberto) ou pull-up: a saída pode dividir a
+        net com outras dessas duas."""
+        return ((self.tristate is not None and cell == self.tristate["cell"])
+                or (self.pullup is not None and cell == self.pullup[0]))
+
+    def _find_bus_cells(self):
+        """Acha o driver de barramento (saída com three_state) e o pull-up da família."""
+        p = []
+        drivers, pullups = [], []
+        for name, cell in self.cells.items():
+            ts = [o for o in cell.outputs if cell.pins[o].get("three_state")]
+            if ts:
+                drivers.append((name, ts))
+            if self.meta_of(name).get("pullup"):
+                pullups.append(name)
+        for name, ts in drivers:
+            cell = self.cells[name]
+            try:
+                f = liberty.parse_expr(cell.pins[ts[0]]["function"] or "?")
+                t = liberty.parse_expr(cell.pins[ts[0]]["three_state"])
+            except liberty.LibertyError as e:
+                p.append(f"{name}.lib: {e}")
+                continue
+            # a forma que o $_TBUF_ do Yosys tem: Y = E ? A : z, com enable ativo alto
+            if (len(ts) != 1 or len(cell.outputs) != 1 or cell.seq or f[0] != "var"
+                    or t[0] != "not" or t[1][0] != "var" or len(cell.inputs) != 2
+                    or {f[1], t[1][1]} != set(cell.inputs)):
+                p.append(f"{name}.lib: driver de barramento deve ter duas entradas e uma saída com "
+                         "function \"A\" e three_state \"!E\" (enable ativo alto)")
+                continue
+            if not self.meta_of(name).get("open_collector"):
+                p.append(f"{name}.json: o driver de barramento só puxa a linha para 0 "
+                         "(coletor aberto): declare \"open_collector\": true")
+                continue
+            if self.tristate:
+                p.append(f"dois drivers de barramento: {self.tristate['cell']} e {name}")
+                continue
+            self.tristate = {"cell": name, "data": f[1], "enable": t[1][1], "out": ts[0]}
+        for name in pullups:
+            cell = self.cells[name]
+            if cell.inputs or len(cell.outputs) != 1 or cell.pins[cell.outputs[0]]["function"].strip() != "1":
+                p.append(f"{name}: o pull-up deve ter só uma saída, com function \"1\"")
+            elif self.pullup:
+                p.append(f"dois pull-ups de barramento: {self.pullup[0]} e {name}")
+            else:
+                self.pullup = (name, cell.outputs[0])
+        if self.tristate and not self.pullup:
+            p.append(f"{self.tristate['cell']}: driver de barramento sem célula de pull-up "
+                     "(uma célula com \"pullup\": true no .json)")
+        return p
 
     def variant_group(self, base):
         """A base e as suas variantes (as que podem substituí-la depois da síntese)."""
@@ -313,6 +376,9 @@ class Library:
         out = ["// Modelos das células gerados do Liberty pelo pcbflow", "`timescale 1ns/1ps"]
         for cell in self.cells.values():
             out += self.reference_model(cell, cell.name)
+        # o netlist do Yosys deixa os drivers de barramento como $_TBUF_ (veja synth.py)
+        out += ["module \\$_TBUF_ (A, E, Y);", "  input A, E;", "  output Y;",
+                "  assign #0.01 Y = E ? A : 1'bz;", "endmodule\n"]
         Path(path).write_text("\n".join(out) + "\n", encoding="utf-8")
 
     def reference_model(self, cell, module_name):
@@ -352,7 +418,13 @@ class Library:
             out.append(f"  always @* {''.join(body)}if ({en}) {iq} = {din};")
         for o in cell.outputs:
             expr = liberty.to_verilog(liberty.parse_expr(cell.pins[o]["function"]))
-            out.append(f"  assign #0.01 {o} = {expr};")
+            if self.meta_of(cell.name).get("pullup"):
+                out.append(f"  pullup ({o});")           # fraco: perde para quem puxa a 0
+            elif cell.pins[o].get("three_state"):
+                off = liberty.to_verilog(liberty.parse_expr(cell.pins[o]["three_state"]))
+                out.append(f"  assign #0.01 {o} = {off} ? 1'bz : {expr};")
+            else:
+                out.append(f"  assign #0.01 {o} = {expr};")
         out.append("endmodule\n")
         return out
 

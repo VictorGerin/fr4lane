@@ -43,6 +43,12 @@ ela fica; sem isso, o macro vai para dentro da área do módulo que o contém ou
 sem nenhuma, para uma faixa abaixo das áreas declaradas (sem floorplan: o alto
 da placa).
 
+Barramentos: "bus_pullups": false tira os pull-ups das linhas de barramento
+desta placa. Numa pilha de placas ligadas pelo barramento, só uma delas leva
+os pull-ups (veja system.py); as outras só têm os drivers de coletor aberto.
+"buffer_ports": true põe um buffer na entrada de cada porta de entrada e
+inout: a placa pesa uma carga só em cada linha da pilha.
+
 Conectores: "connectors" fixa a borda, a posição e a pinagem das barras de
 pinos de E/S (o que permite casar os conectores de placas vizinhas):
 
@@ -115,6 +121,8 @@ class Floorplan:
     keepouts: list = field(default_factory=list)
     macros: list = field(default_factory=list)    # tipos de módulo implementados como macro
     connectors: list = field(default_factory=list)  # Connector, na ordem do arquivo
+    bus_pullups: bool = True                   # pull-up em cada linha de barramento desta placa
+    buffer_ports: bool = False                 # buffer na entrada de cada porta (placa de uma pilha)
 
     def rule_of(self, module_path):
         """Regra mais específica que vale para um caminho de módulo (ou None)."""
@@ -175,12 +183,19 @@ def parse(data, path="floorplan"):
     """Valida um floorplan já lido do JSON (path só aparece nas mensagens)."""
     if not isinstance(data, dict):
         raise FloorplanError(f"{path}: esperado um objeto JSON")
-    _keys(data, ("board", "modules", "keepouts", "macros", "connectors", "_comment"), path)
+    _keys(data, ("board", "modules", "keepouts", "macros", "connectors", "bus_pullups", "buffer_ports",
+                 "_comment"), path)
     fp = Floorplan(str(path))
     macros = data.get("macros", [])
     if not isinstance(macros, list) or not all(isinstance(m, str) and m for m in macros):
         raise FloorplanError(f"{path}: 'macros' deve ser uma lista de tipos de módulo (ex.: [\"adder\"])")
     fp.macros = list(macros)
+    if not isinstance(data.get("bus_pullups", True), bool):
+        raise FloorplanError(f"{path}: 'bus_pullups' deve ser true ou false")
+    fp.bus_pullups = data.get("bus_pullups", True)
+    if not isinstance(data.get("buffer_ports", False), bool):
+        raise FloorplanError(f"{path}: 'buffer_ports' deve ser true ou false")
+    fp.buffer_ports = data.get("buffer_ports", False)
 
     if "board" in data:
         b = data["board"]

@@ -133,7 +133,7 @@ def _bit_names(module):
     return names
 
 
-def load_yosys_json(path, top, lib, hier_path=None):
+def load_yosys_json(path, top, lib, hier_path=None, pullups=True):
     with open(path) as f:
         data = json.load(f)
     module = data["modules"][top]
@@ -158,10 +158,18 @@ def load_yosys_json(path, top, lib, hier_path=None):
     counters = {"ff": 0, "g": 0}
     for yname, c in sorted(module["cells"].items()):
         ctype = c["type"]
+        pins = {p: net_of(b[0]) for p, b in c["connections"].items()}
+        if ctype == "$_TBUF_":
+            # tri-state do Yosys -> driver de barramento (coletor aberto) da família
+            ts = lib.tristate
+            if ts is None:
+                raise ValueError(f"o Verilog tem tri-state ({_clean(yname)}), mas a família "
+                                 f"'{lib.name}' não tem driver de barramento")
+            ctype = ts["cell"]
+            pins = {ts["data"]: pins["A"], ts["enable"]: pins["E"], ts["out"]: pins["Y"]}
         if ctype not in lib.cells:
             raise ValueError(f"célula {ctype} ({yname}) não está na biblioteca — "
                              "o Yosys deixou algo sem mapear")
-        pins = {p: net_of(b[0]) for p, b in c["connections"].items()}
         if lib.cells[ctype].seq:
             counters["ff"] += 1
             inst = f"FF{counters['ff']}"
@@ -171,8 +179,79 @@ def load_yosys_json(path, top, lib, hier_path=None):
         design.instances[inst] = (ctype, _clean(yname))
         design.conns[inst] = pins
         design.inst_module[inst] = _clean(scope_of(yname))
+    add_pullups(lib, design, pullups)
     elaborate(lib, design)
     return design
+
+
+def drivers_by_net(lib, design):
+    """net -> [(instância, pino)] das saídas de células ligadas a ela."""
+    out = {}
+    for inst, (cell, _) in design.instances.items():
+        for pin in lib.cells[cell].outputs:
+            net = design.conns[inst].get(pin)
+            if net is not None and net not in (design.vdd, design.gnd):
+                out.setdefault(net, []).append((inst, pin))
+    return out
+
+
+def add_pullups(lib, design, pullups=True):
+    """Confere quem dirige cada net e põe um pull-up (PU1, PU2...) em cada
+    barramento, isto é, em cada net dirigida por drivers de coletor aberto.
+    Várias saídas numa net só valem se forem todas de drivers de barramento.
+    pullups=False só confere: numa pilha de placas, os pull-ups do barramento
+    ficam em outra placa.
+
+    O pull-up vai para o módulo que contém todos os drivers da linha, com um nome
+    tirado do primeiro deles: as cópias de um macro ganham o mesmo pull-up."""
+    inputs = {p.net for p in design.ports if p.direction == "input"}
+    bus = []
+    drivers = drivers_by_net(lib, design)
+    for net, drv in sorted(drivers.items()):
+        cells = {design.instances[i][0] for i, _ in drv}
+        open_ = all(lib.is_bus_cell(c) for c in cells)
+        if len(drv) > 1 and not open_:
+            raise ValueError(f"net {net} dirigida por várias saídas ("
+                             + ", ".join(f"{i} {design.instances[i][0]}.{p}" for i, p in drv)
+                             + "): só drivers de barramento (tri-state) podem dividir uma net")
+        if open_:
+            if net in inputs:
+                raise ValueError(f"net {net}: barramento ligado a uma entrada do topo")
+            bus.append((net, drv))
+    # porta inout sem driver nesta placa: é uma linha do barramento da pilha
+    # que a placa só lê (ou só leva os pull-ups)
+    for p in design.ports:
+        if (p.direction == "inout" and p.net not in drivers and p.net not in (design.vdd, design.gnd)
+                and all(n != p.net for n, _ in bus)):
+            bus.append((p.net, []))
+    if not bus or not pullups:
+        return
+    if lib.pullup is None:
+        raise ValueError(f"a família '{lib.name}' não tem pull-up de barramento")
+    cell, pin = lib.pullup
+    for k, (net, drv) in enumerate(bus, 1):
+        if drv:
+            mod = common_module([design.inst_module.get(i, "") for i, _ in drv])
+            first = min(drv, key=lambda d: design.instances[d[0]][1])[0]
+            depth = len(mod.split(".")) if mod else 0
+            local = "/".join(design.instances[first][1].split(".")[depth:])
+        else:
+            mod, local = "", net
+        inst = f"PU{k}"
+        design.instances[inst] = (cell, (f"{mod}." if mod else "") + f"$pullup${local}")
+        design.conns[inst] = {pin: net}
+        design.inst_module[inst] = mod
+
+
+def common_module(paths):
+    """Ancestral comum de caminhos de módulo ('' = topo)."""
+    split = [p.split(".") if p else [] for p in paths]
+    out = []
+    for parts in zip(*split):
+        if len(set(parts)) != 1:
+            break
+        out.append(parts[0])
+    return ".".join(out)
 
 
 def elaborate(lib, design):
@@ -251,22 +330,35 @@ def write_switch_level_verilog(lib, design, path, module_name=None):
     lines.append(f"  supply0 {ident(design.gnd)};")
     for n in sorted(design.nets() - {design.vdd, design.gnd}):
         lines.append(f"  wire {ident(n)};")
+    # Porta inout (barramento que sai da placa): ligação bidirecional (tran),
+    # para os drivers das outras placas da pilha chegarem às cargas desta e vice-versa.
+    direct = {p.net for p in design.ports if p.direction == "inout"} - {design.vdd, design.gnd}
     for p in design.ports:
         if p.direction == "input":
             if p.net not in (design.vdd, design.gnd):
                 lines.append(f"  assign {ident(p.net)} = {_port_ref(p)};")
+        elif p.direction == "inout":
+            lines.append(f"  tran {ident('$io.' + p.name)}({_port_ref(p)}, {ident(p.net)});")
         else:
             lines.append(f"  assign {_port_ref(p)} = {ident(p.net)};")
     # As redes de componentes são avaliadas sem atraso e cada saída de bloco
     # passa por um atraso de TRANSPORTE pequeno. Com atraso inercial (nas
     # primitivas ou num assign #d) um glitch X de tempo zero fica preso na
     # saída no Icarus; sem atraso nenhum os latches dos flip-flops entram em corrida.
+    # Num barramento, os drivers de coletor aberto e o pull-up ligam ao mesmo nó
+    # $raw: o transistor que conduz (forte) vence o pull-up (rtran, fraco). Num
+    # barramento que sai pela porta inout, ligam direto na net (sem o atraso):
+    # o nó é o mesmo em todas as placas, e um atraso só desta placa não o representa.
     driven = {}
     for b in design.blocks:
         for out in b.outputs:
             if out in driven:
-                raise ValueError(f"net {out} dirigida por {driven[out]} e {b.name}")
-            driven[out] = b.name
+                if not (lib.is_bus_cell(b.cell) and lib.is_bus_cell(driven[out][1])):
+                    raise ValueError(f"net {out} dirigida por {driven[out][0]} e {b.name}")
+                continue
+            driven[out] = (b.name, b.cell)
+            if out in direct:
+                continue
             raw, dly = ident(out + "$raw"), ident(out + "$d")
             lines.append(f"  wire {raw};")
             lines.append(f"  reg {dly};")
@@ -290,7 +382,8 @@ def write_switch_level_verilog(lib, design, path, module_name=None):
             lines.append(f"  assign {ident(f'{n}$in.{b.name}')} = {ident(n)};")
         for p in b.parts:
             kind = lib.parts[p.model]["kind"]
-            pins = {r: (n + "$raw" if n in outs and r not in CONTROL_ROLES else n) for r, n in p.pins.items()}
+            pins = {r: (n + "$raw" if n in outs and n not in direct and r not in CONTROL_ROLES else n)
+                    for r, n in p.pins.items()}
             if kind == "relay":
                 pins.update({r: f"{pins[r]}$in.{b.name}" for r in ("COM", "NO", "NC") if pins[r] in ins})
             inst = ident(f"{b.name}.{p.name}")

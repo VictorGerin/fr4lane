@@ -20,7 +20,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from . import buffering, cache, cellcheck, check, drc, drive, floorplan, hier, kicad, netlist, place, progress, project, route,     sizing, synth
+from . import buffering, cache, cellcheck, check, drc, drive, floorplan, hier, kicad, netlist, place, progress, project, route,     sizing, synth, system
 from .layout import Rules
 from .library import Library, LibraryError, resolve_family
 
@@ -112,6 +112,12 @@ def main(argv=None):
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--no-buffer", action="store_true",
                     help="não insere buffers nas nets com fan-out acima do que a saída aguenta (só avisa)")
+    ap.add_argument("--no-bus-pullups", action="store_true",
+                    help="sem pull-up nas linhas de barramento (tri-state): numa pilha de placas, só uma "
+                         "delas leva os pull-ups (também \"bus_pullups\": false no floorplan)")
+    ap.add_argument("--buffer-ports", action="store_true",
+                    help="um buffer na entrada de cada porta de entrada e inout: a placa pesa uma carga só "
+                         "em cada linha (placas de uma pilha; também \"buffer_ports\": true no floorplan)")
     ap.add_argument("--no-size", action="store_true",
                     help="não troca as células pelas variantes de fan-out (fica o que o Yosys escolheu)")
     ap.add_argument("--macro", action="append", default=[], metavar="TIPO",
@@ -227,14 +233,31 @@ def main(argv=None):
         json_path, gates_v, stat, hier_json = synth.run_yosys(args.src, args.top, liberty, out, flatten=args.flatten,
                                                                 latches=lib.latch_techmap())
         stat_text = stat.read_text()
-        with progress.Progress("leitura do netlist e expansão em componentes", tick=True):
-            design = netlist.load_yosys_json(json_path, args.top, lib, hier_json)
+        try:
+            with progress.Progress("leitura do netlist e expansão em componentes", tick=True):
+                design = netlist.load_yosys_json(json_path, args.top, lib, hier_json, pullups=_pullups(args, fplan))
+        except ValueError as e:
+            log(f"ERRO: {e}")
+            return 3
+        bus = Counter(cell for cell, _ in design.instances.values())
+        if lib.tristate and bus[lib.tristate["cell"]]:
+            if _pullups(args, fplan):
+                log(f"      barramentos: {bus[lib.pullup[0]]} linha(s) com {bus[lib.tristate['cell']]} drivers "
+                    f"de coletor aberto ({lib.tristate['cell']}) e um pull-up ({lib.pullup[0]}) em cada")
+            else:
+                log(f"      barramentos: {bus[lib.tristate['cell']]} drivers de coletor aberto "
+                    f"({lib.tristate['cell']}), sem pull-ups nesta placa")
         sized = None
         if lib.variants and not args.no_size:
             with progress.Progress("sizing por fan-out", tick=True):
                 sized = sizing.size_design(lib, design, el, drives)
             log(f"      sizing: {len(sized.changed)} instâncias trocadas por variantes de fan-out"
                 + (f", {len(sized.unresolved)} sem variante que atenda" if sized.unresolved else ""))
+        if args.buffer_ports or (fplan and fplan.buffer_ports):
+            with progress.Progress("buffers nas portas", tick=True):
+                ported = buffering.buffer_ports(lib, design, el, drives)
+            if ported:
+                log(f"      buffers nas portas: {len(ported)} (cada linha de entrada pesa uma carga)")
         buffered = None
         if not args.no_buffer:
             with progress.Progress("buffers por fan-out", tick=True):
@@ -402,6 +425,11 @@ def _simulate(args, lib, design, out, gates_v, models, sims, clock):
     """Simulação com o testbench (gate-level e de componentes). sims guarda o
     resultado por testbench: com o placement reaproveitado, um testbench que já
     rodou nesta mesma entrada não roda de novo."""
+    # o netlist de componentes e o resumo das portas saem sempre: são o que o
+    # pcbflow-system usa para montar um sistema de várias placas
+    sw = out / f"{args.top}_switch.v"
+    netlist.write_switch_level_verilog(lib, design, sw)
+    system.write_ports(out / system.PORTS, lib, design)
     if not args.tb:
         clock.stage("[2/6] Simulação: pulada (use --tb)")
         return
@@ -416,14 +444,17 @@ def _simulate(args, lib, design, out, gates_v, models, sims, clock):
     ok, text = run_sim(args.tb, [gates_v, models], out, "sim_gates", "simulação gate-level")
     log(f"      gate-level:       {'OK' if ok else 'FALHOU'}")
     (out / "sim_gates.log").write_text(text)
-    sw = out / f"{args.top}_switch.v"
-    netlist.write_switch_level_verilog(lib, design, sw)
     ok2, text2 = run_sim(args.tb, [sw], out, "sim_switch", "simulação de componentes")
     log(f"      componentes:      {'OK' if ok2 else 'FALHOU'}")
     (out / "sim_switch.log").write_text(text2)
     if not (ok and ok2):
         log("      veja sim_gates.log / sim_switch.log")
     sims[th] = (ok, ok2)
+
+
+def _pullups(args, fplan):
+    """Esta placa leva os pull-ups das linhas de barramento?"""
+    return not args.no_bus_pullups and (fplan is None or fplan.bus_pullups)
 
 
 def _place_params(args):

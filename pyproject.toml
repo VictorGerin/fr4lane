@@ -30,6 +30,7 @@ test = ["pytest", "selenium"]
 pcbflow = "pcbflow.__main__:main"
 pcbflow-fpedit = "pcbflow.fpedit:main"
 pcbflow-drc = "pcbflow.drc:main"
+pcbflow-system = "pcbflow.system:main"
 
 [tool.setuptools]
 packages = ["pcbflow"]

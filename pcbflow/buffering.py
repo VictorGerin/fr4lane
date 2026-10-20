@@ -25,8 +25,8 @@ buffers e continuam com o mesmo molde.
 from dataclasses import dataclass, field
 
 from . import liberty
-from .netlist import elaborate
-from .sizing import _Model, _natural, _sinks_by_net
+from .netlist import common_module, elaborate
+from .sizing import _Model, _bus_driver, _natural, _sinks_by_net
 
 
 @dataclass
@@ -87,15 +87,43 @@ def _groups(model, cell, pin, sinks, cell_of):
     return groups
 
 
-def _lca(paths):
-    """Ancestral comum de caminhos de módulo ('' = topo)."""
-    split = [p.split(".") if p else [] for p in paths]
+def buffer_ports(lib, design, el, drives):
+    """Um buffer da família na entrada de cada porta de entrada e inout (B1,
+    B2...): as cargas da placa passam para a saída dele, e a placa pesa uma
+    carga só em cada linha. Numa pilha de placas, é o que deixa um sinal (ou o
+    pull-up de um barramento) alimentar todas as placas. Os drivers de
+    barramento ficam na linha; só as cargas vão para trás do buffer.
+    Devolve [(porta, cargas movidas)]."""
+    buf = buffer_cell(lib, _Model(lib, el, drives))
+    if buf is None:
+        return []
+    b_in, b_out = lib.cells[buf].inputs[0], lib.cells[buf].outputs[0]
+    sinks = _sinks_by_net(lib, design)
+    power = set(lib.supplies())
+    used = set(design.nets()) | set(sinks)
+    n_buf = sum(1 for i in design.instances if i.startswith("B") and i[1:].isdigit())
     out = []
-    for parts in zip(*split):
-        if len(set(parts)) != 1:
-            break
-        out.append(parts[0])
-    return ".".join(out)
+    for p in design.ports:
+        if p.direction not in ("input", "inout") or p.net in power:
+            continue
+        real = [s for s in sinks.get(p.net, []) if s[0]]
+        if not real:
+            continue
+        new = f"{p.net}.in"
+        while new in used:
+            new += "_"
+        used.add(new)
+        n_buf += 1
+        inst = f"B{n_buf}"
+        design.instances[inst] = (buf, f"$portbuf${p.name}")
+        design.conns[inst] = {b_in: p.net, b_out: new}
+        design.inst_module[inst] = ""
+        for si, sp in real:
+            design.conns[si][sp] = new
+        out.append((p.name, len(real)))
+    if out:
+        elaborate(lib, design)
+    return out
 
 
 def buffer_design(lib, design, el, drives, inputs=True):
@@ -123,6 +151,8 @@ def buffer_design(lib, design, el, drives, inputs=True):
     # quem dirige cada net: (instância, célula, pino) ou a porta de entrada (como um buffer)
     drivers = []
     for inst, (cell, _) in sorted(design.instances.items(), key=lambda kv: _natural(kv[0])):
+        if _bus_driver(lib, cell):
+            continue                     # o barramento é dirigido pelo pull-up dele
         for pin in lib.cells[cell].outputs:
             net = design.conns[inst].get(pin)
             if net is not None and net not in power:
@@ -181,7 +211,7 @@ def buffer_design(lib, design, el, drives, inputs=True):
                 inst = f"B{n_buf}"
                 # módulo: ancestral comum de quem alimenta o buffer e das cargas dele
                 leaves = _leaves(levels, lvl, k)
-                mod = _lca([dmod] + [module.get(s[0], "") for s in leaves])
+                mod = common_module([dmod] + [module.get(s[0], "") for s in leaves])
                 in_net = net if lvl == len(levels) else placed[_parent(levels, lvl, k)][1]
                 out_net = f"{net}.buf{lvl}_{k}"
                 while out_net in used:
