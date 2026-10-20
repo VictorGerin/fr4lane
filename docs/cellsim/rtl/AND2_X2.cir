@@ -1,0 +1,93 @@
+* AND2_X2 — AND de 2 entradas com 2 saídas (NAND2 + 2 inversores), fan-out 10–20 (até 10 por saída)
+* família discrete_rtl, canto típico (VDD 5 V, 27 °C; modelos NPN: spice/BC548B.lib)
+* gerado por pcbflow-cellsim --export; rodar: ngspice -b AND2_X2.cir (imprime as medidas e grava AND2_X2.dat)
+*
+* entradas no nível de pior caso: alto = 1.5 V, baixo = 0.4 V; Y0 leva 10 carga(s) INV.A; Y1 leva 10 carga(s) INV.A
+* saída: 1 se >= 1.5 V, 0 se <= 0.5 V
+*
+* vetores de teste (medida: valor esperado):
+*   0-20 µs  A=0 B=0  ->  s_Y0_0: Y0=0, s_Y1_0: Y1=0
+*   20-40 µs  A=0 B=1  ->  s_Y0_1: Y0=0, s_Y1_1: Y1=0
+*   40-60 µs  A=1 B=0  ->  s_Y0_2: Y0=0, s_Y1_2: Y1=0
+*   60-80 µs  A=1 B=1  ->  s_Y0_3: Y0=1, s_Y1_3: Y1=1
+*   80-100 µs  A=0 B=0  ->  s_Y0_4: Y0=0, s_Y1_4: Y1=0
+*
+* pcbflow-cellsim: canto típico
+.temp 27
+.param kup=1 kb=1
+.model NPN NPN(Is=7.049f Xti=3 Eg=1.11 Vaf=54.76 Bf=250 Ise=78.17f Ne=1.479 Ikf=24.96m Nkf=.5381 Xtb=1.5 Br=1.2 Isc=27.51f Nc=1.775 Ikr=3.321 Rc=.9706 Cjc=4.25p Mjc=.3147 Vjc=.5697 Fc=.5 Cje=11.5p Mje=.6715 Vje=.5 Tr=10n Tf=410.7p Itf=1.12 Xtf=26.19 Vtf=10)
+.subckt NAND2 A B Y VDD GND
+RL VDD Y {1000*kup}
+R1 A b1 {10000*kb}
+R2 B b2 {10000*kb}
+Q1 Y b1 n1 NPN
+Q2 n1 b2 GND NPN
+.ends NAND2
+.subckt INV A Y VDD GND
+RL VDD Y {1000*kup}
+R1 A b1 {10000*kb}
+Q1 Y b1 GND NPN
+.ends INV
+.subckt AND2_X2 A B Y0 Y1 VDD GND
+X1 A B n VDD GND NAND2
+X2 n Y0 VDD GND INV
+X3 n Y1 VDD GND INV
+.ends AND2_X2
+VDD vdd 0 5
+V_A in_A 0 PWL(0 0.4 4e-05 0.4 4.0002e-05 1.5 8e-05 1.5 8.0002e-05 0.4)
+V_B in_B 0 PWL(0 0.4 2e-05 0.4 2.0002e-05 1.5 4e-05 1.5 4.0002e-05 0.4 6e-05 0.4 6.0002e-05 1.5 8e-05 1.5 8.0002e-05 0.4)
+Xdut in_A in_B out_Y0 out_Y1 vdd 0 AND2_X2
+Xld_out_Y0_0 out_Y0 ld_out_Y0_0_Y vdd 0 INV
+Xld_out_Y0_1 out_Y0 ld_out_Y0_1_Y vdd 0 INV
+Xld_out_Y0_2 out_Y0 ld_out_Y0_2_Y vdd 0 INV
+Xld_out_Y0_3 out_Y0 ld_out_Y0_3_Y vdd 0 INV
+Xld_out_Y0_4 out_Y0 ld_out_Y0_4_Y vdd 0 INV
+Xld_out_Y0_5 out_Y0 ld_out_Y0_5_Y vdd 0 INV
+Xld_out_Y0_6 out_Y0 ld_out_Y0_6_Y vdd 0 INV
+Xld_out_Y0_7 out_Y0 ld_out_Y0_7_Y vdd 0 INV
+Xld_out_Y0_8 out_Y0 ld_out_Y0_8_Y vdd 0 INV
+Xld_out_Y0_9 out_Y0 ld_out_Y0_9_Y vdd 0 INV
+Xld_out_Y1_0 out_Y1 ld_out_Y1_0_Y vdd 0 INV
+Xld_out_Y1_1 out_Y1 ld_out_Y1_1_Y vdd 0 INV
+Xld_out_Y1_2 out_Y1 ld_out_Y1_2_Y vdd 0 INV
+Xld_out_Y1_3 out_Y1 ld_out_Y1_3_Y vdd 0 INV
+Xld_out_Y1_4 out_Y1 ld_out_Y1_4_Y vdd 0 INV
+Xld_out_Y1_5 out_Y1 ld_out_Y1_5_Y vdd 0 INV
+Xld_out_Y1_6 out_Y1 ld_out_Y1_6_Y vdd 0 INV
+Xld_out_Y1_7 out_Y1 ld_out_Y1_7_Y vdd 0 INV
+Xld_out_Y1_8 out_Y1 ld_out_Y1_8_Y vdd 0 INV
+Xld_out_Y1_9 out_Y1 ld_out_Y1_9_Y vdd 0 INV
+.tran 4e-08 0.0001
+.control
+run
+linearize
+set wr_singlescale
+set wr_vecnames
+wrdata AND2_X2.dat v(in_A) v(in_B) v(out_Y0) v(out_Y1)
+meas tran s_Y0_0 FIND v(out_Y0) AT=1.9e-05
+meas tran l_Y0_0 FIND v(ld_out_Y0_0_Y) AT=1.9e-05
+meas tran s_Y1_0 FIND v(out_Y1) AT=1.9e-05
+meas tran l_Y1_0 FIND v(ld_out_Y1_0_Y) AT=1.9e-05
+meas tran s_Y0_1 FIND v(out_Y0) AT=3.9e-05
+meas tran l_Y0_1 FIND v(ld_out_Y0_0_Y) AT=3.9e-05
+meas tran s_Y1_1 FIND v(out_Y1) AT=3.9e-05
+meas tran l_Y1_1 FIND v(ld_out_Y1_0_Y) AT=3.9e-05
+meas tran s_Y0_2 FIND v(out_Y0) AT=5.9e-05
+meas tran l_Y0_2 FIND v(ld_out_Y0_0_Y) AT=5.9e-05
+meas tran s_Y1_2 FIND v(out_Y1) AT=5.9e-05
+meas tran l_Y1_2 FIND v(ld_out_Y1_0_Y) AT=5.9e-05
+meas tran s_Y0_3 FIND v(out_Y0) AT=7.9e-05
+meas tran l_Y0_3 FIND v(ld_out_Y0_0_Y) AT=7.9e-05
+meas tran d_Y0_3 TRIG AT=6e-05 TARG v(out_Y0) VAL=1.0 TD=6e-05 CROSS=1
+meas tran s_Y1_3 FIND v(out_Y1) AT=7.9e-05
+meas tran l_Y1_3 FIND v(ld_out_Y1_0_Y) AT=7.9e-05
+meas tran d_Y1_3 TRIG AT=6e-05 TARG v(out_Y1) VAL=1.0 TD=6e-05 CROSS=1
+meas tran s_Y0_4 FIND v(out_Y0) AT=9.9e-05
+meas tran l_Y0_4 FIND v(ld_out_Y0_0_Y) AT=9.9e-05
+meas tran d_Y0_4 TRIG AT=8e-05 TARG v(out_Y0) VAL=1.0 TD=8e-05 CROSS=1
+meas tran s_Y1_4 FIND v(out_Y1) AT=9.9e-05
+meas tran l_Y1_4 FIND v(ld_out_Y1_0_Y) AT=9.9e-05
+meas tran d_Y1_4 TRIG AT=8e-05 TARG v(out_Y1) VAL=1.0 TD=8e-05 CROSS=1
+quit
+.endc
+.end

@@ -1,0 +1,63 @@
+* TBUF — driver de barramento de coletor aberto: inversor de A + dois NPNs em série (E e !A), sem pull-up
+* família discrete_rtl, canto típico (VDD 5 V, 27 °C; modelos NPN: spice/BC548B.lib)
+* gerado por pcbflow-cellsim --export; rodar: ngspice -b TBUF.cir (imprime as medidas e grava TBUF.dat)
+*
+* entradas no nível de pior caso: alto = 1.5 V, baixo = 0.4 V; Y leva 1 carga(s) INV.A
+* saída: 1 se >= 1.5 V, 0 se <= 0.5 V
+*
+* vetores de teste (medida: valor esperado):
+*   0-20 µs  A=0 E=0  ->  s_Y_0: Y=1
+*   20-40 µs  A=0 E=1  ->  s_Y_1: Y=0
+*   40-60 µs  A=1 E=0  ->  s_Y_2: Y=1
+*   60-80 µs  A=1 E=1  ->  s_Y_3: Y=1
+*   80-100 µs  A=0 E=0  ->  s_Y_4: Y=1
+*
+* pcbflow-cellsim: canto típico
+.temp 27
+.param kup=1 kb=1
+.model NPN NPN(Is=7.049f Xti=3 Eg=1.11 Vaf=54.76 Bf=250 Ise=78.17f Ne=1.479 Ikf=24.96m Nkf=.5381 Xtb=1.5 Br=1.2 Isc=27.51f Nc=1.775 Ikr=3.321 Rc=.9706 Cjc=4.25p Mjc=.3147 Vjc=.5697 Fc=.5 Cje=11.5p Mje=.6715 Vje=.5 Tr=10n Tf=410.7p Itf=1.12 Xtf=26.19 Vtf=10)
+.subckt TBUF A E Y VDD GND
+RLI VDD an {1000*kup}
+RI A bi {10000*kb}
+QI an bi GND NPN
+R1 E b1 {10000*kb}
+R2 an b2 {10000*kb}
+Q1 Y b1 n1 NPN
+Q2 n1 b2 GND NPN
+.ends TBUF
+.subckt INV A Y VDD GND
+RL VDD Y {1000*kup}
+R1 A b1 {10000*kb}
+Q1 Y b1 GND NPN
+.ends INV
+.subckt PULLUP Y VDD GND
+R1 VDD Y {1000*kup}
+.ends PULLUP
+VDD vdd 0 5
+V_A in_A 0 PWL(0 0.4 4e-05 0.4 4.0002e-05 1.5 8e-05 1.5 8.0002e-05 0.4)
+V_E in_E 0 PWL(0 0.4 2e-05 0.4 2.0002e-05 1.5 4e-05 1.5 4.0002e-05 0.4 6e-05 0.4 6.0002e-05 1.5 8e-05 1.5 8.0002e-05 0.4)
+Xdut in_A in_E out_Y vdd 0 TBUF
+Xterm_Y out_Y vdd 0 PULLUP
+Xld_out_Y_0 out_Y ld_out_Y_0_Y vdd 0 INV
+.tran 4e-08 0.0001
+.control
+run
+linearize
+set wr_singlescale
+set wr_vecnames
+wrdata TBUF.dat v(in_A) v(in_E) v(out_Y)
+meas tran s_Y_0 FIND v(out_Y) AT=1.9e-05
+meas tran l_Y_0 FIND v(ld_out_Y_0_Y) AT=1.9e-05
+meas tran s_Y_1 FIND v(out_Y) AT=3.9e-05
+meas tran l_Y_1 FIND v(ld_out_Y_0_Y) AT=3.9e-05
+meas tran d_Y_1 TRIG AT=2e-05 TARG v(out_Y) VAL=1.0 TD=2e-05 CROSS=1
+meas tran s_Y_2 FIND v(out_Y) AT=5.9e-05
+meas tran l_Y_2 FIND v(ld_out_Y_0_Y) AT=5.9e-05
+meas tran d_Y_2 TRIG AT=4e-05 TARG v(out_Y) VAL=1.0 TD=4e-05 CROSS=1
+meas tran s_Y_3 FIND v(out_Y) AT=7.9e-05
+meas tran l_Y_3 FIND v(ld_out_Y_0_Y) AT=7.9e-05
+meas tran s_Y_4 FIND v(out_Y) AT=9.9e-05
+meas tran l_Y_4 FIND v(ld_out_Y_0_Y) AT=9.9e-05
+quit
+.endc
+.end

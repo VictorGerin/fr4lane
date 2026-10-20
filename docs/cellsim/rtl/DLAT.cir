@@ -1,0 +1,76 @@
+* DLAT — latch D transparente com E = 1 (latch SR de NORs com entrada controlada; 4 NORs + inversor)
+* família discrete_rtl, canto típico (VDD 5 V, 27 °C; modelos NPN: spice/BC548B.lib)
+* gerado por pcbflow-cellsim --export; rodar: ngspice -b DLAT.cir (imprime as medidas e grava DLAT.dat)
+*
+* entradas no nível de pior caso: alto = 1.5 V, baixo = 0.4 V; Q leva 14 carga(s) INV.A
+* saída: 1 se >= 1.5 V, 0 se <= 0.5 V
+*
+* vetores de teste (medida: valor esperado):
+*   E ligado até 80 µs; D muda em 20, 40, 60, 100 e 120 µs
+*   18 µs (transparente)  ->  s_0: Q=0
+*   38 µs (transparente)  ->  s_1: Q=1
+*   58 µs (transparente)  ->  s_2: Q=0
+*   78 µs (transparente)  ->  s_3: Q=1
+*   118 µs (travado)  ->  s_4: Q=1
+*   138 µs (travado)  ->  s_5: Q=1
+*
+* pcbflow-cellsim: canto típico
+.temp 27
+.param kup=1 kb=1
+.model NPN NPN(Is=7.049f Xti=3 Eg=1.11 Vaf=54.76 Bf=250 Ise=78.17f Ne=1.479 Ikf=24.96m Nkf=.5381 Xtb=1.5 Br=1.2 Isc=27.51f Nc=1.775 Ikr=3.321 Rc=.9706 Cjc=4.25p Mjc=.3147 Vjc=.5697 Fc=.5 Cje=11.5p Mje=.6715 Vje=.5 Tr=10n Tf=410.7p Itf=1.12 Xtf=26.19 Vtf=10)
+.subckt INV A Y VDD GND
+RL VDD Y {1000*kup}
+R1 A b1 {10000*kb}
+Q1 Y b1 GND NPN
+.ends INV
+.subckt NOR2 A B Y VDD GND
+RL VDD Y {1000*kup}
+R1 A b1 {10000*kb}
+R2 B b2 {10000*kb}
+Q1 Y b1 GND NPN
+Q2 Y b2 GND NPN
+.ends NOR2
+.subckt DLAT D E Q VDD GND
+X0 E eb VDD GND INV
+X1 D eb r VDD GND NOR2
+X2 r eb s VDD GND NOR2
+X3 r QN Q VDD GND NOR2
+X4 s Q QN VDD GND NOR2
+.ends DLAT
+VDD vdd 0 5
+V_E in_E 0 PWL(0 1.5 8e-05 1.5 8.0002e-05 0.4)
+V_D in_D 0 PWL(0 0.4 2e-05 0.4 2.0002e-05 1.5 4e-05 1.5 4.0002e-05 0.4 6e-05 0.4 6.0002e-05 1.5 0.0001 1.5 0.000100002 0.4 0.00012 0.4 0.000120002 1.5)
+Xdut in_D in_E out_Q vdd 0 DLAT
+Xld_out_Q_0 out_Q ld_out_Q_0_Y vdd 0 INV
+Xld_out_Q_1 out_Q ld_out_Q_1_Y vdd 0 INV
+Xld_out_Q_2 out_Q ld_out_Q_2_Y vdd 0 INV
+Xld_out_Q_3 out_Q ld_out_Q_3_Y vdd 0 INV
+Xld_out_Q_4 out_Q ld_out_Q_4_Y vdd 0 INV
+Xld_out_Q_5 out_Q ld_out_Q_5_Y vdd 0 INV
+Xld_out_Q_6 out_Q ld_out_Q_6_Y vdd 0 INV
+Xld_out_Q_7 out_Q ld_out_Q_7_Y vdd 0 INV
+Xld_out_Q_8 out_Q ld_out_Q_8_Y vdd 0 INV
+Xld_out_Q_9 out_Q ld_out_Q_9_Y vdd 0 INV
+Xld_out_Q_10 out_Q ld_out_Q_10_Y vdd 0 INV
+Xld_out_Q_11 out_Q ld_out_Q_11_Y vdd 0 INV
+Xld_out_Q_12 out_Q ld_out_Q_12_Y vdd 0 INV
+Xld_out_Q_13 out_Q ld_out_Q_13_Y vdd 0 INV
+.tran 4e-08 0.00014
+.control
+run
+linearize
+set wr_singlescale
+set wr_vecnames
+wrdata DLAT.dat v(in_E) v(in_D) v(out_Q)
+meas tran s_0 FIND v(out_Q) AT=1.8e-05
+meas tran s_1 FIND v(out_Q) AT=3.8e-05
+meas tran s_2 FIND v(out_Q) AT=5.8e-05
+meas tran s_3 FIND v(out_Q) AT=7.8e-05
+meas tran s_4 FIND v(out_Q) AT=0.000118
+meas tran s_5 FIND v(out_Q) AT=0.000138
+meas tran dq_0 TRIG AT=2e-05 TARG v(out_Q) VAL=1.0 TD=2e-05 CROSS=1
+meas tran dq_1 TRIG AT=4e-05 TARG v(out_Q) VAL=1.0 TD=4e-05 CROSS=1
+meas tran dq_2 TRIG AT=6e-05 TARG v(out_Q) VAL=1.0 TD=6e-05 CROSS=1
+quit
+.endc
+.end
