@@ -81,6 +81,7 @@ class Footprint:
     group: str = ""
     uuid: str = field(default_factory=new_uuid)
     rot: int = 0              # rotação no KiCad (graus); pads, contorno e serigrafia já vêm girados
+    model: dict = None        # modelo 3D opcional do footprint: {"path": ..., "scale": [...], "offset": [...], "rotate": [...]}
 
     def pad(self, num):
         for p in self.pads:
@@ -151,7 +152,8 @@ class Board:
 def footprint_from_library(lib, lib_name, ref, value):
     geo = lib.footprints[lib_name]
     fp = Footprint(ref, value, lib_name, courtyard=tuple(geo["courtyard"]),
-                   silk=[tuple(s) for s in geo.get("silk", [])], tht=geo["type"] == "tht")
+                   silk=[tuple(s) for s in geo.get("silk", [])], tht=geo["type"] == "tht",
+                   model=geo.get("model"))
     for p in geo["pads"]:
         fp.pads.append(Pad(p["num"], p["x"], p["y"], p["w"], p["h"], p.get("shape", "rect"),
                            tht=geo["type"] == "tht", drill=p.get("drill", 0.0), fp=fp))

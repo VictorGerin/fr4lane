@@ -1,0 +1,10 @@
+{
+  "description": "inversor CDL por inibição magnética (1 núcleo toroidal + 1 diodo + 3 resistores)",
+  "max_fanout": 4,
+  "layout": {
+    "rows": [
+      ["RB", "R1", "RL"],
+      ["D1", "T1"]
+    ]
+  }
+}

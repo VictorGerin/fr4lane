@@ -4,6 +4,12 @@
     "type": "tht",
     "courtyard": [-1.05, -1.05, 6.13, 3.59],
     "silk": [[0.0, -0.8, 5.08, -0.8], [0.0, 3.34, 5.08, 3.34]],
+    "model": {
+      "path": "${KICAD_3DMODEL_DIR}/Inductor_THT.3dshapes/L_CommonMode_Toroid_Vertical_L21.0mm_W10.0mm_Px5.08mm_Py12.70mm_Murata_5100.step",
+      "scale": [0.4, 0.5, 0.5],
+      "offset": [0.0, 0.0, 0.0],
+      "rotate": [0.0, 0.0, 0.0]
+    },
     "pads": [
       {"num": "1", "x": 0.0, "y": 0.0, "w": 1.5, "h": 1.5, "shape": "rect", "drill": 0.8},
       {"num": "2", "x": 2.54, "y": 0.0, "w": 1.5, "h": 1.5, "shape": "circle", "drill": 0.8},

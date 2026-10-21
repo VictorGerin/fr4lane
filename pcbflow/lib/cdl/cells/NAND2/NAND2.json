@@ -1,0 +1,4 @@
+{
+  "description": "NAND de 2 entradas CDL (AND2 + INV; 2 núcleos toroidais)",
+  "max_fanout": 4
+}

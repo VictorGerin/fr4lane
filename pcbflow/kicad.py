@@ -267,9 +267,17 @@ def _footprint(w, fp, nid, board):
             tx, ty = loc(pad.rx + 1.6 * ix, pad.ry + 1.6 * iy)
             w(f"\t\t(fp_text user {_q(text)} (at {_n(tx)} {_n(ty)} {fp.rot}) (layer \"F.SilkS\") "
               f"(uuid {_q(new_uuid())}) (effects (font (size 0.7 0.7) (thickness 0.1)) (justify {just})))")
-    model = _model_path(fp, board.model_var)
-    if model:
-        w(f"\t\t(model {_q(model)} (offset (xyz 0 0 0)) (scale (xyz 1 1 1)) (rotate (xyz 0 0 0)))")
+    if fp.model:
+        m = fp.model
+        mpath = m["path"].replace("${KICAD_3DMODEL_DIR}", f"${{{board.model_var}}}")
+        off = " ".join(_n(x) for x in m.get("offset", (0, 0, 0)))
+        scl = " ".join(_n(x) for x in m.get("scale", (1, 1, 1)))
+        rot_m = " ".join(_n(x) for x in m.get("rotate", (0, 0, 0)))
+        w(f"\t\t(model {_q(mpath)} (offset (xyz {off})) (scale (xyz {scl})) (rotate (xyz {rot_m})))")
+    else:
+        model = _model_path(fp, board.model_var)
+        if model:
+            w(f"\t\t(model {_q(model)} (offset (xyz 0 0 0)) (scale (xyz 1 1 1)) (rotate (xyz 0 0 0)))")
     w("\t)")
 
 

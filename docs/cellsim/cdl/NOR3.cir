@@ -1,0 +1,121 @@
+* NOR3 — NOR de 3 entradas CDL em um único núcleo (1 núcleo toroidal + 3 diodos + 3 resistores)
+* família discrete_cdl, canto típico (VDD 5 V, 27 °C; modelos CORE: spice/MAGAMP.lib, DIODE: spice/1N4148.lib)
+* gerado por pcbflow-cellsim --export; rodar: ngspice -b NOR3.cir (imprime as medidas e grava NOR3.dat)
+*
+* entradas no nível de pior caso: alto = 4 V, baixo = 0.25 V; Y leva 4 carga(s) INV.A
+* saída: 1 se >= 3.25 V, 0 se <= 0.4 V
+*
+* vetores de teste (medida: valor esperado):
+*   0-20 µs  A=0 B=0 C=0  ->  s_Y_0: Y=1
+*   20-40 µs  A=0 B=0 C=1  ->  s_Y_1: Y=0
+*   40-60 µs  A=0 B=1 C=0  ->  s_Y_2: Y=0
+*   60-80 µs  A=0 B=1 C=1  ->  s_Y_3: Y=0
+*   80-100 µs  A=1 B=0 C=0  ->  s_Y_4: Y=0
+*   100-120 µs  A=1 B=0 C=1  ->  s_Y_5: Y=0
+*   120-140 µs  A=1 B=1 C=0  ->  s_Y_6: Y=0
+*   140-160 µs  A=1 B=1 C=1  ->  s_Y_7: Y=0
+*   160-180 µs  A=0 B=0 C=0  ->  s_Y_8: Y=1
+*
+* pcbflow-cellsim: canto típico
+.temp 27
+.param kup=1 kb=1
+.param kcore=1.0 kic=1.0
+* Núcleo toroidal de ferrite CDL (Core-Diode Logic) — modelo para simulação analógica (pcbflow-cellsim)
+*
+* Na lógica CDL pura (sem transistores), o núcleo toroidal de ferrite atua como
+* estágio magnético de limiar e amplificação: os sinais de entrada passam por
+* diodos retificadores 1N4148 (que impedem o retorno de corrente entre entradas)
+* e alimentam os enrolamentos de comando W1 (+N espiras), W2 (+N espiras) e
+* WB (-N espiras, enrolamento de inibição/polarização).
+*
+* Física modelada:
+*   - Resistência CC de cada enrolamento: 10 Ω (escalada por kcore);
+*   - Força magnetomotriz (FMM) líquida normalizada em mA:
+*       Immf = 1000 * (I(W1) + I(W2) - I(WB))
+*     - Em OR2/BUF: os diodos excitam W1 (WB=0); qualquer entrada alta supera Ic.
+*     - Em INV/NOR2/NOR3: W1 recebe polarização positiva constante de VDD (via RB=10 kΩ,
+*       ~0,5 mA) mantendo a saída em 1 no repouso; qualquer entrada alta injeta corrente
+*       via diodo no enrolamento de inibição WB (via R1=3,3 kΩ, ~1 mA), invertendo o
+*       fluxo magnético líquido e levando a saída a 0.
+*     - Em AND2: W1 e W2 recebem as duas entradas via diodos (~0,5 mA cada) enquanto
+*       WB recebe polarização negativa de VDD (via RB=10 kΩ, ~0,5 mA) que cancela uma
+*       única entrada alta; apenas a coincidência (A=1 e B=1) supera Ic em um único núcleo.
+*   - Dinâmica de comutação de parede de domínio magnético (τ_sw ≈ 120 ns, modelada por
+*     Rmag=120 Ω e Cmag=1 nF) e laço de histerese retangular (SWCORE com limiar coercivo
+*     Ic = 0,14 mA ± 0,02 mA, escalado por kic);
+*   - Saída S com regeneração magnética de baixa impedância (RON=50 Ω para Vdrv=4,3 V,
+*     representando a tensão secundária retificada) e retorno a 0 V pelo resistor de carga
+*     externo RL (2,2 kΩ ao GND) quando o núcleo é inibido/resetado.
+*
+* Pinos na convenção do pcbflow: w1, w2, wb, s, gnd.
+.param kcore=1.0 kic=1.0
+.subckt MCORE w1 w2 wb s gnd
+Vw1  w1  w1m 0
+Rw1  w1m gnd {10*kcore}
+Vw2  w2  w2m 0
+Rw2  w2m gnd {10*kcore}
+Vwb  wb  wbm 0
+Rwb  wbm gnd {10*kcore}
+Bmmf mmf gnd V = 1000 * (i(Vw1) + i(Vw2) - i(Vwb)) / kic
+Rmag mmf flx 120
+Cmag flx gnd 1n
+Vdrv vp  gnd 4.3
+Sc   vp  s   flx gnd SWCORE
+.model SWCORE SW(VT=0.14 VH=0.02 RON=50 ROFF=100MEG)
+.ends MCORE
+.model DIODE D(IS=4.352E-9 N=1.906 BV=110 IBV=0.0001 RS=0.6458 CJO=7.048E-13 VJ=0.869 M=0.03 FC=0.5 TT=3.48E-9)
+.subckt NOR3 A B C Y VDD GND
+RB VDD w1 {10000*kup}
+D1 A d1 DIODE
+D2 B d1 DIODE
+D3 C d1 DIODE
+R1 d1 wb {3300*kb}
+RL Y GND {2200*kb}
+XT1 w1 GND wb Y GND MCORE
+.ends NOR3
+.subckt INV A Y VDD GND
+RB VDD w1 {10000*kup}
+D1 A d1 DIODE
+R1 d1 wb {3300*kb}
+RL Y GND {2200*kb}
+XT1 w1 GND wb Y GND MCORE
+.ends INV
+VDD vdd 0 5
+V_A in_A 0 PWL(0 0.25 8e-05 0.25 8.0002e-05 4 0.00016 4 0.000160002 0.25)
+V_B in_B 0 PWL(0 0.25 4e-05 0.25 4.0002e-05 4 8e-05 4 8.0002e-05 0.25 0.00012 0.25 0.000120002 4 0.00016 4 0.000160002 0.25)
+V_C in_C 0 PWL(0 0.25 2e-05 0.25 2.0002e-05 4 4e-05 4 4.0002e-05 0.25 6e-05 0.25 6.0002e-05 4 8e-05 4 8.0002e-05 0.25 0.0001 0.25 0.000100002 4 0.00012 4 0.000120002 0.25 0.00014 0.25 0.000140002 4 0.00016 4 0.000160002 0.25)
+Xdut in_A in_B in_C out_Y vdd 0 NOR3
+Xld_out_Y_0 out_Y ld_out_Y_0_Y vdd 0 INV
+Xld_out_Y_1 out_Y ld_out_Y_1_Y vdd 0 INV
+Xld_out_Y_2 out_Y ld_out_Y_2_Y vdd 0 INV
+Xld_out_Y_3 out_Y ld_out_Y_3_Y vdd 0 INV
+.tran 4e-08 0.00018
+.control
+run
+linearize
+set wr_singlescale
+set wr_vecnames
+wrdata NOR3.dat v(in_A) v(in_B) v(in_C) v(out_Y)
+meas tran s_Y_0 FIND v(out_Y) AT=1.9e-05
+meas tran l_Y_0 FIND v(ld_out_Y_0_Y) AT=1.9e-05
+meas tran s_Y_1 FIND v(out_Y) AT=3.9e-05
+meas tran l_Y_1 FIND v(ld_out_Y_0_Y) AT=3.9e-05
+meas tran d_Y_1 TRIG AT=2e-05 TARG v(out_Y) VAL=1.75 TD=2e-05 CROSS=1
+meas tran s_Y_2 FIND v(out_Y) AT=5.9e-05
+meas tran l_Y_2 FIND v(ld_out_Y_0_Y) AT=5.9e-05
+meas tran s_Y_3 FIND v(out_Y) AT=7.9e-05
+meas tran l_Y_3 FIND v(ld_out_Y_0_Y) AT=7.9e-05
+meas tran s_Y_4 FIND v(out_Y) AT=9.9e-05
+meas tran l_Y_4 FIND v(ld_out_Y_0_Y) AT=9.9e-05
+meas tran s_Y_5 FIND v(out_Y) AT=0.000119
+meas tran l_Y_5 FIND v(ld_out_Y_0_Y) AT=0.000119
+meas tran s_Y_6 FIND v(out_Y) AT=0.000139
+meas tran l_Y_6 FIND v(ld_out_Y_0_Y) AT=0.000139
+meas tran s_Y_7 FIND v(out_Y) AT=0.000159
+meas tran l_Y_7 FIND v(ld_out_Y_0_Y) AT=0.000159
+meas tran s_Y_8 FIND v(out_Y) AT=0.000179
+meas tran l_Y_8 FIND v(ld_out_Y_0_Y) AT=0.000179
+meas tran d_Y_8 TRIG AT=0.00016 TARG v(out_Y) VAL=1.75 TD=0.00016 CROSS=1
+quit
+.endc
+.end

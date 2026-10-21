@@ -1,0 +1,4 @@
+{
+  "description": "flip-flop D de borda de subida CDL (5 NOR2 + 1 NOR3 + 1 INV; 7 núcleos toroidais)",
+  "max_fanout": 4
+}

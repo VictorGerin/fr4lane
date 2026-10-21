@@ -1,0 +1,10 @@
+{
+  "description": "NOR de 3 entradas CDL em um único núcleo (1 núcleo toroidal + 3 diodos + 3 resistores)",
+  "max_fanout": 4,
+  "layout": {
+    "rows": [
+      ["RB", "R1", "RL"],
+      ["D1", "D2", "D3", "T1"]
+    ]
+  }
+}

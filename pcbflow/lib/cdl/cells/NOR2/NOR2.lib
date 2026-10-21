@@ -1,0 +1,9 @@
+/* NOR2 — porta NOR CDL de 2 entradas em 1 núcleo (1 núcleo de ferrite + 2 diodos + 3 resistores) */
+library(cdl_NOR2) {
+  cell(NOR2) {
+    area : 6;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "!(A | B)"; }
+  }
+}

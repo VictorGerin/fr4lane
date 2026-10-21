@@ -1,0 +1,9 @@
+/* NAND2 — porta NAND CDL de 2 entradas (AND2 + INV; 2 núcleos) */
+library(cdl_NAND2) {
+  cell(NAND2) {
+    area : 12;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "!(A & B)"; }
+  }
+}

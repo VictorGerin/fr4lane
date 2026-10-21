@@ -420,8 +420,8 @@ def write_switch_level_verilog(lib, design, path, module_name=None):
                 lines.append(f"  tranif1 {ident(f'{b.name}.{p.name}.no')}({ident(pins['COM'])}, {ident(pins['NO'])}, {c});")
                 lines.append(f"  tranif0 {ident(f'{b.name}.{p.name}.nc')}({ident(pins['COM'])}, {ident(pins['NC'])}, {c});")
             elif kind == "core":
-                # núcleo de ferrite CTL: soma de fluxo magnético dos enrolamentos W1 (+1), W2 (+1) e WB (-1).
-                # Quando a FMM líquida >= 1 unidade de corrente coerciva, o núcleo comuta e excita a saída S (base do NPN).
+                # núcleo de ferrite (CTL/CDL): soma de fluxo magnético dos enrolamentos W1 (+1), W2 (+1) e WB (-1).
+                # Quando a FMM líquida >= 1 unidade de corrente coerciva, o núcleo comuta e excita a saída S.
                 w1 = f"({ident(pins['W1'])} === 1'b1 ? 1 : 0)"
                 w2 = f"({ident(pins['W2'])} === 1'b1 ? 1 : 0)"
                 wb = f"({ident(pins['WB'])} === 1'b1 ? 1 : 0)"
@@ -429,7 +429,13 @@ def write_switch_level_verilog(lib, design, path, module_name=None):
                 lines.append(f"  wire {c} = (({w1} + {w2} - {wb}) >= 1);")
                 lines.append(f"  assign {ident(pins['S'])} = {c} ? 1'b1 : 1'bz;")
                 lines.append(f"  pulldown ({ident(pins['S'])});")
-            # capacitores e diodos (supressão da bobina) não afetam a lógica
+            elif kind == "diode":
+                # diodo retificador/isolador: conduz unidirecionalmente do anodo (A) para o catodo (K) quando A=1.
+                # (Em famílias a relé, o diodo de roda-livre tem A=GND=0, ficando sempre aberto na simulação lógica.)
+                da = ident(f"{b.name}.{p.name}.on")
+                lines.append(f"  wire {da} = ({ident(pins['A'])} === 1'b1);")
+                lines.append(f"  tranif1 {inst}({ident(pins['A'])}, {ident(pins['K'])}, {da});")
+            # capacitores de desacoplamento não afetam a lógica
     lines.append("endmodule")
     with open(path, "w") as f:
         f.write("\n".join(lines) + "\n")

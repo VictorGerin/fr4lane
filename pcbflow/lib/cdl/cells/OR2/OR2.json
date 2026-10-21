@@ -1,0 +1,10 @@
+{
+  "description": "OU de 2 entradas CDL em 1 núcleo (1 núcleo toroidal + 2 diodos + 2 resistores)",
+  "max_fanout": 4,
+  "layout": {
+    "rows": [
+      ["D1", "D2", "R1"],
+      ["RL", "T1"]
+    ]
+  }
+}

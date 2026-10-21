@@ -1,0 +1,148 @@
+* DFFR — flip-flop D com clear ativo baixo CDL (3 NOR2 + 3 NOR3 + 2 INV; 8 núcleos toroidais)
+* família discrete_cdl, canto típico (VDD 5 V, 27 °C; modelos CORE: spice/MAGAMP.lib, DIODE: spice/1N4148.lib)
+* gerado por pcbflow-cellsim --export; rodar: ngspice -b DFFR.cir (imprime as medidas e grava DFFR.dat)
+*
+* entradas no nível de pior caso: alto = 4 V, baixo = 0.25 V; Q leva 4 carga(s) INV.A
+* saída: 1 se >= 3.25 V, 0 se <= 0.4 V
+*
+* vetores de teste (medida: valor esperado):
+*   borda de subida 1 em 20 µs: D=1 (muda 5 µs antes)  ->  q_0: Q=1
+*   borda de subida 2 em 40 µs: D=0 (muda 5 µs antes)  ->  q_1: Q=0
+*   borda de subida 3 em 60 µs: D=1 (muda 5 µs antes)  ->  q_2: Q=1
+*   borda de subida 4 em 80 µs: D=1 (muda 5 µs antes)  ->  q_3: Q=1
+*   borda de subida 5 em 100 µs: D=0 (muda 5 µs antes)  ->  q_4: Q=0
+*   borda de subida 6 em 120 µs: D=0 (muda 5 µs antes)  ->  q_5: Q=0
+*   borda de subida 7 em 140 µs: D=1 (muda 5 µs antes)  ->  q_6: Q=1
+*   borda de subida 8 em 160 µs: D=0 (muda 5 µs antes)  ->  q_7: Q=0
+*   borda de subida 9 em 180 µs: D=1 (muda 5 µs antes)  ->  q_8: Q=1
+*   borda de subida 10 em 200 µs: D=1 (muda 5 µs antes)  ->  q_9: Q=1
+*   borda de subida 11 em 220 µs: D=1 (muda 5 µs antes)  ->  q_10: Q=1
+*   borda de subida 12 em 240 µs: D=0 (muda 5 µs antes)  ->  q_11: Q=0
+*   borda de subida 13 em 260 µs: D=1 (muda 5 µs antes)  ->  q_12: Q=1
+*   borda de subida 14 em 280 µs: D=1 (muda 5 µs antes)  ->  q_13: Q=0
+*   borda de subida 15 em 300 µs: D=1 (muda 5 µs antes)  ->  q_14: Q=1
+*   borda de subida 16 em 320 µs: D=1 (muda 5 µs antes)  ->  q_15: Q=1
+*   R = 0 de 270 µs a 296 µs (clear assíncrono, com Q = 1 e D = 1)
+*     275 µs, no meio do ciclo  ->  rst_a: Q=0 (muda sem esperar o clock)
+*     286 µs, depois da borda 14  ->  rst_b: Q=0 (o clear vence o clock e o dado)
+*     borda 15, depois de soltar  ->  q_14: Q=1 (volta a obedecer o dado)
+*
+* pcbflow-cellsim: canto típico
+.temp 27
+.param kup=1 kb=1
+.param kcore=1.0 kic=1.0
+* Núcleo toroidal de ferrite CDL (Core-Diode Logic) — modelo para simulação analógica (pcbflow-cellsim)
+*
+* Na lógica CDL pura (sem transistores), o núcleo toroidal de ferrite atua como
+* estágio magnético de limiar e amplificação: os sinais de entrada passam por
+* diodos retificadores 1N4148 (que impedem o retorno de corrente entre entradas)
+* e alimentam os enrolamentos de comando W1 (+N espiras), W2 (+N espiras) e
+* WB (-N espiras, enrolamento de inibição/polarização).
+*
+* Física modelada:
+*   - Resistência CC de cada enrolamento: 10 Ω (escalada por kcore);
+*   - Força magnetomotriz (FMM) líquida normalizada em mA:
+*       Immf = 1000 * (I(W1) + I(W2) - I(WB))
+*     - Em OR2/BUF: os diodos excitam W1 (WB=0); qualquer entrada alta supera Ic.
+*     - Em INV/NOR2/NOR3: W1 recebe polarização positiva constante de VDD (via RB=10 kΩ,
+*       ~0,5 mA) mantendo a saída em 1 no repouso; qualquer entrada alta injeta corrente
+*       via diodo no enrolamento de inibição WB (via R1=3,3 kΩ, ~1 mA), invertendo o
+*       fluxo magnético líquido e levando a saída a 0.
+*     - Em AND2: W1 e W2 recebem as duas entradas via diodos (~0,5 mA cada) enquanto
+*       WB recebe polarização negativa de VDD (via RB=10 kΩ, ~0,5 mA) que cancela uma
+*       única entrada alta; apenas a coincidência (A=1 e B=1) supera Ic em um único núcleo.
+*   - Dinâmica de comutação de parede de domínio magnético (τ_sw ≈ 120 ns, modelada por
+*     Rmag=120 Ω e Cmag=1 nF) e laço de histerese retangular (SWCORE com limiar coercivo
+*     Ic = 0,14 mA ± 0,02 mA, escalado por kic);
+*   - Saída S com regeneração magnética de baixa impedância (RON=50 Ω para Vdrv=4,3 V,
+*     representando a tensão secundária retificada) e retorno a 0 V pelo resistor de carga
+*     externo RL (2,2 kΩ ao GND) quando o núcleo é inibido/resetado.
+*
+* Pinos na convenção do pcbflow: w1, w2, wb, s, gnd.
+.param kcore=1.0 kic=1.0
+.subckt MCORE w1 w2 wb s gnd
+Vw1  w1  w1m 0
+Rw1  w1m gnd {10*kcore}
+Vw2  w2  w2m 0
+Rw2  w2m gnd {10*kcore}
+Vwb  wb  wbm 0
+Rwb  wbm gnd {10*kcore}
+Bmmf mmf gnd V = 1000 * (i(Vw1) + i(Vw2) - i(Vwb)) / kic
+Rmag mmf flx 120
+Cmag flx gnd 1n
+Vdrv vp  gnd 4.3
+Sc   vp  s   flx gnd SWCORE
+.model SWCORE SW(VT=0.14 VH=0.02 RON=50 ROFF=100MEG)
+.ends MCORE
+.model DIODE D(IS=4.352E-9 N=1.906 BV=110 IBV=0.0001 RS=0.6458 CJO=7.048E-13 VJ=0.869 M=0.03 FC=0.5 TT=3.48E-9)
+.subckt INV A Y VDD GND
+RB VDD w1 {10000*kup}
+D1 A d1 DIODE
+R1 d1 wb {3300*kb}
+RL Y GND {2200*kb}
+XT1 w1 GND wb Y GND MCORE
+.ends INV
+.subckt NOR3 A B C Y VDD GND
+RB VDD w1 {10000*kup}
+D1 A d1 DIODE
+D2 B d1 DIODE
+D3 C d1 DIODE
+R1 d1 wb {3300*kb}
+RL Y GND {2200*kb}
+XT1 w1 GND wb Y GND MCORE
+.ends NOR3
+.subckt NOR2 A B Y VDD GND
+RB VDD w1 {10000*kup}
+D1 A d1 DIODE
+D2 B d1 DIODE
+R1 d1 wb {3300*kb}
+RL Y GND {2200*kb}
+XT1 w1 GND wb Y GND MCORE
+.ends NOR2
+.subckt DFFR D C R Q VDD GND
+X0 C ck VDD GND INV
+X9 R rn VDD GND INV
+X1 rn n4 n2 n1 VDD GND NOR3
+X2 n1 ck n2 VDD GND NOR2
+X3 n2 ck n4 n3 VDD GND NOR3
+X4 n3 D n4 VDD GND NOR2
+X5 rn n2 QN Q VDD GND NOR3
+X6 Q n3 QN VDD GND NOR2
+.ends DFFR
+VDD vdd 0 5
+V_C in_C 0 PULSE(0.25 4 2e-05 2e-09 2e-09 9.998e-06 2e-05)
+V_D in_D 0 PWL(0 0.25 1.5e-05 0.25 1.5002e-05 4 3.5e-05 4 3.5002e-05 0.25 5.5e-05 0.25 5.5002e-05 4 9.5e-05 4 9.5002e-05 0.25 0.000135 0.25 0.000135002 4 0.000155 4 0.000155002 0.25 0.000175 0.25 0.000175002 4 0.000235 4 0.000235002 0.25 0.000255 0.25 0.000255002 4)
+V_R in_R 0 PWL(0 4 0.00027 4 0.000270002 0.25 0.000296 0.25 0.000296002 4)
+Xdut in_D in_C in_R out_Q vdd 0 DFFR
+Xld_out_Q_0 out_Q ld_out_Q_0_Y vdd 0 INV
+Xld_out_Q_1 out_Q ld_out_Q_1_Y vdd 0 INV
+Xld_out_Q_2 out_Q ld_out_Q_2_Y vdd 0 INV
+Xld_out_Q_3 out_Q ld_out_Q_3_Y vdd 0 INV
+.tran 5e-08 0.000386
+.control
+run
+linearize
+set wr_singlescale
+set wr_vecnames
+wrdata DFFR.dat v(in_C) v(in_D) v(in_R) v(out_Q)
+meas tran q_0 FIND v(out_Q) AT=2.9e-05
+meas tran q_1 FIND v(out_Q) AT=4.9e-05
+meas tran q_2 FIND v(out_Q) AT=6.9e-05
+meas tran q_3 FIND v(out_Q) AT=8.9e-05
+meas tran q_4 FIND v(out_Q) AT=0.000109
+meas tran q_5 FIND v(out_Q) AT=0.000129
+meas tran q_6 FIND v(out_Q) AT=0.000149
+meas tran q_7 FIND v(out_Q) AT=0.000169
+meas tran q_8 FIND v(out_Q) AT=0.000189
+meas tran q_9 FIND v(out_Q) AT=0.000209
+meas tran q_10 FIND v(out_Q) AT=0.000229
+meas tran q_11 FIND v(out_Q) AT=0.000249
+meas tran q_12 FIND v(out_Q) AT=0.000269
+meas tran q_13 FIND v(out_Q) AT=0.000289
+meas tran q_14 FIND v(out_Q) AT=0.000309
+meas tran q_15 FIND v(out_Q) AT=0.000329
+meas tran rst_a FIND v(out_Q) AT=0.000275
+meas tran rst_b FIND v(out_Q) AT=0.000286
+quit
+.endc
+.end

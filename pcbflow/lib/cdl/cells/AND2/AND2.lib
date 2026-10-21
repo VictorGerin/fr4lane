@@ -1,0 +1,9 @@
+/* AND2 — porta E CDL por coincidência de corrente em 1 núcleo (1 núcleo de ferrite + 2 diodos + 4 resistores) */
+library(cdl_AND2) {
+  cell(AND2) {
+    area : 7;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "A & B"; }
+  }
+}

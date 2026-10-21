@@ -1,0 +1,9 @@
+/* XNOR2 — coincidência CDL de 2 entradas em 3 núcleos (AND2 + NOR2 + OR2) */
+library(cdl_XNOR2) {
+  cell(XNOR2) {
+    area : 18;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "!(A ^ B)"; }
+  }
+}

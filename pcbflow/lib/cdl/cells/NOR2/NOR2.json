@@ -1,0 +1,10 @@
+{
+  "description": "NOR de 2 entradas CDL por inibição magnética (1 núcleo toroidal + 2 diodos + 3 resistores)",
+  "max_fanout": 4,
+  "layout": {
+    "rows": [
+      ["RB", "R1", "RL"],
+      ["D1", "D2", "T1"]
+    ]
+  }
+}

@@ -1,0 +1,4 @@
+{
+  "description": "XNOR de 2 entradas CDL em 3 núcleos (AND2 + NOR2 + OR2)",
+  "max_fanout": 4
+}

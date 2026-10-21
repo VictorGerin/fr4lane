@@ -1,0 +1,10 @@
+{
+  "description": "buffer CDL em um único núcleo (1 núcleo toroidal + 1 diodo + 2 resistores)",
+  "max_fanout": 4,
+  "layout": {
+    "rows": [
+      ["R1", "RL"],
+      ["D1", "T1"]
+    ]
+  }
+}

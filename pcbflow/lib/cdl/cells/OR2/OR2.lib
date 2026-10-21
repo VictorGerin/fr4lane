@@ -1,0 +1,9 @@
+/* OR2 — porta OU CDL em um único núcleo (1 núcleo de ferrite + 2 diodos + 2 resistores) */
+library(cdl_OR2) {
+  cell(OR2) {
+    area : 5;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "A | B"; }
+  }
+}

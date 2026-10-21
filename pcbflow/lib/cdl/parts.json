@@ -1,0 +1,54 @@
+{
+  "CORE": {
+    "kind": "core",
+    "part": "Ferrite Toroid",
+    "ref": "T",
+    "footprint": "pcbflow_Core:Ferrite_Toroid_5Pin_THT",
+    "pins": {
+      "W1": "1",
+      "W2": "2",
+      "WB": "3",
+      "S": "4",
+      "GND": "5"
+    }
+  },
+  "DIODE": {
+    "kind": "diode",
+    "part": "1N4148",
+    "ref": "D",
+    "footprint": "Diode_THT:D_DO-35_SOD27_P2.54mm_Vertical_AnodeUp",
+    "pins": {
+      "K": "1",
+      "A": "2"
+    }
+  },
+  "R": {
+    "kind": "resistor",
+    "ref": "R",
+    "footprint": "Resistor_THT:R_Axial_DIN0204_L3.6mm_D1.6mm_P2.54mm_Vertical",
+    "pins": {
+      "1": "1",
+      "2": "2"
+    }
+  },
+  "CDEC": {
+    "kind": "capacitor",
+    "value": "100n",
+    "ref": "C",
+    "footprint": "Capacitor_THT:C_Disc_D3.0mm_W1.6mm_P2.50mm",
+    "pins": {
+      "1": "1",
+      "2": "2"
+    }
+  },
+  "CBULK": {
+    "kind": "capacitor",
+    "value": "10u",
+    "ref": "C",
+    "footprint": "Capacitor_THT:CP_Radial_D5.0mm_P2.00mm",
+    "pins": {
+      "1": "1",
+      "2": "2"
+    }
+  }
+}

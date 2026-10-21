@@ -1,0 +1,8 @@
+/* BUF — buffer não-inversor CDL em um único núcleo (1 núcleo de ferrite + 1 diodo + 2 resistores) */
+library(cdl_BUF) {
+  cell(BUF) {
+    area : 4;
+    pin(A) { direction : input; }
+    pin(Y) { direction : output; function : "A"; }
+  }
+}

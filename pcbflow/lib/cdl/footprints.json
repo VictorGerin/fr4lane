@@ -1,0 +1,57 @@
+{
+  "_comment": "Geometria da família CDL (Core-Diode Logic, mm). Usa núcleos toroidais de ferrite em THT (5 pinos), diodos 1N4148 em DO-35 vertical e resistores axiais verticais — sem transistores.",
+  "pcbflow_Core:Ferrite_Toroid_5Pin_THT": {
+    "type": "tht",
+    "courtyard": [-1.05, -1.05, 6.13, 3.59],
+    "silk": [[0.0, -0.8, 5.08, -0.8], [0.0, 3.34, 5.08, 3.34]],
+    "model": {
+      "path": "${KICAD_3DMODEL_DIR}/Inductor_THT.3dshapes/L_CommonMode_Toroid_Vertical_L21.0mm_W10.0mm_Px5.08mm_Py12.70mm_Murata_5100.step",
+      "scale": [0.4, 0.5, 0.5],
+      "offset": [0.0, 0.0, 0.0],
+      "rotate": [0.0, 0.0, 0.0]
+    },
+    "pads": [
+      {"num": "1", "x": 0.0, "y": 0.0, "w": 1.5, "h": 1.5, "shape": "rect", "drill": 0.8},
+      {"num": "2", "x": 2.54, "y": 0.0, "w": 1.5, "h": 1.5, "shape": "circle", "drill": 0.8},
+      {"num": "3", "x": 5.08, "y": 0.0, "w": 1.5, "h": 1.5, "shape": "circle", "drill": 0.8},
+      {"num": "4", "x": 0.0, "y": 2.54, "w": 1.5, "h": 1.5, "shape": "circle", "drill": 0.8},
+      {"num": "5", "x": 5.08, "y": 2.54, "w": 1.5, "h": 1.5, "shape": "circle", "drill": 0.8}
+    ]
+  },
+  "Diode_THT:D_DO-35_SOD27_P2.54mm_Vertical_AnodeUp": {
+    "type": "tht",
+    "courtyard": [-1.05, -1.05, 3.6, 1.05],
+    "silk": [],
+    "pads": [
+      {"num": "1", "x": 0.0, "y": 0.0, "w": 1.6, "h": 1.6, "shape": "rect", "drill": 0.8},
+      {"num": "2", "x": 2.54, "y": 0.0, "w": 1.6, "h": 1.6, "shape": "circle", "drill": 0.8}
+    ]
+  },
+  "Resistor_THT:R_Axial_DIN0204_L3.6mm_D1.6mm_P2.54mm_Vertical": {
+    "type": "tht",
+    "courtyard": [-1.05, -1.05, 3.6, 1.05],
+    "silk": [],
+    "pads": [
+      {"num": "1", "x": 0.0, "y": 0.0, "w": 1.4, "h": 1.4, "shape": "circle", "drill": 0.7},
+      {"num": "2", "x": 2.54, "y": 0.0, "w": 1.4, "h": 1.4, "shape": "circle", "drill": 0.7}
+    ]
+  },
+  "Capacitor_THT:C_Disc_D3.0mm_W1.6mm_P2.50mm": {
+    "type": "tht",
+    "courtyard": [-1.05, -1.05, 3.55, 1.05],
+    "silk": [],
+    "pads": [
+      {"num": "1", "x": 0.0, "y": 0.0, "w": 1.6, "h": 1.6, "shape": "circle", "drill": 0.8},
+      {"num": "2", "x": 2.5, "y": 0.0, "w": 1.6, "h": 1.6, "shape": "circle", "drill": 0.8}
+    ]
+  },
+  "Capacitor_THT:CP_Radial_D5.0mm_P2.00mm": {
+    "type": "tht",
+    "courtyard": [-1.75, -2.75, 3.75, 2.75],
+    "silk": [],
+    "pads": [
+      {"num": "1", "x": 0.0, "y": 0.0, "w": 1.6, "h": 1.6, "shape": "rect", "drill": 0.8},
+      {"num": "2", "x": 2.0, "y": 0.0, "w": 1.6, "h": 1.6, "shape": "circle", "drill": 0.8}
+    ]
+  }
+}

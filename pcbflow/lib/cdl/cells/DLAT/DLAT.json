@@ -1,0 +1,4 @@
+{
+  "description": "latch D transparente CDL (4 NOR2 + 1 INV; 5 núcleos toroidais)",
+  "max_fanout": 4
+}

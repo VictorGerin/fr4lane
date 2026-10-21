@@ -1,0 +1,13 @@
+/* DLAT — latch D transparente com E = 1 (latch SR de NORs CDL; 4 NOR2 + inversor) */
+library(cdl_DLAT) {
+  cell(DLAT) {
+    area : 29;
+    latch(IQ, IQN) {
+      enable : "E";
+      data_in : "D";
+    }
+    pin(D) { direction : input; }
+    pin(E) { direction : input; }
+    pin(Q) { direction : output; function : "IQ"; }
+  }
+}

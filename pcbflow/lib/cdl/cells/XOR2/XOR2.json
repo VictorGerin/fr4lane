@@ -1,0 +1,4 @@
+{
+  "description": "XOR de 2 entradas CDL em 4 núcleos (OR2 + NAND2 + AND2)",
+  "max_fanout": 4
+}

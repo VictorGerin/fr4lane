@@ -1,0 +1,4 @@
+{
+  "description": "flip-flop D com clear ativo baixo CDL (3 NOR2 + 3 NOR3 + 2 INV; 8 núcleos toroidais)",
+  "max_fanout": 4
+}

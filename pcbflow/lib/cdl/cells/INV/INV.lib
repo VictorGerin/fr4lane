@@ -1,0 +1,8 @@
+/* INV — inversor CDL por inibição magnética (1 núcleo de ferrite + 1 diodo + 3 resistores) */
+library(cdl_INV) {
+  cell(INV) {
+    area : 5;
+    pin(A) { direction : input; }
+    pin(Y) { direction : output; function : "!A"; }
+  }
+}
