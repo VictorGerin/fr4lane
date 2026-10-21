@@ -6,19 +6,26 @@
 * saída: 1 se >= 3.5 V, 0 se <= 1.5 V
 *
 * vetores de teste (medida: valor esperado):
-*   borda de subida 1 em 2 µs: D=1 (muda 0.5 µs antes)  ->  q_0: Q=1
-*   borda de subida 2 em 4 µs: D=0 (muda 0.5 µs antes)  ->  q_1: Q=0
-*   borda de subida 3 em 6 µs: D=1 (muda 0.5 µs antes)  ->  q_2: Q=1
-*   borda de subida 4 em 8 µs: D=1 (muda 0.5 µs antes)  ->  q_3: Q=1
-*   borda de subida 5 em 10 µs: D=0 (muda 0.5 µs antes)  ->  q_4: Q=0
-*   borda de subida 6 em 12 µs: D=0 (muda 0.5 µs antes)  ->  q_5: Q=0
-*   borda de subida 7 em 14 µs: D=1 (muda 0.5 µs antes)  ->  q_6: Q=1
-*   borda de subida 8 em 16 µs: D=0 (muda 0.5 µs antes)  ->  q_7: Q=0
-*   borda de subida 9 em 18 µs: D=1 (muda 0.5 µs antes)  ->  q_8: Q=1
-*   borda de subida 10 em 20 µs: D=1 (muda 0.5 µs antes)  ->  q_9: Q=1
-*   borda de subida 11 em 22 µs: D=1 (muda 0.5 µs antes)  ->  q_10: Q=1
-*   borda de subida 12 em 24 µs: D=0 (muda 0.5 µs antes)  ->  q_11: Q=0
-*   R = 0 de 25 a 25.8 µs (clear assíncrono)  ->  rst: Q=0
+*   borda de subida 1 em 2 µs: D=1 (muda 500 ns antes)  ->  q_0: Q=1
+*   borda de subida 2 em 4 µs: D=0 (muda 500 ns antes)  ->  q_1: Q=0
+*   borda de subida 3 em 6 µs: D=1 (muda 500 ns antes)  ->  q_2: Q=1
+*   borda de subida 4 em 8 µs: D=1 (muda 500 ns antes)  ->  q_3: Q=1
+*   borda de subida 5 em 10 µs: D=0 (muda 500 ns antes)  ->  q_4: Q=0
+*   borda de subida 6 em 12 µs: D=0 (muda 500 ns antes)  ->  q_5: Q=0
+*   borda de subida 7 em 14 µs: D=1 (muda 500 ns antes)  ->  q_6: Q=1
+*   borda de subida 8 em 16 µs: D=0 (muda 500 ns antes)  ->  q_7: Q=0
+*   borda de subida 9 em 18 µs: D=1 (muda 500 ns antes)  ->  q_8: Q=1
+*   borda de subida 10 em 20 µs: D=1 (muda 500 ns antes)  ->  q_9: Q=1
+*   borda de subida 11 em 22 µs: D=1 (muda 500 ns antes)  ->  q_10: Q=1
+*   borda de subida 12 em 24 µs: D=0 (muda 500 ns antes)  ->  q_11: Q=0
+*   borda de subida 13 em 26 µs: D=1 (muda 500 ns antes)  ->  q_12: Q=1
+*   borda de subida 14 em 28 µs: D=1 (muda 500 ns antes)  ->  q_13: Q=0
+*   borda de subida 15 em 30 µs: D=1 (muda 500 ns antes)  ->  q_14: Q=1
+*   borda de subida 16 em 32 µs: D=1 (muda 500 ns antes)  ->  q_15: Q=1
+*   R = 0 de 27 µs a 29.6 µs (clear assíncrono, com Q = 1 e D = 1)
+*     27.5 µs, no meio do ciclo  ->  rst_a: Q=0 (muda sem esperar o clock)
+*     28.6 µs, depois da borda 14  ->  rst_b: Q=0 (o clear vence o clock e o dado)
+*     borda 15, depois de soltar  ->  q_14: Q=1 (volta a obedecer o dado)
 *
 * pcbflow-cellsim: canto típico
 .temp 27
@@ -53,11 +60,11 @@ MN1 Y A GND GND NMOS L=100u W=100u
 .ends INV
 VDD vdd 0 5
 V_C in_C 0 PULSE(0.5 4.5 2e-06 2e-09 2e-09 9.98e-07 2e-06)
-V_D in_D 0 PWL(0 0.5 1.5e-06 0.5 1.502e-06 4.5 3.5e-06 4.5 3.502e-06 0.5 5.5e-06 0.5 5.502e-06 4.5 9.5e-06 4.5 9.502e-06 0.5 1.35e-05 0.5 1.3502e-05 4.5 1.55e-05 4.5 1.5502e-05 0.5 1.75e-05 0.5 1.7502e-05 4.5 2.35e-05 4.5 2.3502e-05 0.5)
-V_R in_R 0 PWL(0 4.5 2.5e-05 4.5 2.5002e-05 0.5 2.58e-05 0.5 2.5802e-05 4.5)
+V_D in_D 0 PWL(0 0.5 1.5e-06 0.5 1.502e-06 4.5 3.5e-06 4.5 3.502e-06 0.5 5.5e-06 0.5 5.502e-06 4.5 9.5e-06 4.5 9.502e-06 0.5 1.35e-05 0.5 1.3502e-05 4.5 1.55e-05 4.5 1.5502e-05 0.5 1.75e-05 0.5 1.7502e-05 4.5 2.35e-05 4.5 2.3502e-05 0.5 2.55e-05 0.5 2.5502e-05 4.5)
+V_R in_R 0 PWL(0 4.5 2.7e-05 4.5 2.7002e-05 0.5 2.96e-05 0.5 2.9602e-05 4.5)
 Xdut in_D in_C in_R out_Q vdd 0 DFFR
 Xld_out_Q_0 out_Q ld_out_Q_0_Y vdd 0 INV
-.tran 5e-09 2.88e-05
+.tran 5e-09 3.86e-05
 .control
 run
 linearize
@@ -76,7 +83,12 @@ meas tran q_8 FIND v(out_Q) AT=1.89e-05
 meas tran q_9 FIND v(out_Q) AT=2.09e-05
 meas tran q_10 FIND v(out_Q) AT=2.29e-05
 meas tran q_11 FIND v(out_Q) AT=2.49e-05
-meas tran rst FIND v(out_Q) AT=2.56e-05
+meas tran q_12 FIND v(out_Q) AT=2.69e-05
+meas tran q_13 FIND v(out_Q) AT=2.89e-05
+meas tran q_14 FIND v(out_Q) AT=3.09e-05
+meas tran q_15 FIND v(out_Q) AT=3.29e-05
+meas tran rst_a FIND v(out_Q) AT=2.75e-05
+meas tran rst_b FIND v(out_Q) AT=2.86e-05
 quit
 .endc
 .end

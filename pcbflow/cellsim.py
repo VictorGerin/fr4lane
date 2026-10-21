@@ -74,7 +74,8 @@ TIMING = {"step": 20e-6,          # duração de cada combinação de entrada na
           "holds": [1e-6, 5e-7, 3e-7, 2e-7, 1e-7, 5e-8, 2e-8, 1e-8],
           "setups": [1e-6, 5e-7, 3e-7, 2e-7, 1e-7, 5e-8, 2e-8, 1e-8],
           "resolution": 5e-9,     # passo da simulação nas varreduras dos flip-flops
-          "edge": 2e-9}           # rampa das fontes de entrada
+          "edge": 2e-9,           # rampa das fontes de entrada
+          "batch": 64}            # vetores por netlist no --design
 VTH = 1.0            # limiar para medir atrasos na RTL (entre o nível baixo e o alto)
 VOL_MAX = 0.5        # nível baixo máximo na RTL: a próxima base fica cortada
 
@@ -256,10 +257,21 @@ def pwl(points, edge):
     return "PWL(" + " ".join(out) + ")"
 
 
+TIMEOUT = 180       # segundos por netlist: além disso, o ponto do teste conta como falha
+
+
 def run_deck(ngspice, path, text):
+    """Roda o netlist e devolve as medidas {nome: valor}. Um netlist que não
+    termina em TIMEOUT (o ngspice não converge, ex.: um flip-flop de relés com
+    o dado mudando no meio da troca dos contatos) devolve {}: o ponto falha."""
     path.write_text(text, encoding="utf-8")
-    r = subprocess.run([ngspice, "-b", path.name], capture_output=True, text=True, encoding="utf-8",
-                       errors="replace", cwd=path.parent)
+    try:
+        r = subprocess.run([ngspice, "-b", path.name], capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", cwd=path.parent, timeout=TIMEOUT)
+    except subprocess.TimeoutExpired:
+        (path.with_suffix(".log")).write_text(f"ngspice não terminou em {TIMEOUT} s (não convergiu)\n",
+                                               encoding="utf-8")
+        return {}
     out = r.stdout + r.stderr
     (path.with_suffix(".log")).write_text(out, encoding="utf-8")
     vals = {m.group(1).lower(): float(m.group(2))
@@ -527,28 +539,41 @@ def sim_ff(lib, models, corner, cell, work, ngspice, capture=None):
     # funcional, com período folgado e o dado mudando longe das bordas
     clk_name, rising, data, asyn, qpin = _ff_pins(c)
     if capture:
-        # para publicar: o funcional, com o clear (se houver) no fim
-        bits = BITS
-        clear = None
-        tail = []
+        # Para publicar: o funcional e, se houver clear/preset, a prova de que ele é
+        # assíncrono e manda mais que o clock e o dado: com Q no valor oposto, ele
+        # chega no meio de um ciclo (Q muda na hora), atravessa uma borda ativa com
+        # o dado contrário (Q não muda) e solta (Q volta na borda seguinte).
+        P = corner.period
+        bits = list(BITS)
+        want = list(BITS)
+        tail, clear, extra_vec = [], None, []
         if asyn:
-            key, _ = next(iter(asyn.values()))
-            t0 = (len(bits) + 0.5) * corner.period
-            clear = (t0, t0 + 0.4 * corner.period)
-            tail = [f"meas tran rst FIND v(out_{qpin}) AT={t0 + 0.3 * corner.period:.9g}"]
-        deck, *_ = _ff_deck(lib, models, corner, cell, corner.period, bits, corner.period / 4, tail, clear, tstep=corner.period / 400)
+            pin, (key, inactive) = next(iter(asyn.items()))
+            level = 0 if key == "clear" else 1
+            n0 = len(bits)
+            bits += [1 - level] * 4                    # Q fica no valor oposto ao do clear/preset
+            want += [1 - level] * 4
+            t0, t1 = (n0 + 1.5) * P, (n0 + 2.8) * P     # do meio de um ciclo até depois da borda seguinte
+            clear = (t0, t1)
+            want[n0 + 1] = level                       # amostrado em (n0 + 2,45) P: ainda com o clear
+            tail = [f"meas tran rst_a FIND v(out_{qpin}) AT={t0 + 0.25 * P:.15g}",
+                    f"meas tran rst_b FIND v(out_{qpin}) AT={(n0 + 2) * P + 0.3 * P:.15g}"]
+            extra_vec = [f"{pin} = {1 - inactive} de {_ns(t0)} a {_ns(t1)} ({key} assíncrono, com Q = {1 - level} "
+                         f"e {data[0]} = {1 - level})",
+                         f"  {_ns(t0 + 0.25 * P)}, no meio do ciclo  ->  rst_a: {qpin}={level} (muda sem esperar o clock)",
+                         f"  {_ns((n0 + 2) * P + 0.3 * P)}, depois da borda {n0 + 2}  ->  rst_b: {qpin}={level} "
+                         f"(o {key} vence o clock e o dado)",
+                         f"  borda {n0 + 3}, depois de soltar  ->  q_{n0 + 2}: {qpin}={1 - level} (volta a obedecer o dado)"]
+        deck, *_ = _ff_deck(lib, models, corner, cell, P, bits, P / 4, tail, clear, tstep=P / 400)
         edge = "subida" if rising else "descida"
-        vectors = [f"borda de {edge} {k + 1} em {(k + 1) * corner.period * 1e6:g} µs: {data[0]}={b} "
-                   f"(muda {corner.period / 4 * 1e6:g} µs antes)  ->  q_{k}: {qpin}={b}" for k, b in enumerate(bits)]
-        if asyn:
-            p, (key, inactive) = next(iter(asyn.items()))
-            vectors.append(f"{p} = {1 - inactive} de {clear[0] * 1e6:g} a {clear[1] * 1e6:g} µs ({key} assíncrono)"
-                           f"  ->  rst: {qpin}={0 if key == 'clear' else 1}")
+        vectors = [f"borda de {edge} {k + 1} em {_ns((k + 1) * P)}: {data[0]}={b} (muda {_ns(P / 4)} antes)"
+                   f"  ->  q_{k}: {qpin}={w}" for k, (b, w) in enumerate(zip(bits, want))] + extra_vec
         sig = [f"in_{clk_name}", f"in_{data[0]}"] + [f"in_{p}" for p in asyn] + [f"out_{qpin}"]
         deck = _capture(deck, capture.name, sig, _about(lib, corner, cell, lv, _loads_note(lib, cell, [qpin]), vectors))
         vals = run_deck(ngspice, capture.with_suffix(".cir"), deck)
-        ok = _ff_ok(vals, bits, lv) and (not asyn or logic(vals.get("rst", float("nan")), lv) ==
-                                         (0 if next(iter(asyn.values()))[0] == "clear" else 1))
+        ok = _ff_ok(vals, want, lv)
+        if asyn:
+            ok = ok and all(logic(vals.get(m, float("nan")), lv) == level for m in ("rst_a", "rst_b"))
         return {"ok": ok, "fails": [] if ok else ["teste funcional exportado falhou"], "signals": sig}
     meas = []
     for k in range(1, len(BITS)):
@@ -678,20 +703,17 @@ def _evaluate(lib, design, env):
     return val
 
 
-BATCH = 64     # vetores por netlist: com o tempo absoluto pequeno, o passo de tempo não esbarra
-               # na precisão do double (bordas de ns em 1 ms de simulação faziam o ngspice abortar)
-
-
 def sim_design(lib, models, corner, design, vectors, work, ngspice, capture=None):
-    """Simula o circuito com os vetores [{entrada: 0/1}], em lotes de BATCH; cada
+    """Simula o circuito com os vetores [{entrada: 0/1}], em lotes (timing.batch no library.json); cada
     lote começa repetindo o último vetor do anterior, para medir a transição."""
+    batch = int(corner.batch)
     if capture:                                   # para publicar: só o primeiro lote
-        return _sim_batch(lib, models, corner, design, vectors[:BATCH], work, ngspice, capture, 0, False)
+        return _sim_batch(lib, models, corner, design, vectors[:batch], work, ngspice, capture, 0, False)
     out = {"ok": True, "fails": [], "vectors": len(vectors), "tpd": None, "where": None,
            "cells": len(design.instances), "parts": len(design.parts)}
-    for i in range(0, len(vectors), BATCH):
+    for i in range(0, len(vectors), batch):
         first = max(0, i - 1)
-        r = _sim_batch(lib, models, corner, design, vectors[first:i + BATCH], work, ngspice, None, first, i > 0)
+        r = _sim_batch(lib, models, corner, design, vectors[first:i + batch], work, ngspice, None, first, i > 0)
         out["fails"] += r["fails"]
         if r["tpd"] and (out["tpd"] is None or r["tpd"] > out["tpd"]):
             out["tpd"], out["where"] = r["tpd"], r["where"]
@@ -833,9 +855,9 @@ def export_design(lib, design, vectors, outdir, res, log=print, window=32):
         f.unlink()
     L = [f"# Circuito `{design.top}` na família `{Path(lib.path).name}` (ngspice)", "",
          f"{len(design.instances)} células, {len(design.parts)} componentes, {len(vectors)} vetores "
-         "(todas as combinações das entradas, simuladas em lotes de 64). Cada vetor é conferido contra a "
+         f"(todas as combinações das entradas, simuladas em lotes de {int(cs[0].batch)}). Cada vetor é conferido contra a "
          "lógica do netlist; o caminho crítico é o último cruzamento de uma saída depois da mudança das "
-         f"entradas. O netlist publicado tem os primeiros {min(BATCH, len(vectors))} vetores.", "",
+         f"entradas. O netlist publicado tem os primeiros {min(int(cs[0].batch), len(vectors))} vetores.", "",
          "| Canto | Resultado | Caminho crítico |", "|---|---|---|"]
     for name, x in res.items():
         L.append(f"| {name} | {'OK' if x['ok'] else '**falhou**'} | "
@@ -930,9 +952,10 @@ def check_family(lib, cells=None, work=None, log=print, jobs=None):
     warns = [f"{cell} ({corner}): {w}" for cell, by in res.items() for corner, r in by.items()
              for w in r.get("warns", [])]
     for cell, by in res.items():
-        ckqs = [r["ckq"][0] for r in by.values() if r.get("ckq")]
+        ok = [r for r in by.values() if r["ok"]]        # num canto em que a célula falha, não há hold
+        ckqs = [r["ckq"][0] for r in ok if r.get("ckq")]
         # conservador: o lado de cima do intervalo do hold (o último que passou)
-        holds = [r["hold"][0] or r["hold"][1] for r in by.values() if r.get("hold") and r["hold"][1]]
+        holds = [r["hold"][0] or r["hold"][1] for r in ok if r.get("hold") and r["hold"][1]]
         if ckqs and holds and max(holds) >= min(ckqs):
             warns.append(f"{cell}: hold de até {max(holds) * 1e9:.0f} ns >= clock -> Q mínimo de "
                          f"{min(ckqs) * 1e9:.0f} ns: um {cell} ligado direto em outro capturaria o dado novo")
@@ -986,6 +1009,8 @@ def export(lib, cells, outdir, res, corners, warns, log=print):
             f.unlink()
         shown[cell] = r["ok"]
         log(f"  {cell:<9} exportado ({'OK' if r['ok'] else 'FALHOU'})")
+    if set(cells) != set(lib.cells):
+        return                                   # só algumas células: o README e os resultados ficam
     report(outdir / "resultados.md", lib, res, corners, warns)
     L = [f"# Células da família `{Path(lib.path).name}` no ngspice", "",
          "Cada célula da família é simulada como circuito de verdade, com o modelo SPICE dos componentes, "
@@ -1010,7 +1035,7 @@ def _ns(v):
         return "—"
     if v >= 1e-3:
         return f"{v * 1e3:.3g} ms"
-    return f"{v * 1e6:.2g} µs" if v >= 1e-6 else f"{v * 1e9:.3g} ns"
+    return f"{v * 1e6:.3g} µs" if v >= 1e-6 else f"{v * 1e9:.3g} ns"
 
 
 def _status(r):

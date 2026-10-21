@@ -18,7 +18,14 @@
 *   borda de subida 10 em 200 µs: D=1 (muda 5 µs antes)  ->  q_9: Q=1
 *   borda de subida 11 em 220 µs: D=1 (muda 5 µs antes)  ->  q_10: Q=1
 *   borda de subida 12 em 240 µs: D=0 (muda 5 µs antes)  ->  q_11: Q=0
-*   R = 0 de 250 a 258 µs (clear assíncrono)  ->  rst: Q=0
+*   borda de subida 13 em 260 µs: D=1 (muda 5 µs antes)  ->  q_12: Q=1
+*   borda de subida 14 em 280 µs: D=1 (muda 5 µs antes)  ->  q_13: Q=0
+*   borda de subida 15 em 300 µs: D=1 (muda 5 µs antes)  ->  q_14: Q=1
+*   borda de subida 16 em 320 µs: D=1 (muda 5 µs antes)  ->  q_15: Q=1
+*   R = 0 de 270 µs a 296 µs (clear assíncrono, com Q = 1 e D = 1)
+*     275 µs, no meio do ciclo  ->  rst_a: Q=0 (muda sem esperar o clock)
+*     286 µs, depois da borda 14  ->  rst_b: Q=0 (o clear vence o clock e o dado)
+*     borda 15, depois de soltar  ->  q_14: Q=1 (volta a obedecer o dado)
 *
 * pcbflow-cellsim: canto típico
 .temp 27
@@ -57,8 +64,8 @@ X6 Q n3 QN VDD GND NOR2
 .ends DFFR
 VDD vdd 0 5
 V_C in_C 0 PULSE(0.4 1.5 2e-05 2e-09 2e-09 9.998e-06 2e-05)
-V_D in_D 0 PWL(0 0.4 1.5e-05 0.4 1.5002e-05 1.5 3.5e-05 1.5 3.5002e-05 0.4 5.5e-05 0.4 5.5002e-05 1.5 9.5e-05 1.5 9.5002e-05 0.4 0.000135 0.4 0.000135002 1.5 0.000155 1.5 0.000155002 0.4 0.000175 0.4 0.000175002 1.5 0.000235 1.5 0.000235002 0.4)
-V_R in_R 0 PWL(0 1.5 0.00025 1.5 0.000250002 0.4 0.000258 0.4 0.000258002 1.5)
+V_D in_D 0 PWL(0 0.4 1.5e-05 0.4 1.5002e-05 1.5 3.5e-05 1.5 3.5002e-05 0.4 5.5e-05 0.4 5.5002e-05 1.5 9.5e-05 1.5 9.5002e-05 0.4 0.000135 0.4 0.000135002 1.5 0.000155 1.5 0.000155002 0.4 0.000175 0.4 0.000175002 1.5 0.000235 1.5 0.000235002 0.4 0.000255 0.4 0.000255002 1.5)
+V_R in_R 0 PWL(0 1.5 0.00027 1.5 0.000270002 0.4 0.000296 0.4 0.000296002 1.5)
 Xdut in_D in_C in_R out_Q vdd 0 DFFR
 Xld_out_Q_0 out_Q ld_out_Q_0_Y vdd 0 INV
 Xld_out_Q_1 out_Q ld_out_Q_1_Y vdd 0 INV
@@ -74,7 +81,7 @@ Xld_out_Q_10 out_Q ld_out_Q_10_Y vdd 0 INV
 Xld_out_Q_11 out_Q ld_out_Q_11_Y vdd 0 INV
 Xld_out_Q_12 out_Q ld_out_Q_12_Y vdd 0 INV
 Xld_out_Q_13 out_Q ld_out_Q_13_Y vdd 0 INV
-.tran 5e-08 0.000288
+.tran 5e-08 0.000386
 .control
 run
 linearize
@@ -93,7 +100,12 @@ meas tran q_8 FIND v(out_Q) AT=0.000189
 meas tran q_9 FIND v(out_Q) AT=0.000209
 meas tran q_10 FIND v(out_Q) AT=0.000229
 meas tran q_11 FIND v(out_Q) AT=0.000249
-meas tran rst FIND v(out_Q) AT=0.000256
+meas tran q_12 FIND v(out_Q) AT=0.000269
+meas tran q_13 FIND v(out_Q) AT=0.000289
+meas tran q_14 FIND v(out_Q) AT=0.000309
+meas tran q_15 FIND v(out_Q) AT=0.000329
+meas tran rst_a FIND v(out_Q) AT=0.000275
+meas tran rst_b FIND v(out_Q) AT=0.000286
 quit
 .endc
 .end
