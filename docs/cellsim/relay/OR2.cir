@@ -23,9 +23,10 @@
 * da família, sempre do lado do pior caso:
 *   bobina 167 Ω (30 mA a 5 V); kcoil escala a resistência (tolerância e o
 *   aquecimento do cobre, +0,39 %/°C), e o canto o define;
-*   atraca com 24 mA (80 % da tensão nominal na bobina de 167 Ω: o máximo da
-*   ficha) e solta abaixo de 3 mA (10 %: o mínimo da ficha). O relé atraca pela
-*   corrente (ampère-espiras), então esses limiares não mudam com a temperatura;
+*   atraca com 21,8 mA (80 % da tensão nominal na bobina no limite de +10 %:
+*   4 V / 183,7 Ω, o máximo da ficha) e solta abaixo de 2,7 mA (10 %: 0,5 V /
+*   183,7 Ω, o mínimo da ficha). O relé atraca pela corrente (ampère-espiras),
+*   então esses limiares não mudam com a temperatura;
 *   os contatos mudam 5 ms depois de a corrente cruzar o limiar (o tempo máximo
 *   de operação e de liberação da ficha), numa linha de atraso ideal;
 *   contato fechado 0,1 Ω (resistência de contato máxima), aberto 1 GΩ.
@@ -41,8 +42,8 @@ Tdl s  0  sd 0 Z0=50 TD=5m
 Rtl sd 0  50
 Sno com no sd 0 SWNO
 Snc com nc 0 sd SWNC
-.model SWNO SW(VT=13.5 VH=10.5 RON=0.1 ROFF=1G)
-.model SWNC SW(VT=-13.5 VH=10.5 RON=0.1 ROFF=1G)
+.model SWNO SW(VT=12.25 VH=9.55 RON=0.1 ROFF=1G)
+.model SWNC SW(VT=-12.25 VH=9.55 RON=0.1 ROFF=1G)
 .ends G5V1
 .model DIODE D(IS=4.352E-9 N=1.906 BV=110 IBV=0.0001 RS=0.6458 CJO=7.048E-13 VJ=0.869 M=0.03 FC=0.5 TT=3.48E-9)
 .subckt OR2 A B Y VDD GND

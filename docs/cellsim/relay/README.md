@@ -10,7 +10,7 @@ Cada `<CÉLULA>.cir` é um netlist do ngspice completo: o modelo do transistor, 
 ngspice -b AND2.cir      # imprime as medidas e grava AND2.dat com as formas de onda
 ```
 
-Para rodar todos os cantos e refazer estes arquivos: `pcbflow-cellsim --lib relay --export docs/cellsim/relay`.
+Para rodar todos os cantos e refazer estes arquivos: `pcbflow-cellsim --lib relay --export C:/Users/victo/Documents/pcbflow/docs/cellsim/relay`.
 
 ## Células
 
@@ -109,8 +109,4 @@ XOR: K1 gera !A; K2 escolhe !A (B energizado) ou A
 [XOR2.cir](XOR2.cir) — passa no canto típico
 
 ![XOR2](XOR2.png)
-
-## Circuito add4
-
-Um circuito inteiro, sintetizado pelo pcbflow: 20 células, 80 componentes e 512 vetores. Resultados e gráfico em [add4.md](add4.md); netlist em [add4.cir](add4.cir).
 
