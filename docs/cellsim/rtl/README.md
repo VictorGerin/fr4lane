@@ -114,3 +114,7 @@ driver de barramento de coletor aberto: inversor de A + dois NPNs em série (E e
 
 Um circuito inteiro, sintetizado pelo pcbflow: 36 células, 204 componentes e 512 vetores. Resultados e gráfico em [add4.md](add4.md); netlist em [add4.cir](add4.cir).
 
+## Circuito tanque
+
+Um circuito inteiro, sintetizado pelo pcbflow: 21 células, 177 componentes e 17 vetores. Resultados e gráfico em [tanque.md](tanque.md); dados em [tanque.csv](tanque.csv); netlist em [tanque.cir](tanque.cir).
+

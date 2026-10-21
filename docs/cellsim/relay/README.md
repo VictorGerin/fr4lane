@@ -114,3 +114,7 @@ XOR: K1 gera !A; K2 escolhe !A (B energizado) ou A
 
 Um circuito inteiro, sintetizado pelo pcbflow: 20 células, 80 componentes e 512 vetores. Resultados e gráfico em [add4.md](add4.md); dados em [add4.csv](add4.csv); netlist em [add4.cir](add4.cir).
 
+## Circuito tanque
+
+Um circuito inteiro, sintetizado pelo pcbflow: 15 células, 64 componentes e 17 vetores. Resultados e gráfico em [tanque.md](tanque.md); dados em [tanque.csv](tanque.csv); netlist em [tanque.cir](tanque.cir).
+

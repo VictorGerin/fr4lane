@@ -106,3 +106,7 @@ OR-AND-INVERT: Y = !((A|B)&C)
 
 Um circuito inteiro, sintetizado pelo pcbflow: 36 células, 144 componentes e 512 vetores. Resultados e gráfico em [add4.md](add4.md); netlist em [add4.cir](add4.cir).
 
+## Circuito tanque
+
+Um circuito inteiro, sintetizado pelo pcbflow: 21 células, 152 componentes e 17 vetores. Resultados e gráfico em [tanque.md](tanque.md); dados em [tanque.csv](tanque.csv); netlist em [tanque.cir](tanque.cir).
+

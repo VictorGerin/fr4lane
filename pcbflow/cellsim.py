@@ -776,8 +776,8 @@ def sim_design(lib, models, corner, design, vectors, work, ngspice, capture=None
     lote começa repetindo o último vetor do anterior, para medir a transição."""
     has_seq = any(lib.cells[c].seq for c, _ in design.instances.values())
     batch = len(vectors) if has_seq else int(corner.batch)
-    if capture:                                   # para publicar: só o primeiro lote
-        return _sim_batch(lib, models, corner, design, vectors[:int(corner.batch)], work, ngspice, capture, 0, False)
+    if capture:                                   # para publicar: só o primeiro lote (ou tudo se sequencial)
+        return _sim_batch(lib, models, corner, design, vectors[:batch], work, ngspice, capture, 0, False)
     out = {"ok": True, "fails": [], "vectors": len(vectors), "tpd": None, "where": None,
            "cells": len(design.instances), "parts": len(design.parts), "measured": 0, "missing": 0, "rows": []}
     for i in range(0, len(vectors), batch):
@@ -1011,9 +1011,42 @@ def _safe(name):
 
 def design_vectors(design, n=None, seed=1, shuffle=False):
     """Todas as combinações das entradas (até 2^12) ou n sorteadas.
-    Com shuffle (True = semente aleatória, ou int = semente fixa), embaralha a ordem dos vetores."""
+    Se houver entradas de clock/reset, gera uma sequência com reset inicial e bordas de clock
+    (mudando os dados com clk=0 e subindo clk=1 no passo seguinte, respeitando setup e hold)."""
     import random
     ins = [p.name for p in design.ports if p.direction == "input"]
+    clk = next((p for p in ins if p in ("clk", "clock", "C")), None)
+    rst_n = next((p for p in ins if p in ("rst_n", "resetn", "R")), None)
+    rst = next((p for p in ins if p in ("rst", "reset")), None)
+    if clk:
+        data_ins = [p for p in ins if p not in (clk, rst_n, rst)]
+        total = 2 ** len(data_ins)
+        ks = list(range(total))
+        if shuffle is not False and shuffle is not None:
+            rng = random.Random() if shuffle is True else random.Random(int(shuffle))
+            rng.shuffle(ks)
+        seq = ks + ks                              # dois giros pelas combinações para percorrer todos os estados
+        if n is not None:
+            seq = seq[:max(1, n // 2)]
+        vecs = []
+        base0 = seq[0] if seq else 0
+        if rst_n or rst:
+            v0 = {p: (base0 >> i) & 1 for i, p in enumerate(data_ins)}
+            v0[clk] = 0
+            if rst_n:
+                v0[rst_n] = 0
+            if rst:
+                v0[rst] = 1
+            vecs.append(v0)
+        for k in seq:
+            d = {p: (k >> i) & 1 for i, p in enumerate(data_ins)}
+            if rst_n:
+                d[rst_n] = 1
+            if rst:
+                d[rst] = 0
+            vecs.append({**d, clk: 0})
+            vecs.append({**d, clk: 1})
+        return vecs
     total = 2 ** len(ins)
     if n is None and total > 4096:
         n = 512
