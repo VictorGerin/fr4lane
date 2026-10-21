@@ -18,17 +18,46 @@ def rtl():
 
 def test_modelos_e_cantos_da_familia(rtl):
     models, corners = cellsim.spice_setup(rtl)
-    kind, params = models["NPN"]
-    assert kind == "NPN" and params["Bf"] == "250" and params["Tr"] == "10n"
+    m = models["NPN"]
+    assert m.kind == "NPN" and m.params["Bf"] == "250" and m.params["Tr"] == "10n"
     names = [c.name for c in corners]
     assert names[0] == "típico" and {"lento", "rápido", "quente"} <= set(names)
     lento = next(c for c in corners if c.name == "lento")
     assert lento.params["NPN"]["Bf"] == 110 and lento.vdd == 4.75
 
 
-def test_familia_sem_spice():
+def test_familia_sem_spice(tmp_path):
+    import json
+    dst = tmp_path / "lib" / "cmos"
+    shutil.copytree(lib_path("cmos"), dst)
+    shutil.copy(LIB / "footprints.json", tmp_path / "lib")
+    meta = json.loads((dst / "library.json").read_text(encoding="utf-8"))
+    del meta["spice"]
+    (dst / "library.json").write_text(json.dumps(meta), encoding="utf-8")
     with pytest.raises(cellsim.CellSimError, match="não declara \"spice\""):
-        cellsim.spice_setup(Library(lib_path("cmos")))
+        cellsim.spice_setup(Library(dst))
+
+
+@pytest.mark.parametrize("family, keys", [("cmos", {"NMOS", "PMOS"}), ("relay", {"RELAY", "DIODE"})])
+def test_modelos_das_outras_familias(family, keys):
+    models, corners = cellsim.spice_setup(Library(lib_path(family)))
+    assert set(models) == keys
+    if family == "relay":
+        assert models["RELAY"].kind == "SUBCKT" and models["RELAY"].subckt == "G5V1"
+        assert {c.name for c in corners} == {"típico", "lento", "quente", "rápido"}
+    else:
+        assert models["NMOS"].instance == "L=100u W=100u"
+        assert corners[0].step == 2e-6 and corners[0].levels["vih"] == 0.9
+
+
+@pytest.mark.spice
+def test_somador_no_ngspice(tmp_path):
+    from conftest import PCBFLOW
+    lib = Library(lib_path("cmos"))
+    res, design = cellsim.check_design(lib, [PCBFLOW / "examples/demo/demo_top.v"], "add4", tmp_path,
+                                       vectors=40, log=lambda m: None)
+    assert all(r["ok"] for r in res.values()), {k: r["fails"][:3] for k, r in res.items()}
+    assert res["típico"]["tpd"] and res["típico"]["vectors"] == 40
 
 
 def test_netlist_das_celulas(rtl):

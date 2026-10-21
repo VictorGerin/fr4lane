@@ -1,0 +1,28 @@
+* Relé SPDT de 5 V — modelo comportamental para a simulação analógica (pcbflow-cellsim)
+*
+* Um relé é mecânico e não tem modelo SPICE de fabricante. Este segue a ficha do
+* Omron G5V-1 (5 VDC), um relé SPDT de sinal com bobina de cerca de 30 mA, como o
+* da família, sempre do lado do pior caso:
+*   bobina 167 Ω (30 mA a 5 V); kcoil escala a resistência (tolerância e o
+*   aquecimento do cobre, +0,39 %/°C), e o canto o define;
+*   atraca com 24 mA (80 % da tensão nominal na bobina de 167 Ω: o máximo da
+*   ficha) e solta abaixo de 3 mA (10 %: o mínimo da ficha). O relé atraca pela
+*   corrente (ampère-espiras), então esses limiares não mudam com a temperatura;
+*   os contatos mudam 5 ms depois de a corrente cruzar o limiar (o tempo máximo
+*   de operação e de liberação da ficha), numa linha de atraso ideal;
+*   contato fechado 0,1 Ω (resistência de contato máxima), aberto 1 GΩ.
+* Simplificações: sem a indutância da bobina (a ficha não informa) e sem o
+* intervalo em que os dois contatos ficam abertos (abre antes de fechar).
+*
+* Pinos na convenção do pcbflow: bobina c1 (+) e c2, contato comum, NA e NF.
+.subckt G5V1 c1 c2 com no nc
+Vs  c1 cm 0
+Rc  cm c2 {167*kcoil}
+Bs  s  0  V = 1000 * i(Vs)
+Tdl s  0  sd 0 Z0=50 TD=5m
+Rtl sd 0  50
+Sno com no sd 0 SWNO
+Snc com nc 0 sd SWNC
+.model SWNO SW(VT=13.5 VH=10.5 RON=0.1 ROFF=1G)
+.model SWNC SW(VT=-13.5 VH=10.5 RON=0.1 ROFF=1G)
+.ends G5V1

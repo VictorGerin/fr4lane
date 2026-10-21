@@ -23,5 +23,92 @@
   "placement": {
     "part_gap": 1.0,
     "row_gap": 5.0
+  },
+  "spice": {
+    "_comment": "Simulação analógica das células (pcbflow-cellsim). Relé: modelo comportamental a partir da ficha do Omron G5V-1 (spice/G5V-1.lib); diodo: 1N4148 da Nexperia. Cantos: kcoil é a escala da resistência da bobina (tolerância de ±10 % e +0,39 %/°C do cobre a partir de 23 °C). Níveis em fração do VDD.",
+    "models": {
+      "RELAY": "spice/G5V-1.lib",
+      "DIODE": "spice/1N4148.lib"
+    },
+    "corners": {
+      "típico": {
+        "vdd": 5.0,
+        "temp": 23,
+        "params": {
+          "RELAY": {
+            "kcoil": 1.0
+          }
+        }
+      },
+      "lento": {
+        "vdd": 4.75,
+        "temp": 23,
+        "params": {
+          "RELAY": {
+            "kcoil": 1.1
+          }
+        }
+      },
+      "quente": {
+        "vdd": 4.75,
+        "temp": 50,
+        "params": {
+          "RELAY": {
+            "kcoil": 1.217
+          }
+        }
+      },
+      "rápido": {
+        "vdd": 5.25,
+        "temp": 0,
+        "params": {
+          "RELAY": {
+            "kcoil": 0.819
+          }
+        }
+      }
+    },
+    "levels": {
+      "vih": 1.0,
+      "vil": 0.0,
+      "voh_min": 0.9,
+      "vol_max": 0.1,
+      "vth": 0.5
+    },
+    "timing": {
+      "step": 0.05,
+      "period": 0.1,
+      "periods": [
+        0.1,
+        0.05,
+        0.03,
+        0.02,
+        0.015,
+        0.01,
+        0.007
+      ],
+      "holds": [
+        0.02,
+        0.01,
+        0.007,
+        0.005,
+        0.003,
+        0.002,
+        0.001,
+        0.0005
+      ],
+      "setups": [
+        0.02,
+        0.01,
+        0.007,
+        0.005,
+        0.003,
+        0.002,
+        0.001,
+        0.0005
+      ],
+      "resolution": 2e-05,
+      "edge": 1e-05
+    }
   }
 }

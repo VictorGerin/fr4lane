@@ -19,6 +19,14 @@ em outro capturaria o dado novo na mesma borda.
 
   pcbflow-cellsim --lib rtl [--cells DFF INV ...] [--out build/cellsim]
   pcbflow-cellsim --lib rtl --export docs/cellsim/rtl
+  pcbflow-cellsim --lib rtl --design add4 --src examples/demo/demo_top.v
+
+--design simula um circuito combinacional inteiro, do jeito que vai para a
+placa: o pcbflow sintetiza o Verilog (com o sizing e os buffers), cada célula
+vira uma instância no ngspice e as entradas recebem todas as combinações (ou
+--vectors sorteadas). Cada vetor é conferido contra a lógica do netlist, e o
+último cruzamento de cada saída dá o atraso do caminho crítico, com as cargas
+reais entre as portas.
 
 --export grava, para cada célula, o teste funcional no primeiro canto como um
 netlist do ngspice autocontido (<CÉLULA>.cir: modelo, subcircuitos, vetores de
@@ -27,10 +35,22 @@ onda (<CÉLULA>.png) e um README.md com os resultados de todos os cantos: quem
 quiser conferir uma célula roda "ngspice -b <CÉLULA>.cir" sem o pcbflow.
 
 "spice" no library.json:
-  "models":  {"NPN": "spice/BC548B.lib"}   chave do parts.json -> arquivo com o .model
+  "models":  {"NPN": "spice/BC548B.lib"}   chave do parts.json -> arquivo com o
+             .model, ou {"file": ..., "instance": "L=100u W=100u"} (parâmetros
+             da instância). Um arquivo com .subckt (ex.: o relé) vira uma
+             instância X dele, com os nós na ordem do elemento do .sp.
   "corners": {"lento": {"vdd": 4.75, "temp": 0, "pull_up": 1.05, "base": 1.05,
                         "params": {"NPN": {"Bf": 110}}}, ...}
-  pull_up escala os resistores ligados ao VDD; base, os outros.
+             pull_up escala os resistores ligados ao VDD; base, os outros;
+             params troca parâmetros do .model ou, num .subckt, define os
+             .param que ele usa (ex.: {"RELAY": {"kcoil": 1.2}}).
+  "levels":  {"vih": 1.0, "vil": 0.0, "voh_min": 0.9, "vol_max": 0.1, "vth": 0.5}
+             (opcional) níveis em fração do VDD; sem ele, os da família RTL
+             (voh_min do "electrical", 2 Vce(sat) e 0,5 V);
+  "timing":  {"step": 20e-6, "period": 20e-6, "periods": [...], "holds": [...],
+              "setups": [...], "resolution": 5e-9} (opcional) a escala de tempo
+             dos testes: passo das combinacionais, período do teste funcional,
+             grades de período, hold e setup, e o passo da simulação.
 """
 
 import argparse
@@ -47,14 +67,16 @@ from pathlib import Path
 from . import drive, liberty
 from .library import Library, LibraryError, resolve_family
 
-VTH = 1.0            # limiar para medir atrasos (entre o nível baixo e o alto)
-STEP = 20e-6         # duração de cada combinação de entrada nas combinacionais
-PERIOD = 20e-6       # período do clock no teste funcional dos flip-flops
-PERIODS = (1e-5, 5e-6, 2e-6, 1e-6, 5e-7, 2e-7, 1e-7)
-HOLDS = (1e-6, 5e-7, 3e-7, 2e-7, 1e-7, 5e-8, 2e-8, 1e-8)
-SETUPS = (1e-6, 5e-7, 3e-7, 2e-7, 1e-7, 5e-8, 2e-8, 1e-8)
-EDGE = 2e-9          # rampa das fontes ideais
-VOL_MAX = 0.5        # nível baixo máximo: a próxima base fica cortada
+# escala de tempo padrão (a da família RTL); "timing" no library.json troca
+TIMING = {"step": 20e-6,          # duração de cada combinação de entrada nas combinacionais
+          "period": 20e-6,        # período do clock no teste funcional dos flip-flops
+          "periods": [1e-5, 5e-6, 2e-6, 1e-6, 5e-7, 2e-7, 1e-7],
+          "holds": [1e-6, 5e-7, 3e-7, 2e-7, 1e-7, 5e-8, 2e-8, 1e-8],
+          "setups": [1e-6, 5e-7, 3e-7, 2e-7, 1e-7, 5e-8, 2e-8, 1e-8],
+          "resolution": 5e-9,     # passo da simulação nas varreduras dos flip-flops
+          "edge": 2e-9}           # rampa das fontes de entrada
+VTH = 1.0            # limiar para medir atrasos na RTL (entre o nível baixo e o alto)
+VOL_MAX = 0.5        # nível baixo máximo na RTL: a próxima base fica cortada
 
 
 class CellSimError(Exception):
@@ -87,6 +109,15 @@ def _model_params(text, path):
 
 
 @dataclass
+class Model:
+    kind: str                   # NPN, NMOS, D... ou SUBCKT
+    params: dict                # parâmetros do .model ({} num .subckt)
+    instance: str = ""          # parâmetros da instância (ex.: L=100u W=100u)
+    text: str = ""              # o .subckt inteiro, quando o modelo é um subcircuito
+    subckt: str = ""            # nome do .subckt
+
+
+@dataclass
 class Corner:
     name: str
     vdd: float
@@ -94,6 +125,18 @@ class Corner:
     pull_up: float
     base: float
     params: dict = field(default_factory=dict)     # chave do parts.json -> {parâmetro: valor}
+    levels: dict = None                            # frações do VDD ("levels"), ou None (RTL)
+    timing: dict = field(default_factory=lambda: dict(TIMING))
+
+    def __getattr__(self, name):                   # corner.step, corner.periods... vêm de timing
+        t = self.__dict__.get("timing") or {}
+        if name in t:
+            return t[name]
+        raise AttributeError(name)
+
+    @property
+    def vth(self):
+        return self.levels["vth"] * self.vdd if self.levels else VTH
 
 
 def spice_setup(lib):
@@ -103,27 +146,41 @@ def spice_setup(lib):
         raise CellSimError(f"a família '{lib.name}' não declara \"spice\" no library.json "
                            "(modelos SPICE dos componentes e cantos)")
     models = {}
-    for key, rel in cfg.get("models", {}).items():
+    for key, spec in cfg.get("models", {}).items():
         if key not in lib.parts:
             raise CellSimError(f"library.json: spice.models cita '{key}', que não está no parts.json")
-        path = (lib.path / rel).resolve()
+        spec = spec if isinstance(spec, dict) else {"file": spec}
+        path = (lib.path / spec["file"]).resolve()
         if not path.is_file():
-            raise CellSimError(f"library.json: modelo {rel} não encontrado")
-        models[key] = _model_params(path.read_text(encoding="utf-8"), path)
-    need = {p for s in lib.subckts.values() for e in s.devices if e.letter in "QMD" for p in [e.model]}
+            raise CellSimError(f"library.json: modelo {spec['file']} não encontrado")
+        text = path.read_text(encoding="utf-8")
+        m = re.search(r"^\s*\.subckt\s+(\S+)", text, re.I | re.M)
+        if m:
+            models[key] = Model("SUBCKT", {}, spec.get("instance", ""), text, m.group(1))
+        else:
+            kind, params = _model_params(text, path)
+            models[key] = Model(kind, params, spec.get("instance", ""))
+    need = {p for s in lib.subckts.values() for e in s.devices if e.letter in "QMDK" for p in [e.model]}
     missing = sorted(need - set(models))
     if missing:
         raise CellSimError(f"library.json: sem modelo SPICE para {', '.join(missing)} (spice.models)")
+    levels = cfg.get("levels")
+    timing = dict(TIMING, **cfg.get("timing", {}))
     corners = [Corner(n, float(c.get("vdd", 5.0)), float(c.get("temp", 27)), float(c.get("pull_up", 1.0)),
-                      float(c.get("base", 1.0)), c.get("params", {}))
+                      float(c.get("base", 1.0)), c.get("params", {}), levels, timing)
                for n, c in cfg.get("corners", {"típico": {}}).items()]
     return models, corners
 
 
 # ---------------------------------------------------------------- netlists
-def subckt_text(lib, names):
+def subckt_text(lib, names, models=None):
     """Os .subckt das células (e dos que elas instanciam), com os resistores
     escalados pelos parâmetros kup (ligados ao VDD) e kb (os outros)."""
+    models = models or {}
+
+    def inst(e):
+        m = models.get(e.model)
+        return f" {m.instance}" if m and m.instance else ""
     out, done = [], set()
 
     def emit(n):
@@ -143,11 +200,16 @@ def subckt_text(lib, names):
             elif e.letter == "C":
                 out.append(f"{e.name} {' '.join(e.nodes)} {drive.parse_value(e.value):g}")
             elif e.letter == "Q":
-                out.append(f"{e.name} {' '.join(e.nodes)} {e.model}")
-            elif e.letter == "M":
-                out.append(f"{e.name} {' '.join(e.nodes)} {e.nodes[2]} {e.model}")
+                out.append(f"{e.name} {' '.join(e.nodes)} {e.model}{inst(e)}")
+            elif e.letter == "M":                  # corpo no fonte: componente discreto
+                out.append(f"{e.name} {' '.join(e.nodes)} {e.nodes[2]} {e.model}{inst(e)}")
             elif e.letter == "D":
-                out.append(f"{e.name} {' '.join(e.nodes)} {e.model}")
+                out.append(f"{e.name} {' '.join(e.nodes)} {e.model}{inst(e)}")
+            elif e.letter == "K":                  # relé: instância do subcircuito do modelo
+                m = models.get(e.model)
+                if not m or m.kind != "SUBCKT":
+                    raise CellSimError(f"{n}: o relé {e.name} precisa de um modelo .subckt em spice.models")
+                out.append(f"X{e.name} {' '.join(e.nodes)} {m.subckt}")
             else:
                 raise CellSimError(f"{n}: elemento {e.name} ({e.letter}) sem equivalente no ngspice")
         out.append(f".ends {n}")
@@ -159,11 +221,17 @@ def subckt_text(lib, names):
 def header(lib, models, corner, cells):
     lines = [f"* pcbflow-cellsim: canto {corner.name}", f".temp {corner.temp:g}",
              f".param kup={corner.pull_up:g} kb={corner.base:g}"]
-    for key, (kind, params) in models.items():
-        p = dict(params)
-        p.update({k: str(v) for k, v in corner.params.get(key, {}).items()})
-        lines.append(f".model {key} {kind}(" + " ".join(f"{k}={v}" for k, v in p.items()) + ")")
-    lines.append(subckt_text(lib, cells))
+    for key, m in models.items():
+        over = corner.params.get(key, {})
+        if m.kind == "SUBCKT":
+            if over:
+                lines.append(".param " + " ".join(f"{k}={v}" for k, v in over.items()))
+            lines.append(m.text.strip())
+            continue
+        p = dict(m.params)
+        p.update({k: str(v) for k, v in over.items()})
+        lines.append(f".model {key} {m.kind}(" + " ".join(f"{k}={v}" for k, v in p.items()) + ")")
+    lines.append(subckt_text(lib, cells, models))
     lines.append(f"VDD vdd 0 {corner.vdd:g}")
     return "\n".join(lines)
 
@@ -175,14 +243,15 @@ def instance(lib, cell, name, nets):
     return f"X{name} {' '.join(nodes)} {cell}"
 
 
-def pwl(points):
-    """[(t, v)] -> PWL com degraus de EDGE."""
+def pwl(points, edge):
+    """[(t, v)] -> PWL com rampas de 'edge' (tempos com precisão total: em 1 s,
+    uma rampa de µs some se o instante for escrito com poucos algarismos)."""
     out, last = [], None
     for t, v in points:
         if last is None:
             out.append(f"0 {v:g}")
         elif v != last:
-            out += [f"{t:.9g} {last:g}", f"{t + EDGE:.9g} {v:g}"]
+            out += [f"{t:.15g} {last:g}", f"{t + edge:.15g} {v:g}"]
         last = v
     return "PWL(" + " ".join(out) + ")"
 
@@ -241,6 +310,10 @@ class Levels:
 
 
 def levels(lib, corner):
+    if corner.levels:
+        f = corner.levels
+        return Levels(vih=f["vih"] * corner.vdd, vil=f["vil"] * corner.vdd,
+                      voh_min=f["voh_min"] * corner.vdd, vol_max=f["vol_max"] * corner.vdd)
     el = drive.electrical_of(lib)
     voh = el.voh_min if el else 0.7 * corner.vdd
     vol = (2 * el.vce_sat if el else 0.1 * corner.vdd)
@@ -285,22 +358,22 @@ def sim_comb(lib, models, corner, cell, work, ngspice, capture=None):
     combos = list(range(2 ** n)) + [0]                  # volta ao início: mede as duas transições
     src = []
     for i, p in enumerate(ins):
-        pts = [(k * STEP, lv.vih if (combo >> (n - 1 - i)) & 1 else lv.vil) for k, combo in enumerate(combos)]
-        src.append(f"V_{p} in_{p} 0 {pwl(pts)}")
+        pts = [(k * corner.step, lv.vih if (combo >> (n - 1 - i)) & 1 else lv.vil) for k, combo in enumerate(combos)]
+        src.append(f"V_{p} in_{p} 0 {pwl(pts, corner.edge)}")
     nets = {**{p: f"in_{p}" for p in ins}, **{o: f"out_{o}" for o in outs}}
     expect = [{o: _expected(lib, c, o, {p: (combo >> (n - 1 - i)) & 1 for i, p in enumerate(ins)}) for o in outs}
               for combo in combos]
     meas = []
     for k in range(len(combos)):
         for o in outs:
-            at = (k + 1) * STEP - STEP / 20
+            at = (k + 1) * corner.step - corner.step / 20
             meas.append(f"meas tran s_{o}_{k} FIND v(out_{o}) AT={at:.9g}")
             lnet = _load_out(lib, cell, o)
             if lnet:
                 meas.append(f"meas tran l_{o}_{k} FIND v({lnet}) AT={at:.9g}")
             if k and None not in (expect[k][o], expect[k - 1][o]) and expect[k][o] != expect[k - 1][o]:
-                meas.append(f"meas tran d_{o}_{k} TRIG AT={k * STEP:.9g} TARG v(out_{o}) VAL={VTH} "
-                            f"TD={k * STEP:.9g} CROSS=1")
+                meas.append(f"meas tran d_{o}_{k} TRIG AT={k * corner.step:.9g} TARG v(out_{o}) VAL={corner.vth} "
+                            f"TD={k * corner.step:.9g} CROSS=1")
     term = []
     for o in outs:                                      # drivers de coletor aberto: a terminação do barramento
         if c.pins[o].get("three_state") and lib.terminator:
@@ -309,7 +382,7 @@ def sim_comb(lib, models, corner, cell, work, ngspice, capture=None):
     deck = "\n".join([header(lib, models, corner, [cell, *rcells] + ([lib.terminator["cell"]] if term else [])),
                       *src, instance(lib, cell, "dut", nets), *term,
                       loads_text(lib, cell, {o: f"out_{o}" for o in outs}),
-                      f".tran {STEP / 500:.3g} {len(combos) * STEP:.9g}", ".control", "run", *meas, "quit",
+                      f".tran {corner.step / 500:.3g} {len(combos) * corner.step:.9g}", ".control", "run", *meas, "quit",
                       ".endc", ".end"])
     path = work / f"{cell}_{corner.name}.cir"
     if capture:
@@ -317,7 +390,7 @@ def sim_comb(lib, models, corner, cell, work, ngspice, capture=None):
         for k, combo in enumerate(combos):
             env = {p: (combo >> (n - 1 - i)) & 1 for i, p in enumerate(ins)}
             want = ", ".join(f"s_{o}_{k}: {o}={expect[k][o]}" for o in outs)
-            vectors.append(f"{k * STEP * 1e6:g}-{(k + 1) * STEP * 1e6:g} µs  {_env(env) or '(sem entradas)'}  ->  {want}")
+            vectors.append(f"{k * corner.step * 1e6:g}-{(k + 1) * corner.step * 1e6:g} µs  {_env(env) or '(sem entradas)'}  ->  {want}")
         deck = _capture(deck, capture.name, [f"in_{p}" for p in ins] + [f"out_{o}" for o in outs],
                         _about(lib, corner, cell, lv, _loads_note(lib, cell, outs), vectors))
         path = capture.with_suffix(".cir")
@@ -396,19 +469,19 @@ def _ff_deck(lib, models, corner, cell, period, bits, change, extra_meas=(), cle
     hi, lo = lv.vih, lv.vil
     a, b = (lo, hi) if rising else (hi, lo)
     n = len(bits)
-    ck = f"V_{clk} in_{clk} 0 PULSE({a:g} {b:g} {period:.9g} {EDGE:g} {EDGE:g} {period / 2 - EDGE:.9g} {period:.9g})"
+    ck = f"V_{clk} in_{clk} 0 PULSE({a:g} {b:g} {period:.9g} {corner.edge:g} {corner.edge:g} {period / 2 - corner.edge:.15g} {period:.9g})"
     d = data[0]
     pts, v = [(0.0, lo)], 0
     for i, bit in enumerate(bits):
         t = (i + 1) * period - change
         pts.append((t, hi if bit else lo))
-    src = [ck, f"V_{d} in_{d} 0 {pwl(pts)}"]
+    src = [ck, f"V_{d} in_{d} 0 {pwl(pts, corner.edge)}"]
     for p, (key, inactive) in asyn.items():
         pts = [(0.0, hi if inactive else lo)]
         if clear_at:
             t0, t1 = clear_at
             pts += [(t0, lo if inactive else hi), (t1, hi if inactive else lo)]
-        src.append(f"V_{p} in_{p} 0 {pwl(pts)}")
+        src.append(f"V_{p} in_{p} 0 {pwl(pts, corner.edge)}")
     for p in data[1:]:
         src.append(f"V_{p} in_{p} 0 {lo:g}")
     nets = {**{p: f"in_{p}" for p in c.inputs}, **{o: f"out_{o}" for o in c.outputs}}
@@ -417,7 +490,7 @@ def _ff_deck(lib, models, corner, cell, period, bits, change, extra_meas=(), cle
     meas = [f"meas tran q_{k} FIND v(out_{q}) AT={(k + 1) * period + 0.45 * period:.9g}" for k in range(n)]
     deck = "\n".join([header(lib, models, corner, [cell, rcell]), *src, instance(lib, cell, "dut", nets),
                       loads_text(lib, cell, {q: f"out_{q}"}),
-                      f".tran {tstep or min(period / 400, 5e-9):.3g} {t_end:.9g}", ".control", "run", *meas, *extra_meas,
+                      f".tran {tstep or min(period / 400, corner.resolution):.3g} {t_end:.9g}", ".control", "run", *meas, *extra_meas,
                       "quit", ".endc", ".end"])
     return deck, q, clk
 
@@ -460,13 +533,13 @@ def sim_ff(lib, models, corner, cell, work, ngspice, capture=None):
         tail = []
         if asyn:
             key, _ = next(iter(asyn.values()))
-            t0 = (len(bits) + 0.5) * PERIOD
-            clear = (t0, t0 + 0.4 * PERIOD)
-            tail = [f"meas tran rst FIND v(out_{qpin}) AT={t0 + 0.3 * PERIOD:.9g}"]
-        deck, *_ = _ff_deck(lib, models, corner, cell, PERIOD, bits, PERIOD / 4, tail, clear, tstep=PERIOD / 400)
+            t0 = (len(bits) + 0.5) * corner.period
+            clear = (t0, t0 + 0.4 * corner.period)
+            tail = [f"meas tran rst FIND v(out_{qpin}) AT={t0 + 0.3 * corner.period:.9g}"]
+        deck, *_ = _ff_deck(lib, models, corner, cell, corner.period, bits, corner.period / 4, tail, clear, tstep=corner.period / 400)
         edge = "subida" if rising else "descida"
-        vectors = [f"borda de {edge} {k + 1} em {(k + 1) * PERIOD * 1e6:g} µs: {data[0]}={b} "
-                   f"(muda {PERIOD / 4 * 1e6:g} µs antes)  ->  q_{k}: {qpin}={b}" for k, b in enumerate(bits)]
+        vectors = [f"borda de {edge} {k + 1} em {(k + 1) * corner.period * 1e6:g} µs: {data[0]}={b} "
+                   f"(muda {corner.period / 4 * 1e6:g} µs antes)  ->  q_{k}: {qpin}={b}" for k, b in enumerate(bits)]
         if asyn:
             p, (key, inactive) = next(iter(asyn.items()))
             vectors.append(f"{p} = {1 - inactive} de {clear[0] * 1e6:g} a {clear[1] * 1e6:g} µs ({key} assíncrono)"
@@ -480,14 +553,14 @@ def sim_ff(lib, models, corner, cell, work, ngspice, capture=None):
     meas = []
     for k in range(1, len(BITS)):
         if BITS[k] != BITS[k - 1]:
-            td = (k + 1) * PERIOD - PERIOD / 10
+            td = (k + 1) * corner.period - corner.period / 10
             e = "RISE" if BITS[k] else "FALL"
             meas.append(f"meas tran ckq_{k} TRIG v(in_{clk_name}) VAL={(lv.vih + lv.vil) / 2:g} TD={td:.9g} "
-                        f"{'RISE' if rising else 'FALL'}=1 TARG v(out_{qpin}) VAL={VTH} TD={td:.9g} {e}=1")
-    vals, q, clk = run("func", PERIOD, PERIOD / 4, extra=meas)
+                        f"{'RISE' if rising else 'FALL'}=1 TARG v(out_{qpin}) VAL={corner.vth} TD={td:.9g} {e}=1")
+    vals, q, clk = run("func", corner.period, corner.period / 4, extra=meas)
     if not _ff_ok(vals, BITS, lv):
         got = [round(vals.get(f"q_{k}", float("nan")), 2) for k in range(len(BITS))]
-        out["fails"].append(f"captura errada com período de {PERIOD * 1e6:g} µs: Q = {got}, esperado {BITS}")
+        out["fails"].append(f"captura errada com período de {corner.period * 1e6:g} µs: Q = {got}, esperado {BITS}")
     ckq = [v for k, v in vals.items() if k.startswith("ckq_") and v > 0]
     out["ckq"] = (min(ckq), max(ckq)) if ckq else None
     # clear/preset assíncrono: no meio de um ciclo, Q vai ao valor e fica até soltar
@@ -495,23 +568,23 @@ def sim_ff(lib, models, corner, cell, work, ngspice, capture=None):
         key, inactive = next(iter(asyn.values()))
         level = 0 if key == "clear" else 1
         bits = [1 - level] * 4
-        t0 = 4.5 * PERIOD
-        extra = [f"meas tran rst FIND v(out_{qpin}) AT={t0 + 0.3 * PERIOD:.9g}"]
-        vals, *_ = run("async", PERIOD, PERIOD / 4, bits=bits, extra=extra, clear_at=(t0, t0 + 0.4 * PERIOD))
+        t0 = 4.5 * corner.period
+        extra = [f"meas tran rst FIND v(out_{qpin}) AT={t0 + 0.3 * corner.period:.9g}"]
+        vals, *_ = run("async", corner.period, corner.period / 4, bits=bits, extra=extra, clear_at=(t0, t0 + 0.4 * corner.period))
         if logic(vals.get("rst", float("nan")), lv) != level:
             out["fails"].append(f"{key} assíncrono não levou Q a {level} (Q = {vals.get('rst', float('nan')):.2f} V)")
     # menor período que funciona
     out["period"] = None
-    for p in PERIODS:
+    for p in corner.periods:
         vals, *_ = run(f"p{p:g}", p, p / 4)
         if not _ff_ok(vals, BITS, lv):
             break
         out["period"] = p
     # hold: o dado muda h DEPOIS da borda e o valor antigo tem de ficar. O hold
     # necessário fica entre o último h que passou e o primeiro que falhou.
-    out["hold"] = _sweep(HOLDS, lambda h: _ff_ok(run(f"h{h:g}", PERIOD, -h)[0], [0] + BITS[:-1], lv))
+    out["hold"] = _sweep(corner.holds, lambda h: _ff_ok(run(f"h{h:g}", corner.period, -h)[0], [0] + BITS[:-1], lv))
     # setup: o dado muda s ANTES da borda e o valor novo tem de entrar
-    out["setup"] = _sweep(SETUPS, lambda s: _ff_ok(run(f"s{s:g}", PERIOD, s)[0], BITS, lv))
+    out["setup"] = _sweep(corner.setups, lambda s: _ff_ok(run(f"s{s:g}", corner.period, s)[0], BITS, lv))
     out["ok"] = not out["fails"]
     return out
 
@@ -527,18 +600,18 @@ def sim_latch(lib, models, corner, cell, work, ngspice, capture=None):
     d = liberty.parse_expr(lt["data_in"])[1]
     q = next(o for o in c.outputs if c.pins[o]["function"].strip() == lt["iq"])
     on, off = (lv.vih, lv.vil) if high else (lv.vil, lv.vih)
-    T = STEP
+    T = corner.step
     # transparente: E ligado, D muda 3 vezes; travado: E desliga, D muda e Q fica
     en_pts = [(0.0, on), (4 * T, off)]
     d_pts = [(0.0, lv.vil), (T, lv.vih), (2 * T, lv.vil), (3 * T, lv.vih), (5 * T, lv.vil), (6 * T, lv.vih)]
     want = [(0.9 * T, 0), (1.9 * T, 1), (2.9 * T, 0), (3.9 * T, 1), (5.9 * T, 1), (6.9 * T, 1)]
     nets = {**{p: f"in_{p}" for p in c.inputs}, **{o: f"out_{o}" for o in c.outputs}}
     meas = [f"meas tran s_{k} FIND v(out_{q}) AT={t:.9g}" for k, (t, _) in enumerate(want)]
-    meas += [f"meas tran dq_{k} TRIG AT={t:.9g} TARG v(out_{q}) VAL={VTH} TD={t:.9g} CROSS=1"
+    meas += [f"meas tran dq_{k} TRIG AT={t:.9g} TARG v(out_{q}) VAL={corner.vth} TD={t:.9g} CROSS=1"
              for k, t in enumerate((T, 2 * T, 3 * T))]
     rcell = fanout_load(lib, cell, q)[0]
-    deck = "\n".join([header(lib, models, corner, [cell, rcell]), f"V_{en} in_{en} 0 {pwl(en_pts)}",
-                      f"V_{d} in_{d} 0 {pwl(d_pts)}", instance(lib, cell, "dut", nets),
+    deck = "\n".join([header(lib, models, corner, [cell, rcell]), f"V_{en} in_{en} 0 {pwl(en_pts, corner.edge)}",
+                      f"V_{d} in_{d} 0 {pwl(d_pts, corner.edge)}", instance(lib, cell, "dut", nets),
                       loads_text(lib, cell, {q: f"out_{q}"}), f".tran {T / 500:.3g} {7 * T:.9g}",
                       ".control", "run", *meas, "quit", ".endc", ".end"])
     path = work / f"{cell}_{corner.name}.cir"
@@ -558,6 +631,270 @@ def sim_latch(lib, models, corner, cell, work, ngspice, capture=None):
                          f"({'transparente' if t < 4 * T else 'travado'}; esperado {w})")
     dq = [v for k, v in vals.items() if k.startswith("dq_") and v > 0]
     return {"ok": not fails, "fails": fails, "tpd": max(dq) if dq else None}
+
+
+# ---------------------------------------------------------------- circuitos
+def build_design(lib, sources, top, outdir):
+    """O netlist de células do circuito, como o fluxo o monta (síntese, sizing e buffers)."""
+    from . import buffering, netlist, sizing, synth
+    outdir = Path(outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    liberty_file = outdir / "cells.lib"
+    lib.write_liberty(liberty_file)
+    json_path, _, _, hier = synth.run_yosys(sources, top, liberty_file, outdir, latches=lib.latch_techmap())
+    design = netlist.load_yosys_json(json_path, top, lib, hier)
+    el, drives = drive.library_drive(lib)
+    if lib.variants:
+        sizing.size_design(lib, design, el, drives)
+    buffering.buffer_design(lib, design, el, drives)
+    seq = sorted({c for c, _ in design.instances.values() if lib.cells[c].seq})
+    if seq:
+        raise CellSimError(f"--design só simula circuitos combinacionais ({top} tem {', '.join(seq)})")
+    return design
+
+
+def _evaluate(lib, design, env):
+    """Valor lógico de cada net para as entradas env {net: 0/1}."""
+    val = dict(env)
+    val[design.vdd], val[design.gnd] = 1, 0
+    pending = dict(design.instances)
+    while pending:
+        progress_ = False
+        for inst, (cell, _) in list(pending.items()):
+            c = lib.cells[cell]
+            conns = design.conns[inst]
+            ins = {p: val.get(conns.get(p)) for p in c.inputs}
+            if None in ins.values():
+                continue
+            for o in c.outputs:
+                if o in conns:
+                    if lib.is_bus_cell(cell):
+                        raise CellSimError("--design não simula barramentos tri-state")
+                    val[conns[o]] = liberty.eval_expr(liberty.parse_expr(c.pins[o]["function"]), ins)
+            del pending[inst]
+            progress_ = True
+        if not progress_:
+            raise CellSimError("o circuito tem um laço combinacional (ou uma net sem driver)")
+    return val
+
+
+BATCH = 64     # vetores por netlist: com o tempo absoluto pequeno, o passo de tempo não esbarra
+               # na precisão do double (bordas de ns em 1 ms de simulação faziam o ngspice abortar)
+
+
+def sim_design(lib, models, corner, design, vectors, work, ngspice, capture=None):
+    """Simula o circuito com os vetores [{entrada: 0/1}], em lotes de BATCH; cada
+    lote começa repetindo o último vetor do anterior, para medir a transição."""
+    if capture:                                   # para publicar: só o primeiro lote
+        return _sim_batch(lib, models, corner, design, vectors[:BATCH], work, ngspice, capture, 0, False)
+    out = {"ok": True, "fails": [], "vectors": len(vectors), "tpd": None, "where": None,
+           "cells": len(design.instances), "parts": len(design.parts)}
+    for i in range(0, len(vectors), BATCH):
+        first = max(0, i - 1)
+        r = _sim_batch(lib, models, corner, design, vectors[first:i + BATCH], work, ngspice, None, first, i > 0)
+        out["fails"] += r["fails"]
+        if r["tpd"] and (out["tpd"] is None or r["tpd"] > out["tpd"]):
+            out["tpd"], out["where"] = r["tpd"], r["where"]
+    out["ok"] = not out["fails"]
+    return out
+
+
+def _sim_batch(lib, models, corner, design, vectors, work, ngspice, capture, first, skip0):
+    """Um lote: o vetor local k é o vetor first + k; com skip0, o vetor 0 (repetido
+    do lote anterior) só dá o estado inicial."""
+    lv = levels(lib, corner)
+    work = Path(work)
+    names = {design.vdd: "vdd", design.gnd: "0"}
+
+    def node(net):
+        if net not in names:
+            names[net] = f"n{len(names)}"
+        return names[net]
+
+    ins = [p for p in design.ports if p.direction == "input"]
+    outs = [p for p in design.ports if p.direction == "output"]
+    T = corner.step
+    src = []
+    for p in ins:
+        if p.net in (design.vdd, design.gnd):
+            continue
+        pts = [(k * T, lv.vih if v[p.name] else lv.vil) for k, v in enumerate(vectors)]
+        src.append(f"V_{_safe(p.name)} {node(p.net)} 0 {pwl(pts, corner.edge)}")
+    cells = sorted({c for c, _ in design.instances.values()})
+    lines = []
+    for inst, (cell, _) in design.instances.items():
+        conns = {pin: node(net) for pin, net in design.conns[inst].items()}
+        for pin in lib.subckts[cell].pins:            # pino sem ligação: nó próprio
+            if pin not in conns and pin not in (lib.vdd, lib.gnd):
+                conns[pin] = node(f"{inst}.{pin}")
+        lines.append(instance(lib, cell, _safe(inst), conns))
+    # cada saída leva uma carga de referência (a entrada do que vem depois na placa)
+    rcell, rpin, _ = fanout_load(lib, cells[0], lib.cells[cells[0]].outputs[0])
+    for p in outs:
+        others = [x for x in lib.subckts[rcell].pins if x not in (lib.vdd, lib.gnd, rpin)]
+        lines.append(instance(lib, rcell, f"ld_{_safe(p.name)}",
+                              {rpin: node(p.net), **{x: f"ldo_{_safe(p.name)}_{x}" for x in others}}))
+    expect = []
+    for v in vectors:
+        val = _evaluate(lib, design, {p.net: v[p.name] for p in ins})
+        expect.append({p.name: val.get(p.net) for p in outs})
+    meas = []
+    for k in range(len(vectors)):
+        for p in outs:
+            o = _safe(p.name)
+            meas.append(f"meas tran s_{o}_{k} FIND v({node(p.net)}) AT={(k + 1) * T - T / 20:.9g}")
+            if k and expect[k][p.name] != expect[k - 1][p.name]:
+                meas.append(f"meas tran t_{o}_{k} WHEN v({node(p.net)})={corner.vth:g} CROSS=LAST "
+                            f"FROM={k * T:.9g} TO={(k + 1) * T:.9g}")
+    deck = "\n".join([header(lib, models, corner, cells + [rcell]), *src, *lines,
+                      f".tran {T / 500:.3g} {len(vectors) * T:.9g}", ".control", "run", *meas, "quit",
+                      ".endc", ".end"])
+    path = work / f"{design.top}_{corner.name}_{first}.cir"
+    if capture:
+        vec = [f"vetor {k} ({k * T * 1e6:g}-{(k + 1) * T * 1e6:g} µs): {_env({x.name: v[x.name] for x in ins})}"
+               f"  ->  " + ", ".join(f"s_{_safe(o)}_{k}: {o}={e}" for o, e in expect[k].items())
+               for k, v in enumerate(vectors)]
+        sig = [node(p.net) for p in ins + outs if p.net not in (design.vdd, design.gnd)]
+        labels = {node(p.net): p.name for p in ins + outs}
+        about = _about_design(lib, corner, design, lv, vec)
+        deck = _capture(deck, capture.name, sig, about)
+        path = capture.with_suffix(".cir")
+    vals = run_deck(ngspice, path, deck)
+    fails, worst = [], (0.0, None)
+    for k, v in enumerate(vectors):
+        if skip0 and k == 0:
+            continue
+        for p in outs:
+            o = _safe(p.name).lower()
+            got = vals.get(f"s_{o}_{k}")
+            want = expect[k][p.name]
+            if got is None or logic(got, lv) != want:
+                fails.append(f"vetor {first + k} ({_env({x.name: v[x.name] for x in ins})}): {p.name} = "
+                             f"{'—' if got is None else f'{got:.2f} V'} (esperado {want})")
+            t = vals.get(f"t_{o}_{k}")
+            if t is not None and t - k * T > worst[0]:
+                worst = (t - k * T, f"{p.name} no vetor {first + k}")
+    r = {"ok": not fails, "fails": fails, "vectors": len(vectors), "tpd": worst[0] or None, "where": worst[1],
+         "cells": len(design.instances), "parts": len(design.parts)}
+    if capture:
+        r["labels"] = labels
+    return r
+
+
+def _about_design(lib, corner, design, lv, vectors):
+    cells = sorted({c for c, _ in design.instances.values()})
+    return [f"{design.top} — circuito sintetizado pelo pcbflow ({len(design.instances)} células: "
+            f"{', '.join(cells)}; {len(design.parts)} componentes)",
+            f"família {lib.name}, canto {corner.name} (VDD {corner.vdd:g} V, {corner.temp:g} °C)",
+            f"gerado por pcbflow-cellsim --design {design.top} --export; rodar: ngspice -b {design.top}.cir", "",
+            f"entradas no nível de pior caso: alto = {lv.vih:g} V, baixo = {lv.vil:g} V; cada saída leva uma "
+            "carga de referência", f"saída: 1 se >= {lv.voh_min:g} V, 0 se <= {lv.vol_max:g} V", "",
+            "vetores de teste (medida: valor esperado):"] + ["  " + v for v in vectors] + [""]
+
+
+def export_design(lib, design, vectors, outdir, res, log=print, window=32):
+    """O netlist do circuito no primeiro canto, um gráfico dos primeiros vetores e o resumo."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+    ngspice = find_ngspice()
+    models, cs = spice_setup(lib)
+    corner = cs[0]
+    lv = levels(lib, corner)
+    outdir = Path(outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    r = sim_design(lib, models, corner, design, vectors, outdir, ngspice, capture=outdir / design.top)
+    dat = outdir / f"{design.top}.dat"
+    names = dat.read_text(encoding="utf-8").splitlines()[0].split()
+    data = np.loadtxt(dat, skiprows=1, ndmin=2)
+    keep = data[:, 0] <= window * corner.step
+    data = data[keep]
+    sig = names[1:]
+    fig, axs = plt.subplots(len(sig), 1, sharex=True, figsize=(10, 0.55 * len(sig) + 1.2), squeeze=False)
+    unit, scale = ("ms", 1e3) if corner.step >= 1e-3 else ("µs", 1e6)
+    for i, name in enumerate(sig):
+        ax = axs[i][0]
+        nd = re.sub(r"^v\((.*)\)$", r"\1", name)
+        label = r["labels"].get(nd, nd)
+        out = any(label == p.name for p in design.ports if p.direction == "output")
+        ax.plot(data[:, 0] * scale, data[:, i + 1], lw=1.0, color="#c0392b" if out else "#2c3e50")
+        ax.set_ylim(-0.4, corner.vdd + 0.4)
+        ax.set_yticks([])
+        ax.set_ylabel(label, rotation=0, ha="right", va="center", fontsize=8)
+    axs[-1][0].set_xlabel(f"tempo ({unit})")
+    fig.suptitle(f"{design.top} — {Path(lib.path).name}, canto {corner.name}: os primeiros {window} vetores",
+                 fontsize=11)
+    fig.tight_layout()
+    fig.savefig(outdir / f"{design.top}.png", dpi=100)
+    plt.close(fig)
+    dat.unlink()
+    for f in outdir.glob(f"{design.top}*.log"):
+        f.unlink()
+    L = [f"# Circuito `{design.top}` na família `{Path(lib.path).name}` (ngspice)", "",
+         f"{len(design.instances)} células, {len(design.parts)} componentes, {len(vectors)} vetores "
+         "(todas as combinações das entradas, simuladas em lotes de 64). Cada vetor é conferido contra a "
+         "lógica do netlist; o caminho crítico é o último cruzamento de uma saída depois da mudança das "
+         f"entradas. O netlist publicado tem os primeiros {min(BATCH, len(vectors))} vetores.", "",
+         "| Canto | Resultado | Caminho crítico |", "|---|---|---|"]
+    for name, x in res.items():
+        L.append(f"| {name} | {'OK' if x['ok'] else '**falhou**'} | "
+                 + (f"{_ns(x['tpd'])} ({x['where']})" if x.get("tpd") else "—") + " |")
+    L += ["", f"Reproduzir (canto {corner.name}): `ngspice -b {design.top}.cir`", "", f"![{design.top}]({design.top}.png)", ""]
+    (outdir / f"{design.top}.md").write_text("\n".join(L) + "\n", encoding="utf-8")
+    readme = outdir / "README.md"
+    if readme.is_file():                        # a seção do circuito no README das células
+        text = readme.read_text(encoding="utf-8")
+        mark = f"## Circuito {design.top}"
+        if mark not in text:
+            text = text.rstrip() + "\n\n" + "\n".join(
+                [mark, "", f"Um circuito inteiro, sintetizado pelo pcbflow: {len(design.instances)} células, "
+                 f"{len(design.parts)} componentes e {len(vectors)} vetores. Resultados e gráfico em "
+                 f"[{design.top}.md]({design.top}.md); netlist em [{design.top}.cir]({design.top}.cir).", ""])
+            readme.write_text(text + "\n", encoding="utf-8")
+    log(f"  {design.top} exportado")
+
+
+def _safe(name):
+    return re.sub(r"[^A-Za-z0-9_]", "_", name)
+
+
+def design_vectors(design, n=None, seed=1):
+    """Todas as combinações das entradas (até 2^12) ou n sorteadas."""
+    import random
+    ins = [p.name for p in design.ports if p.direction == "input"]
+    total = 2 ** len(ins)
+    if n is None and total > 4096:
+        n = 512
+    if n is None or n >= total:
+        ks = list(range(total))
+    else:
+        ks = random.Random(seed).sample(range(total), n)
+    return [{p: (k >> i) & 1 for i, p in enumerate(ins)} for k in ks]
+
+
+def check_design(lib, sources, top, work, vectors=None, log=print, jobs=None):
+    ngspice = find_ngspice()
+    if not ngspice:
+        raise CellSimError("ngspice não encontrado")
+    models, corners = spice_setup(lib)
+    work = Path(work)
+    design = build_design(lib, sources, top, work / "synth")
+    vecs = design_vectors(design, vectors)
+    log(f"  {top}: {len(design.instances)} células, {len(design.parts)} componentes, {len(vecs)} vetores")
+
+    def one(corner):
+        try:
+            return corner.name, sim_design(lib, models, corner, design, vecs, work, ngspice)
+        except CellSimError as e:
+            return corner.name, {"ok": False, "fails": [str(e)], "vectors": len(vecs)}
+    res = {}
+    with ThreadPoolExecutor(max_workers=jobs or min(4, len(corners))) as ex:
+        for name, r in ex.map(one, corners):
+            res[name] = r
+            log(f"  {top:<9} {name:<7} {'OK' if r['ok'] else 'FALHOU'}"
+                + (f", caminho crítico {_ns(r['tpd'])} ({r['where']})" if r.get("tpd") else ""))
+    return res, design
 
 
 # ----------------------------------------------------------------- comando
@@ -729,8 +1066,31 @@ def main(argv=None):
     ap.add_argument("--jobs", type=int, help="simulações em paralelo")
     ap.add_argument("--export", metavar="PASTA",
                     help="grava netlists autocontidos, gráficos e um README.md para publicar")
+    ap.add_argument("--design", metavar="TOP", help="simula este circuito combinacional inteiro (com --src)")
+    ap.add_argument("--src", nargs="+", help="fontes Verilog do --design")
+    ap.add_argument("--vectors", type=int, help="vetores sorteados no --design (padrão: todas as combinações)")
     args = ap.parse_args(argv)
     t0 = time.time()
+    if args.design:
+        try:
+            lib = Library(resolve_family(args.lib))
+            out = Path(args.out or Path("build/cellsim") / f"{args.design}_{Path(lib.path).name}")
+            if not args.src:
+                raise CellSimError("--design precisa de --src")
+            print(f"Simulação analógica do circuito '{args.design}' na família '{lib.name}' (ngspice)")
+            res, design = check_design(lib, args.src, args.design, out, args.vectors, jobs=args.jobs)
+        except (LibraryError, CellSimError, RuntimeError, ValueError) as e:
+            print(f"ERRO: {e}")
+            return 3
+        for name, r in res.items():
+            for f in r["fails"][:10]:
+                print(f"  FALHA ({name}): {f}")
+        if args.export:
+            export_design(lib, design, design_vectors(design, args.vectors), args.export, res)
+        bad = [n for n, r in res.items() if not r["ok"]]
+        print(f"{len(res)} cantos: {len(bad)} com falha. Netlists em {out}")
+        print(f"Concluído em {time.time() - t0:.0f} s")
+        return 1 if bad else 0
     try:
         lib = Library(resolve_family(args.lib))
         out = Path(args.out or Path("build/cellsim") / Path(lib.path).name)
