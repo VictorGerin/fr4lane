@@ -2,6 +2,24 @@
   "_comment": "Geometria da família de relés (mm). O relé é GENÉRICO: 5 pinos em grade de 2,54 mm (1 e 2 bobina, 3 comum, 4 normalmente aberto, 5 normalmente fechado). Antes de fabricar, troque pela geometria e pinagem do relé escolhido (aqui e em parts.json).",
   "pcbflow_Relay:Relay_SPDT_THT_generic": {
     "type": "tht",
+    "model": {
+      "path": "/Relay_THT.3dshapes/Relay_SPDT_Omron_G5V-1.step",
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "offset": [
+        0.0,
+        -6.35,
+        0.0
+      ],
+      "rotate": [
+        0.0,
+        0.0,
+        -90.0
+      ]
+    },
     "courtyard": [
       -1.6,
       -1.6,

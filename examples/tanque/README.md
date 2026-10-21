@@ -96,6 +96,40 @@ Na família **tube** (1ª geração de computadores, estilo ENIAC / IBM 604), to
   <img src="../../docs/img/tanque_tube_top.jpg" alt="Vista superior da placa tanque_tube (172 x 125 mm, 8 fileiras)" width="780">
 </p>
 
+### Família CMOS Discreta (`--lib cmos`)
+
+Na família **CMOS** discreta SMD, cada porta é construída com redes complementares pull-up (PMOS `BSS84`) e pull-down (NMOS `2N7002`) em encapsulamento SOT-23, sem resistores estáticos:
+
+- **Células:** 21 (`2 DFFR`, `4 INV`, `4 NAND2`, `3 NAND3`, `1 NOR2`, `1 NOR3`, `6 OAI21`)
+- **Componentes:** 152 (76 NMOS `2N7002` e 76 PMOS `BSS84`) + capacitores de desacoplamento SMD 0805
+- **Dimensões:** 115 × 74 mm, 4 camadas, 5 fileiras
+- **Roteamento e DRC:** 100 % roteada em 8 iterações (2 s), 0 violações de folga e 0 erros no DRC do KiCad
+
+<p align="center">
+  <img src="../../docs/img/tanque_cmos_3d.jpg" alt="Placa da máquina de estados tanque na família CMOS discreta (76 2N7002 e 76 BSS84 em SOT-23)" width="780">
+</p>
+
+<p align="center">
+  <img src="../../docs/img/tanque_cmos_top.jpg" alt="Vista superior da placa tanque_cmos (115 x 74 mm, 5 fileiras)" width="780">
+</p>
+
+### Família de Relés Eletromecânicos (`--lib relay`)
+
+Na família **relay** eletromecânica (geração Zuse Z3 / Harvard Mark II), cada célula usa relés SPDT de 5 V (`Omron G5V-1`) com diodos de roda-livre (`1N4148`), explorando o contato comutador SPDT para realizar `MUX2`, `XOR2` e `XNOR2` com apenas 1 relé:
+
+- **Células:** 15 (`2 DFFR`, `3 INV`, `1 MUX2`, `5 NAND2`, `2 OR2`, `1 XNOR2`, `1 XOR2`)
+- **Componentes:** 64 (34 relés SPDT `Omron G5V-1` e 30 diodos `1N4148`) + capacitores de desacoplamento
+- **Dimensões:** 140 × 100 mm, 4 camadas, 5 fileiras
+- **Roteamento e DRC:** 100 % roteada em 6 iterações (2 s), 0 violações de folga e 0 erros no DRC do KiCad
+
+<p align="center">
+  <img src="../../docs/img/tanque_relay_3d.jpg" alt="Placa da máquina de estados tanque na família de relés (34 relés SPDT Omron G5V-1 e 30 diodos 1N4148)" width="780">
+</p>
+
+<p align="center">
+  <img src="../../docs/img/tanque_relay_top.jpg" alt="Vista superior da placa tanque_relay (140 x 100 mm, 5 fileiras)" width="780">
+</p>
+
 ## Como gerar e simular
 
 ```sh
@@ -105,9 +139,13 @@ pcbflow --top tanque --lib dtl                                    # gera a PCB n
 pcbflow --top tanque --lib ctl                                    # gera a PCB na família CTL (ferrite + NPN)
 pcbflow --top tanque --lib cdl                                    # gera a PCB na família CDL (ferrite + diodos)
 pcbflow --top tanque --lib tube                                   # gera a PCB na família de válvulas a vácuo (JAN-6418)
+pcbflow --top tanque --lib cmos                                   # gera a PCB na família CMOS discreta (2N7002 + BSS84)
+pcbflow --top tanque --lib relay                                  # gera a PCB na família de relés SPDT (Omron G5V-1)
 pcbflow-cellsim --lib rtl --design tanque --src tanque.v          # simulação analógica SPICE nos 4 cantos (RTL)
 pcbflow-cellsim --lib dtl --design tanque --src tanque.v          # simulação analógica SPICE nos 4 cantos (DTL)
 pcbflow-cellsim --lib ctl --design tanque --src tanque.v          # simulação analógica SPICE nos 4 cantos (CTL)
 pcbflow-cellsim --lib cdl --design tanque --src tanque.v          # simulação analógica SPICE nos 4 cantos (CDL)
 pcbflow-cellsim --lib tube --design tanque --src tanque.v         # simulação analógica SPICE nos 4 cantos (válvulas)
+pcbflow-cellsim --lib cmos --design tanque --src tanque.v         # simulação analógica SPICE nos 4 cantos (CMOS)
+pcbflow-cellsim --lib relay --design tanque --src tanque.v        # simulação analógica SPICE nos 4 cantos (relés)
 ```
