@@ -1,0 +1,7 @@
+{
+  "src": [
+    "tanque.v"
+  ],
+  "tb": "tb_tanque.v",
+  "out": "build/pcb"
+}
