@@ -1,0 +1,9 @@
+/* NOR2 — porta NOR DTL de 2 entradas em 1 único transistor (1 NPN + 2 diodos + 4 resistores) */
+library(dtl_NOR2) {
+  cell(NOR2) {
+    area : 7;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "!(A | B)"; }
+  }
+}

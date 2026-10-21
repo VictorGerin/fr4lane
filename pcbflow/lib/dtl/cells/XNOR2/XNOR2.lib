@@ -1,0 +1,9 @@
+/* XNOR2 — coincidência DTL de 2 entradas (XOR2 + INV; 5 NPNs) */
+library(dtl_XNOR2) {
+  cell(XNOR2) {
+    area : 29;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "!(A ^ B)"; }
+  }
+}

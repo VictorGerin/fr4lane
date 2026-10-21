@@ -1,0 +1,9 @@
+/* XOR2 — OU-exclusivo DTL de 2 entradas em 4 NAND2 (4 NPNs) */
+library(dtl_XOR2) {
+  cell(XOR2) {
+    area : 24;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "A ^ B"; }
+  }
+}

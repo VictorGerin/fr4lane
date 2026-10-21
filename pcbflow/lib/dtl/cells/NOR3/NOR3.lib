@@ -1,0 +1,10 @@
+/* NOR3 — porta NOR DTL de 3 entradas em 1 único transistor (1 NPN + 3 diodos + 5 resistores) */
+library(dtl_NOR3) {
+  cell(NOR3) {
+    area : 9;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(C) { direction : input; }
+    pin(Y) { direction : output; function : "!(A | B | C)"; }
+  }
+}

@@ -1,0 +1,10 @@
+/* NAND3 — porta NAND DTL de 3 entradas em um único transistor (1 NPN + 5 diodos + 3 resistores) */
+library(dtl_NAND3) {
+  cell(NAND3) {
+    area : 7;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(C) { direction : input; }
+    pin(Y) { direction : output; function : "!(A & B & C)"; }
+  }
+}

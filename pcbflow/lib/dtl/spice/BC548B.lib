@@ -1,0 +1,8 @@
+* BC548B — modelo Gummel-Poon para a simulação analógica das células DTL (pcbflow-cellsim)
+*
+* Origem: biblioteca standard.bjt do LTspice (entrada BC548B, mfg=Fairchild).
+* O modelo é da faixa B (BF = 250). A família DTL é dimensionada com β mínimo
+* de 110 (qualquer BC548): os cantos do library.json trocam o BF.
+.model BC548B NPN(Is=7.049f Xti=3 Eg=1.11 Vaf=54.76 Bf=250 Ise=78.17f Ne=1.479 Ikf=24.96m Nkf=.5381
++ Xtb=1.5 Br=1.2 Isc=27.51f Nc=1.775 Ikr=3.321 Rc=.9706 Cjc=4.25p Mjc=.3147 Vjc=.5697 Fc=.5
++ Cje=11.5p Mje=.6715 Vje=.5 Tr=10n Tf=410.7p Itf=1.12 Xtf=26.19 Vtf=10)

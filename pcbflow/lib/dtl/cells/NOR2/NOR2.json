@@ -1,0 +1,10 @@
+{
+  "description": "NOR de 2 entradas DTL em um único transistor (1 NPN + 2 diodos + 4 resistores)",
+  "max_fanout": 4,
+  "layout": {
+    "rows": [
+      ["R1", "R2", "RB", "RL"],
+      ["D1", "D2", "Q1"]
+    ]
+  }
+}

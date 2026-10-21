@@ -1,0 +1,13 @@
+/* DLAT — latch D transparente com E = 1 (4 NAND2 DTL; 4 NPNs) */
+library(dtl_DLAT) {
+  cell(DLAT) {
+    area : 24;
+    latch(IQ, IQN) {
+      enable : "E";
+      data_in : "D";
+    }
+    pin(D) { direction : input; }
+    pin(E) { direction : input; }
+    pin(Q) { direction : output; function : "IQ"; }
+  }
+}

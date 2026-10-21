@@ -430,11 +430,16 @@ def write_switch_level_verilog(lib, design, path, module_name=None):
                 lines.append(f"  assign {ident(pins['S'])} = {c} ? 1'b1 : 1'bz;")
                 lines.append(f"  pulldown ({ident(pins['S'])});")
             elif kind == "diode":
-                # diodo retificador/isolador: conduz unidirecionalmente do anodo (A) para o catodo (K) quando A=1.
-                # (Em famílias a relé, o diodo de roda-livre tem A=GND=0, ficando sempre aberto na simulação lógica.)
-                da = ident(f"{b.name}.{p.name}.on")
-                lines.append(f"  wire {da} = ({ident(pins['A'])} === 1'b1);")
-                lines.append(f"  tranif1 {inst}({ident(pins['A'])}, {ident(pins['K'])}, {da});")
+                # diodo retificador/lógico (CDL/DTL):
+                # - se o catodo K é entrada do bloco (porta E a diodos da DTL, D1 d1 A), K=0 puxa o anodo A a 0;
+                # - se o catodo K é nó interno (porta OU a diodos na CDL/DTL ou diodo de level-shift DS), A=1 conduz 1 para K;
+                # - se o anodo A está no GND (diodo de supressão da bobina nos relés), fica sempre reverso.
+                if pins["A"] != design.gnd:
+                    a_net, k_net = ident(pins["A"]), ident(pins["K"])
+                    if pins["K"] in b.inputs:
+                        lines.append(f"  assign (strong0, highz1) {a_net} = ({k_net} === 1'b0) ? 1'b0 : 1'bz;")
+                    else:
+                        lines.append(f"  assign (highz0, strong1) {k_net} = ({a_net} === 1'b1) ? 1'b1 : 1'bz;")
             # capacitores de desacoplamento não afetam a lógica
     lines.append("endmodule")
     with open(path, "w") as f:

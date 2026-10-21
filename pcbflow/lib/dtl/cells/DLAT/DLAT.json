@@ -1,0 +1,4 @@
+{
+  "description": "latch D transparente DTL (4 NAND2; 4 transistores NPN)",
+  "max_fanout": 4
+}

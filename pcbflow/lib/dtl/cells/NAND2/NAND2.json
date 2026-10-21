@@ -1,0 +1,10 @@
+{
+  "description": "NAND de 2 entradas DTL em um único transistor (1 NPN + 4 diodos + 3 resistores)",
+  "max_fanout": 4,
+  "layout": {
+    "rows": [
+      ["R1", "RB", "RL"],
+      ["D1", "D2", "DS1", "DS2", "Q1"]
+    ]
+  }
+}

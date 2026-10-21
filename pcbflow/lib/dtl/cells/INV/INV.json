@@ -1,0 +1,10 @@
+{
+  "description": "inversor DTL com deslocamento de nível por 2 diodos (1 NPN + 3 diodos + 3 resistores)",
+  "max_fanout": 4,
+  "layout": {
+    "rows": [
+      ["R1", "RB", "RL"],
+      ["D1", "DS1", "DS2", "Q1"]
+    ]
+  }
+}

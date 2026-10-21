@@ -1,0 +1,94 @@
+* DFF — flip-flop D de borda de subida DTL (5 NAND2 + 1 NAND3; 6 transistores NPN)
+* família discrete_dtl, canto típico (VDD 5 V, 27 °C; modelos NPN: spice/BC548B.lib, DIODE: spice/1N4148.lib)
+* gerado por pcbflow-cellsim --export; rodar: ngspice -b DFF.cir (imprime as medidas e grava DFF.dat)
+*
+* entradas no nível de pior caso: alto = 2.75 V, baixo = 0.4 V; Q leva 4 carga(s) INV.A
+* saída: 1 se >= 2.5 V, 0 se <= 0.4 V
+*
+* vetores de teste (medida: valor esperado):
+*   borda de subida 1 em 20 µs: D=1 (muda 5 µs antes)  ->  q_0: Q=1
+*   borda de subida 2 em 40 µs: D=0 (muda 5 µs antes)  ->  q_1: Q=0
+*   borda de subida 3 em 60 µs: D=1 (muda 5 µs antes)  ->  q_2: Q=1
+*   borda de subida 4 em 80 µs: D=1 (muda 5 µs antes)  ->  q_3: Q=1
+*   borda de subida 5 em 100 µs: D=0 (muda 5 µs antes)  ->  q_4: Q=0
+*   borda de subida 6 em 120 µs: D=0 (muda 5 µs antes)  ->  q_5: Q=0
+*   borda de subida 7 em 140 µs: D=1 (muda 5 µs antes)  ->  q_6: Q=1
+*   borda de subida 8 em 160 µs: D=0 (muda 5 µs antes)  ->  q_7: Q=0
+*   borda de subida 9 em 180 µs: D=1 (muda 5 µs antes)  ->  q_8: Q=1
+*   borda de subida 10 em 200 µs: D=1 (muda 5 µs antes)  ->  q_9: Q=1
+*   borda de subida 11 em 220 µs: D=1 (muda 5 µs antes)  ->  q_10: Q=1
+*   borda de subida 12 em 240 µs: D=0 (muda 5 µs antes)  ->  q_11: Q=0
+*
+* pcbflow-cellsim: canto típico
+.temp 27
+.param kup=1 kb=1
+.model NPN NPN(Is=7.049f Xti=3 Eg=1.11 Vaf=54.76 Bf=250 Ise=78.17f Ne=1.479 Ikf=24.96m Nkf=.5381 Xtb=1.5 Br=1.2 Isc=27.51f Nc=1.775 Ikr=3.321 Rc=.9706 Cjc=4.25p Mjc=.3147 Vjc=.5697 Fc=.5 Cje=11.5p Mje=.6715 Vje=.5 Tr=10n Tf=410.7p Itf=1.12 Xtf=26.19 Vtf=10)
+.model DIODE D(IS=4.352E-9 N=1.906 BV=110 IBV=0.0001 RS=0.6458 CJO=7.048E-13 VJ=0.869 M=0.03 FC=0.5 TT=3.48E-9)
+.subckt NAND2 A B Y VDD GND
+R1 VDD d1 {4700*kup}
+D1 d1 A DIODE
+D2 d1 B DIODE
+DS1 d1 m1 DIODE
+DS2 m1 b1 DIODE
+RB b1 GND {10000*kb}
+RL VDD Y {1500*kup}
+Q1 Y b1 GND NPN
+.ends NAND2
+.subckt NAND3 A B C Y VDD GND
+R1 VDD d1 {4700*kup}
+D1 d1 A DIODE
+D2 d1 B DIODE
+D3 d1 C DIODE
+DS1 d1 m1 DIODE
+DS2 m1 b1 DIODE
+RB b1 GND {10000*kb}
+RL VDD Y {1500*kup}
+Q1 Y b1 GND NPN
+.ends NAND3
+.subckt DFF D C Q VDD GND
+X1 n4 n2 n1 VDD GND NAND2
+X2 n1 C n2 VDD GND NAND2
+X3 n2 C n4 n3 VDD GND NAND3
+X4 n3 D n4 VDD GND NAND2
+X5 n2 QN Q VDD GND NAND2
+X6 Q n3 QN VDD GND NAND2
+.ends DFF
+.subckt INV A Y VDD GND
+R1 VDD d1 {4700*kup}
+D1 d1 A DIODE
+DS1 d1 m1 DIODE
+DS2 m1 b1 DIODE
+RB b1 GND {10000*kb}
+RL VDD Y {1500*kup}
+Q1 Y b1 GND NPN
+.ends INV
+VDD vdd 0 5
+V_C in_C 0 PULSE(0.4 2.75 2e-05 2e-09 2e-09 9.998e-06 2e-05)
+V_D in_D 0 PWL(0 0.4 1.5e-05 0.4 1.5002e-05 2.75 3.5e-05 2.75 3.5002e-05 0.4 5.5e-05 0.4 5.5002e-05 2.75 9.5e-05 2.75 9.5002e-05 0.4 0.000135 0.4 0.000135002 2.75 0.000155 2.75 0.000155002 0.4 0.000175 0.4 0.000175002 2.75 0.000235 2.75 0.000235002 0.4)
+Xdut in_D in_C out_Q vdd 0 DFF
+Xld_out_Q_0 out_Q ld_out_Q_0_Y vdd 0 INV
+Xld_out_Q_1 out_Q ld_out_Q_1_Y vdd 0 INV
+Xld_out_Q_2 out_Q ld_out_Q_2_Y vdd 0 INV
+Xld_out_Q_3 out_Q ld_out_Q_3_Y vdd 0 INV
+.tran 5e-08 0.00026
+.control
+run
+linearize
+set wr_singlescale
+set wr_vecnames
+wrdata DFF.dat v(in_C) v(in_D) v(out_Q)
+meas tran q_0 FIND v(out_Q) AT=2.9e-05
+meas tran q_1 FIND v(out_Q) AT=4.9e-05
+meas tran q_2 FIND v(out_Q) AT=6.9e-05
+meas tran q_3 FIND v(out_Q) AT=8.9e-05
+meas tran q_4 FIND v(out_Q) AT=0.000109
+meas tran q_5 FIND v(out_Q) AT=0.000129
+meas tran q_6 FIND v(out_Q) AT=0.000149
+meas tran q_7 FIND v(out_Q) AT=0.000169
+meas tran q_8 FIND v(out_Q) AT=0.000189
+meas tran q_9 FIND v(out_Q) AT=0.000209
+meas tran q_10 FIND v(out_Q) AT=0.000229
+meas tran q_11 FIND v(out_Q) AT=0.000249
+quit
+.endc
+.end

@@ -1,0 +1,49 @@
+{
+  "_comment": "Geometria da família DTL (Diode-Transistor Logic, mm). Usa diodos 1N4148 em DO-35 vertical, transistores NPN BC548 em TO-92 e resistores axiais verticais.",
+  "Package_TO_SOT_THT:TO-92_Inline_Wide": {
+    "type": "tht",
+    "courtyard": [-1.05, -1.95, 6.13, 3.0],
+    "silk": [[0.74, 2.65, 4.34, 2.65]],
+    "pads": [
+      {"num": "1", "x": 0.0, "y": 0.0, "w": 1.5, "h": 1.5, "shape": "rect", "drill": 0.8},
+      {"num": "2", "x": 2.54, "y": 0.0, "w": 1.5, "h": 1.5, "shape": "circle", "drill": 0.8},
+      {"num": "3", "x": 5.08, "y": 0.0, "w": 1.5, "h": 1.5, "shape": "circle", "drill": 0.8}
+    ]
+  },
+  "Diode_THT:D_DO-35_SOD27_P2.54mm_Vertical_AnodeUp": {
+    "type": "tht",
+    "courtyard": [-1.05, -1.05, 3.6, 1.05],
+    "silk": [],
+    "pads": [
+      {"num": "1", "x": 0.0, "y": 0.0, "w": 1.6, "h": 1.6, "shape": "rect", "drill": 0.8},
+      {"num": "2", "x": 2.54, "y": 0.0, "w": 1.6, "h": 1.6, "shape": "circle", "drill": 0.8}
+    ]
+  },
+  "Resistor_THT:R_Axial_DIN0204_L3.6mm_D1.6mm_P2.54mm_Vertical": {
+    "type": "tht",
+    "courtyard": [-1.05, -1.05, 3.6, 1.05],
+    "silk": [],
+    "pads": [
+      {"num": "1", "x": 0.0, "y": 0.0, "w": 1.4, "h": 1.4, "shape": "circle", "drill": 0.7},
+      {"num": "2", "x": 2.54, "y": 0.0, "w": 1.4, "h": 1.4, "shape": "circle", "drill": 0.7}
+    ]
+  },
+  "Capacitor_THT:C_Disc_D3.0mm_W1.6mm_P2.50mm": {
+    "type": "tht",
+    "courtyard": [-1.05, -1.05, 3.55, 1.05],
+    "silk": [],
+    "pads": [
+      {"num": "1", "x": 0.0, "y": 0.0, "w": 1.6, "h": 1.6, "shape": "circle", "drill": 0.8},
+      {"num": "2", "x": 2.5, "y": 0.0, "w": 1.6, "h": 1.6, "shape": "circle", "drill": 0.8}
+    ]
+  },
+  "Capacitor_THT:CP_Radial_D5.0mm_P2.00mm": {
+    "type": "tht",
+    "courtyard": [-1.75, -2.75, 3.75, 2.75],
+    "silk": [],
+    "pads": [
+      {"num": "1", "x": 0.0, "y": 0.0, "w": 1.6, "h": 1.6, "shape": "rect", "drill": 0.8},
+      {"num": "2", "x": 2.0, "y": 0.0, "w": 1.6, "h": 1.6, "shape": "circle", "drill": 0.8}
+    ]
+  }
+}

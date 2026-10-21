@@ -40,6 +40,7 @@ def test_familia_sem_spice(tmp_path):
 
 @pytest.mark.parametrize("family, keys", [
     ("cmos", {"NMOS", "PMOS"}),
+    ("dtl", {"NPN", "DIODE"}),
     ("ctl", {"CORE", "NPN"}),
     ("cdl", {"CORE", "DIODE"}),
     ("relay", {"RELAY", "DIODE"}),
@@ -49,6 +50,9 @@ def test_modelos_das_outras_familias(family, keys):
     assert set(models) == keys
     if family == "relay":
         assert models["RELAY"].kind == "SUBCKT" and models["RELAY"].subckt == "G5V1"
+        assert {c.name for c in corners} == {"típico", "lento", "quente", "rápido"}
+    elif family == "dtl":
+        assert models["NPN"].kind == "NPN" and models["DIODE"].kind == "D"
         assert {c.name for c in corners} == {"típico", "lento", "quente", "rápido"}
     elif family == "ctl":
         assert models["CORE"].kind == "SUBCKT" and models["CORE"].subckt == "FCORE"

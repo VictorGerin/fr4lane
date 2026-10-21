@@ -1,0 +1,9 @@
+/* NAND2 — porta NAND DTL de 2 entradas (1 NPN + 4 diodos + 3 resistores) */
+library(dtl_NAND2) {
+  cell(NAND2) {
+    area : 6;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "!(A & B)"; }
+  }
+}

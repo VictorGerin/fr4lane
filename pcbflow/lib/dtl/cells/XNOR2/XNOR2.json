@@ -1,0 +1,4 @@
+{
+  "description": "XNOR de 2 entradas DTL (XOR2 + INV; 5 transistores NPN)",
+  "max_fanout": 4
+}

@@ -1,0 +1,4 @@
+{
+  "description": "flip-flop D com clear ativo baixo DTL (2 NAND2 + 4 NAND3; 6 transistores NPN)",
+  "max_fanout": 4
+}

@@ -1,0 +1,4 @@
+{
+  "description": "flip-flop D de borda de subida DTL (5 NAND2 + 1 NAND3; 6 transistores NPN)",
+  "max_fanout": 4
+}

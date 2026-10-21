@@ -1,0 +1,8 @@
+/* INV — inversor DTL (1 NPN + 3 diodos + 3 resistores) */
+library(dtl_INV) {
+  cell(INV) {
+    area : 5;
+    pin(A) { direction : input; }
+    pin(Y) { direction : output; function : "!A"; }
+  }
+}

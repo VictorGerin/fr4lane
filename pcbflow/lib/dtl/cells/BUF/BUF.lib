@@ -1,0 +1,8 @@
+/* BUF — buffer DTL (2 inversores DTL em cascata; 2 NPNs) */
+library(dtl_BUF) {
+  cell(BUF) {
+    area : 10;
+    pin(A) { direction : input; }
+    pin(Y) { direction : output; function : "A"; }
+  }
+}
