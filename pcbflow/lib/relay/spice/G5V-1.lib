@@ -26,7 +26,7 @@ Clp sm 0  1u
 Vad vp 0  1
 Sa  vp arm sm 0 SWARM
 Ra  arm 0 50
-T0  arm 0 d0 0 Z0=50 TD=4.3m
+T0  arm 0 d0 0 Z0=50 TD=4.0m
 R0  d0  0 50
 B0  u0  0 V = 2 * v(d0)
 T1  u0  0 d1 0 Z0=50 TD={tb1}

@@ -4,10 +4,10 @@
 
 | Canto | Resultado | Sem convergir | Caminho crítico |
 |---|---|---:|---|
-| típico | OK | 14 % | 45.2 ms (co no vetor 238) |
-| lento | OK | 5 % | 45.2 ms (co no vetor 238) |
-| quente | OK | 5 % | 45.2 ms (co no vetor 450) |
-| rápido | OK | 9 % | 45.2 ms (co no vetor 238) |
+| típico | OK | — | 43 ms (co no vetor 315) |
+| lento | OK | — | 43.9 ms (co no vetor 315) |
+| quente | OK | — | 44.9 ms (co no vetor 315) |
+| rápido | OK | — | 43.2 ms (co no vetor 315) |
 
 Dados completos de todos os vetores e cantos em [add4.csv](add4.csv). Reproduzir (canto típico): `ngspice -b add4.cir`
 
