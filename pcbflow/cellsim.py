@@ -710,13 +710,14 @@ def sim_design(lib, models, corner, design, vectors, work, ngspice, capture=None
     if capture:                                   # para publicar: só o primeiro lote
         return _sim_batch(lib, models, corner, design, vectors[:batch], work, ngspice, capture, 0, False)
     out = {"ok": True, "fails": [], "vectors": len(vectors), "tpd": None, "where": None,
-           "cells": len(design.instances), "parts": len(design.parts), "measured": 0, "missing": 0}
+           "cells": len(design.instances), "parts": len(design.parts), "measured": 0, "missing": 0, "rows": []}
     for i in range(0, len(vectors), batch):
         first = max(0, i - 1)
         r = _sim_batch(lib, models, corner, design, vectors[first:i + batch], work, ngspice, None, first, i > 0)
         out["fails"] += r["fails"]
         out["measured"] += r["measured"]
         out["missing"] += r["missing"]
+        out["rows"] += r["rows"]
         if r["tpd"] and (out["tpd"] is None or r["tpd"] > out["tpd"]):
             out["tpd"], out["where"] = r["tpd"], r["where"]
     out["ok"] = not out["fails"]
@@ -784,27 +785,45 @@ def _sim_batch(lib, models, corner, design, vectors, work, ngspice, capture, fir
         deck = _capture(deck, capture.name, sig, about)
         path = capture.with_suffix(".cir")
     vals = run_deck(ngspice, path, deck)
-    fails, worst, measured, missing = [], (0.0, None), 0, 0
+    fails, worst, measured, missing, rows = [], (0.0, None), 0, 0, []
     for k, v in enumerate(vectors):
         if skip0 and k == 0:
             continue
+        row = {"corner": corner.name, "vector": first + k}
+        for p in ins:
+            row[p.name] = v[p.name]
+        row_ok, row_missing, row_tpd = True, False, None
         for p in outs:
             o = _safe(p.name).lower()
             got = vals.get(f"s_{o}_{k}")
             want = expect[k][p.name]
+            t = vals.get(f"t_{o}_{k}")
+            dt = (t - k * T) if t is not None else None
+            row[f"exp_{p.name}"] = want
+            row[f"v_{p.name}"] = "" if got is None else f"{got:.4g}"
+            row[f"got_{p.name}"] = "" if got is None or logic(got, lv) is None else logic(got, lv)
+            row[f"tpd_{p.name}_s"] = "" if dt is None else f"{dt:.6g}"
             # sem medida: o ngspice não chegou lá (não convergiu); conta à parte, não é saída errada
             if got is None:
                 missing += 1
+                row_missing = True
                 continue
             measured += 1
             if logic(got, lv) != want:
+                row_ok = False
                 fails.append(f"vetor {first + k} ({_env({x.name: v[x.name] for x in ins})}): {p.name} = "
                              f"{'—' if got is None else f'{got:.2f} V'} (esperado {want})")
-            t = vals.get(f"t_{o}_{k}")
-            if t is not None and t - k * T > worst[0]:
-                worst = (t - k * T, f"{p.name} no vetor {first + k}")
+            if dt is not None:
+                if row_tpd is None or dt > row_tpd:
+                    row_tpd = dt
+                if dt > worst[0]:
+                    worst = (dt, f"{p.name} no vetor {first + k}")
+        row["tpd_max_s"] = "" if row_tpd is None else f"{row_tpd:.6g}"
+        row["status"] = "missing" if row_missing else ("ok" if row_ok else "fail")
+        rows.append(row)
     r = {"ok": not fails, "fails": fails, "vectors": len(vectors), "tpd": worst[0] or None, "where": worst[1],
-         "cells": len(design.instances), "parts": len(design.parts), "measured": measured, "missing": missing}
+         "cells": len(design.instances), "parts": len(design.parts), "measured": measured, "missing": missing,
+         "rows": rows}
     if capture:
         r["labels"] = labels
     return r
@@ -821,8 +840,27 @@ def _about_design(lib, corner, design, lv, vectors):
             "vetores de teste (medida: valor esperado):"] + ["  " + v for v in vectors] + [""]
 
 
-def export_design(lib, design, vectors, outdir, res, log=print, window=32):
-    """O netlist do circuito no primeiro canto, um gráfico dos primeiros vetores e o resumo."""
+def write_design_csv(path, design, res):
+    """Grava um CSV com as entradas, valores esperados, tensões e atrasos de cada vetor em cada canto."""
+    import csv
+    ins = [p.name for p in design.ports if p.direction == "input"]
+    outs = [p.name for p in design.ports if p.direction == "output"]
+    cols = ["corner", "vector", *ins]
+    for o in outs:
+        cols += [f"exp_{o}", f"v_{o}", f"got_{o}", f"tpd_{o}_s"]
+    cols += ["tpd_max_s", "status"]
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=cols)
+        w.writeheader()
+        for r in res.values():
+            for row in r.get("rows", ()):
+                w.writerow(row)
+
+
+def export_design(lib, design, vectors, outdir, res, log=print, window=32, csv_out=True):
+    """O netlist do circuito no primeiro canto, um gráfico dos primeiros vetores, o CSV e o resumo."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -833,6 +871,10 @@ def export_design(lib, design, vectors, outdir, res, log=print, window=32):
     lv = levels(lib, corner)
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
+    csv_path = None
+    if csv_out:
+        csv_path = (outdir / f"{design.top}.csv") if csv_out is True else Path(csv_out)
+        write_design_csv(csv_path, design, res)
     r = sim_design(lib, models, corner, design, vectors, outdir, ngspice, capture=outdir / design.top)
     dat = outdir / f"{design.top}.dat"
     names = dat.read_text(encoding="utf-8").splitlines()[0].split()
@@ -873,7 +915,10 @@ def export_design(lib, design, vectors, outdir, res, log=print, window=32):
         status = "OK" if x["ok"] else "**%d saídas erradas**" % len(x["fails"])
         L.append(f"| {name} | {status} | {miss} | "
                  + (f"{_ns(x['tpd'])} ({x['where']})" if x.get("tpd") else "—") + " |")
-    L += ["", f"Reproduzir (canto {corner.name}): `ngspice -b {design.top}.cir`", "", f"![{design.top}]({design.top}.png)", ""]
+    csv_line = (f"Dados completos de todos os vetores e cantos em [{csv_path.name}]({csv_path.name}). "
+                if csv_path and csv_path.parent == outdir else "")
+    L += ["", f"{csv_line}Reproduzir (canto {corner.name}): `ngspice -b {design.top}.cir`", "",
+          f"![{design.top}]({design.top}.png)", ""]
     (outdir / f"{design.top}.md").write_text("\n".join(L) + "\n", encoding="utf-8")
     readme = outdir / "README.md"
     if readme.is_file():                        # a seção do circuito no README das células
@@ -883,7 +928,8 @@ def export_design(lib, design, vectors, outdir, res, log=print, window=32):
             text = text.rstrip() + "\n\n" + "\n".join(
                 [mark, "", f"Um circuito inteiro, sintetizado pelo pcbflow: {len(design.instances)} células, "
                  f"{len(design.parts)} componentes e {len(vectors)} vetores. Resultados e gráfico em "
-                 f"[{design.top}.md]({design.top}.md); netlist em [{design.top}.cir]({design.top}.cir).", ""])
+                 f"[{design.top}.md]({design.top}.md); dados em [{design.top}.csv]({design.top}.csv); "
+                 f"netlist em [{design.top}.cir]({design.top}.cir).", ""])
             readme.write_text(text + "\n", encoding="utf-8")
     log(f"  {design.top} exportado")
 
@@ -892,28 +938,32 @@ def _safe(name):
     return re.sub(r"[^A-Za-z0-9_]", "_", name)
 
 
-def design_vectors(design, n=None, seed=1):
-    """Todas as combinações das entradas (até 2^12) ou n sorteadas."""
+def design_vectors(design, n=None, seed=1, shuffle=False):
+    """Todas as combinações das entradas (até 2^12) ou n sorteadas.
+    Com shuffle (True = semente aleatória, ou int = semente fixa), embaralha a ordem dos vetores."""
     import random
     ins = [p.name for p in design.ports if p.direction == "input"]
     total = 2 ** len(ins)
     if n is None and total > 4096:
         n = 512
+    rng = random.Random() if shuffle is True else random.Random(seed if shuffle is False or shuffle is None else int(shuffle))
     if n is None or n >= total:
         ks = list(range(total))
+        if shuffle is not False and shuffle is not None:
+            rng.shuffle(ks)
     else:
-        ks = random.Random(seed).sample(range(total), n)
+        ks = rng.sample(range(total), n)
     return [{p: (k >> i) & 1 for i, p in enumerate(ins)} for k in ks]
 
 
-def check_design(lib, sources, top, work, vectors=None, log=print, jobs=None):
+def check_design(lib, sources, top, work, vectors=None, log=print, jobs=None, shuffle=False):
     ngspice = find_ngspice()
     if not ngspice:
         raise CellSimError("ngspice não encontrado")
     models, corners = spice_setup(lib)
     work = Path(work)
     design = build_design(lib, sources, top, work / "synth")
-    vecs = design_vectors(design, vectors)
+    vecs = vectors if isinstance(vectors, list) else design_vectors(design, vectors, shuffle=shuffle)
     log(f"  {top}: {len(design.instances)} células, {len(design.parts)} componentes, {len(vecs)} vetores")
 
     def one(corner):
@@ -1111,6 +1161,13 @@ def main(argv=None):
     ap.add_argument("--design", metavar="TOP", help="simula este circuito combinacional inteiro (com --src)")
     ap.add_argument("--src", nargs="+", help="fontes Verilog do --design")
     ap.add_argument("--vectors", type=int, help="vetores sorteados no --design (padrão: todas as combinações)")
+    ap.add_argument("--shuffle", metavar="SEED", nargs="?", type=int, const=True, default=False,
+                    help="embaralha a ordem dos vetores do --design (sem argumento usa semente aleatória)")
+    ap.add_argument("--window", type=int, default=32,
+                    help="número de vetores mostrados no gráfico do --design --export (padrão: 32)")
+    ap.add_argument("--csv", metavar="ARQ", nargs="?", const=True, default=None,
+                    help="grava CSV com todos os vetores e cantos do --design (padrão no --export: <PASTA>/<TOP>.csv)")
+    ap.add_argument("--no-csv", action="store_true", help="não grava o CSV no --design --export")
     args = ap.parse_args(argv)
     t0 = time.time()
     if args.design:
@@ -1119,16 +1176,25 @@ def main(argv=None):
             out = Path(args.out or Path("build/cellsim") / f"{args.design}_{Path(lib.path).name}")
             if not args.src:
                 raise CellSimError("--design precisa de --src")
-            print(f"Simulação analógica do circuito '{args.design}' na família '{lib.name}' (ngspice)")
-            res, design = check_design(lib, args.src, args.design, out, args.vectors, jobs=args.jobs)
+            shuf = int(time.time() * 1000) % (2**31) if args.shuffle is True else args.shuffle
+            print(f"Simulação analógica do circuito '{args.design}' na família '{lib.name}' (ngspice)"
+                  + (f" [shuffle seed={shuf}]" if shuf is not False else ""))
+            res, design = check_design(lib, args.src, args.design, out, args.vectors, jobs=args.jobs,
+                                       shuffle=shuf)
         except (LibraryError, CellSimError, RuntimeError, ValueError) as e:
             print(f"ERRO: {e}")
             return 3
         for name, r in res.items():
             for f in r["fails"][:10]:
                 print(f"  FALHA ({name}): {f}")
+        csv_target = False if args.no_csv else (args.csv if args.csv is not None else bool(args.export))
+        if csv_target and not args.export:
+            cpath = (out / f"{args.design}.csv") if csv_target is True else Path(csv_target)
+            write_design_csv(cpath, design, res)
+            print(f"  CSV gravado em {cpath}")
         if args.export:
-            export_design(lib, design, design_vectors(design, args.vectors), args.export, res)
+            export_design(lib, design, design_vectors(design, args.vectors, shuffle=shuf), args.export, res,
+                          window=args.window, csv_out=csv_target)
         bad = [n for n, r in res.items() if not r["ok"]]
         print(f"{len(res)} cantos: {len(bad)} com falha. Netlists em {out}")
         print(f"Concluído em {time.time() - t0:.0f} s")
