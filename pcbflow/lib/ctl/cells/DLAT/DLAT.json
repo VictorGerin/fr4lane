@@ -1,0 +1,4 @@
+{
+  "description": "latch D transparente com E = 1 (4 NOR2 CTL + inversor)",
+  "max_fanout": 4
+}

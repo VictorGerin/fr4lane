@@ -1,0 +1,8 @@
+/* INV — inversor CTL (1 núcleo de ferrite + 1 NPN + 2 resistores) */
+library(ctl_INV) {
+  cell(INV) {
+    area : 4;
+    pin(A) { direction : input; }
+    pin(Y) { direction : output; function : "!A"; }
+  }
+}

@@ -1,0 +1,220 @@
+* tanque — circuito sintetizado pelo pcbflow (17 células: DFFR, INV, NAND2, NOR2, NOR3, OR2, XOR2; 201 componentes)
+* família discrete_ctl, canto típico (VDD 5 V, 27 °C)
+* gerado por pcbflow-cellsim --design tanque --export; rodar: ngspice -b tanque.cir
+*
+* entradas no nível de pior caso: alto = 3.6 V, baixo = 0.4 V; cada saída leva uma carga de referência
+* saída: 1 se >= 2.75 V, 0 se <= 0.5 V
+*
+* vetores de teste (medida: valor esperado):
+*   vetor 0 (0-20 µs): clk=0 rst_n=0 nivel_baixo=0 nivel_alto=0  ->  s_estado_0__0: estado[0]=0, s_estado_1__0: estado[1]=0, s_bomba_0: bomba=0
+*   vetor 1 (20-40 µs): clk=0 rst_n=1 nivel_baixo=0 nivel_alto=0  ->  s_estado_0__1: estado[0]=0, s_estado_1__1: estado[1]=0, s_bomba_1: bomba=0
+*   vetor 2 (40-60 µs): clk=1 rst_n=1 nivel_baixo=0 nivel_alto=0  ->  s_estado_0__2: estado[0]=1, s_estado_1__2: estado[1]=0, s_bomba_2: bomba=1
+*   vetor 3 (60-80 µs): clk=0 rst_n=1 nivel_baixo=1 nivel_alto=0  ->  s_estado_0__3: estado[0]=1, s_estado_1__3: estado[1]=0, s_bomba_3: bomba=1
+*   vetor 4 (80-100 µs): clk=1 rst_n=1 nivel_baixo=1 nivel_alto=0  ->  s_estado_0__4: estado[0]=1, s_estado_1__4: estado[1]=0, s_bomba_4: bomba=1
+*   vetor 5 (100-120 µs): clk=0 rst_n=1 nivel_baixo=0 nivel_alto=1  ->  s_estado_0__5: estado[0]=1, s_estado_1__5: estado[1]=0, s_bomba_5: bomba=1
+*   vetor 6 (120-140 µs): clk=1 rst_n=1 nivel_baixo=0 nivel_alto=1  ->  s_estado_0__6: estado[0]=0, s_estado_1__6: estado[1]=1, s_bomba_6: bomba=0
+*   vetor 7 (140-160 µs): clk=0 rst_n=1 nivel_baixo=1 nivel_alto=1  ->  s_estado_0__7: estado[0]=0, s_estado_1__7: estado[1]=1, s_bomba_7: bomba=0
+*   vetor 8 (160-180 µs): clk=1 rst_n=1 nivel_baixo=1 nivel_alto=1  ->  s_estado_0__8: estado[0]=0, s_estado_1__8: estado[1]=1, s_bomba_8: bomba=0
+*   vetor 9 (180-200 µs): clk=0 rst_n=1 nivel_baixo=0 nivel_alto=0  ->  s_estado_0__9: estado[0]=0, s_estado_1__9: estado[1]=1, s_bomba_9: bomba=0
+*   vetor 10 (200-220 µs): clk=1 rst_n=1 nivel_baixo=0 nivel_alto=0  ->  s_estado_0__10: estado[0]=1, s_estado_1__10: estado[1]=1, s_bomba_10: bomba=0
+*   vetor 11 (220-240 µs): clk=0 rst_n=1 nivel_baixo=1 nivel_alto=0  ->  s_estado_0__11: estado[0]=1, s_estado_1__11: estado[1]=1, s_bomba_11: bomba=0
+*   vetor 12 (240-260 µs): clk=1 rst_n=1 nivel_baixo=1 nivel_alto=0  ->  s_estado_0__12: estado[0]=1, s_estado_1__12: estado[1]=1, s_bomba_12: bomba=0
+*   vetor 13 (260-280 µs): clk=0 rst_n=1 nivel_baixo=0 nivel_alto=1  ->  s_estado_0__13: estado[0]=1, s_estado_1__13: estado[1]=1, s_bomba_13: bomba=0
+*   vetor 14 (280-300 µs): clk=1 rst_n=1 nivel_baixo=0 nivel_alto=1  ->  s_estado_0__14: estado[0]=0, s_estado_1__14: estado[1]=0, s_bomba_14: bomba=0
+*   vetor 15 (300-320 µs): clk=0 rst_n=1 nivel_baixo=1 nivel_alto=1  ->  s_estado_0__15: estado[0]=0, s_estado_1__15: estado[1]=0, s_bomba_15: bomba=0
+*   vetor 16 (320-340 µs): clk=1 rst_n=1 nivel_baixo=1 nivel_alto=1  ->  s_estado_0__16: estado[0]=0, s_estado_1__16: estado[1]=0, s_bomba_16: bomba=0
+*
+* pcbflow-cellsim: canto típico
+.temp 27
+.param kup=1 kb=1
+.param kcore=1.0 kic=1.0
+* Núcleo toroidal de ferrite CTL — modelo comportamental para simulação analógica (pcbflow-cellsim)
+*
+* Um núcleo de ferrite de laço retangular (square-loop) para lógica CTL possui
+* três enrolamentos de comando (W1 e W2 no sentido positivo, +N espiras; WB no
+* sentido oposto de inibição/bias, -N espiras) e um enrolamento de saída/sense S
+* que excita a base do transistor NPN regenerador (BC548).
+*
+* Física modelada:
+*   - Resistência CC de cada enrolamento: 10 Ω (escalada por kcore). A corrente
+*     de entrada é definida pelos resistores externos de 10 kΩ (~0,25 a 0,5 mA por
+*     unidade de corrente I0 conforme o fan-out da porta anterior);
+*   - Força magnetomotriz (FMM) líquida normalizada em mA:
+*       Immf = 1000 * (I(W1) + I(W2) - I(WB))
+*     Em NOR2/INV (WB=0), qualquer entrada alta gera >= 0,22 mA. Em NAND2, WB recebe
+*     uma corrente de polarização (bias) de VDD (via 27 kΩ) que cancela magneticamente
+*     o fluxo de uma única entrada alta, exigindo coincidência de corrente nas duas
+*     entradas (A=1 e B=1) para vencer a coercividade e comutar um único núcleo + 1 NPN;
+*   - Inércia de comutação de parede de domínio magnético (tempo de chaveamento
+*     de Peaker τ_sw ≈ 120 ns, modelado por Rmag=120 Ω e Cmag=1 nF) e laço de
+*     histerese retangular (SWCORE com limiar coercivo Ic = 0,12 mA ± 0,02 mA,
+*     escalado por kic conforme a temperatura do ferrite);
+*   - Acoplamento de saída S para a base do transistor regenerador através da
+*     impedância equivalente do enrolamento secundário (Rs = 10 kΩ).
+*
+* Pinos na convenção do pcbflow: w1, w2, wb, s, gnd.
+.param kcore=1.0 kic=1.0
+.subckt FCORE w1 w2 wb s gnd
+Vw1  w1  w1m 0
+Rw1  w1m gnd {10*kcore}
+Vw2  w2  w2m 0
+Rw2  w2m gnd {10*kcore}
+Vwb  wb  wbm 0
+Rwb  wbm gnd {10*kcore}
+Bmmf mmf gnd V = 1000 * (i(Vw1) + i(Vw2) - i(Vwb)) / kic
+Rmag mmf flx 120
+Cmag flx gnd 1n
+Vdrv vp  gnd 5.0
+Sc   vp  sc  flx gnd SWCORE
+Rsc  sc  gnd 100k
+Rs   sc  s   {10k*kcore}
+.model SWCORE SW(VT=0.12 VH=0.02 RON=10 ROFF=100MEG)
+.ends FCORE
+.model NPN NPN(Is=7.049f Xti=3 Eg=1.11 Vaf=54.76 Bf=250 Ise=78.17f Ne=1.479 Ikf=24.96m Nkf=.5381 Xtb=1.5 Br=1.2 Isc=27.51f Nc=1.775 Ikr=3.321 Rc=.9706 Cjc=4.25p Mjc=.3147 Vjc=.5697 Fc=.5 Cje=11.5p Mje=.6715 Vje=.5 Tr=10n Tf=410.7p Itf=1.12 Xtf=26.19 Vtf=10)
+.subckt INV A Y VDD GND
+RL VDD Y {1000*kup}
+R1 A w1 {10000*kb}
+XT1 w1 GND GND b1 GND FCORE
+Q1 Y b1 GND NPN
+.ends INV
+.subckt NOR3 A B C Y VDD GND
+RL VDD Y {1000*kup}
+R1 A w1 {10000*kb}
+R2 B w2 {10000*kb}
+R3 C w3 {10000*kb}
+XT1 w1 w2 GND b1 GND FCORE
+XT2 w3 GND GND b1 GND FCORE
+Q1 Y b1 GND NPN
+.ends NOR3
+.subckt NOR2 A B Y VDD GND
+RL VDD Y {1000*kup}
+R1 A w1 {10000*kb}
+R2 B w2 {10000*kb}
+XT1 w1 w2 GND b1 GND FCORE
+Q1 Y b1 GND NPN
+.ends NOR2
+.subckt DFFR D C R Q VDD GND
+X0 C ck VDD GND INV
+X9 R rn VDD GND INV
+X1 rn n4 n2 n1 VDD GND NOR3
+X2 n1 ck n2 VDD GND NOR2
+X3 n2 ck n4 n3 VDD GND NOR3
+X4 n3 D n4 VDD GND NOR2
+X5 rn n2 QN Q VDD GND NOR3
+X6 Q n3 QN VDD GND NOR2
+.ends DFFR
+.subckt NAND2 A B Y VDD GND
+RL VDD Y {1000*kup}
+R1 A w1 {10000*kb}
+R2 B w2 {10000*kb}
+RB VDD wb {13300*kup}
+XT1 w1 w2 wb b1 GND FCORE
+Q1 Y b1 GND NPN
+.ends NAND2
+.subckt OR2 A B Y VDD GND
+X1 A B n VDD GND NOR2
+X2 n Y VDD GND INV
+.ends OR2
+.subckt AND2 A B Y VDD GND
+X1 A B n VDD GND NAND2
+X2 n Y VDD GND INV
+.ends AND2
+.subckt XOR2 A B Y VDD GND
+X1 A B ab VDD GND AND2
+X2 A B no VDD GND NOR2
+X3 ab no Y VDD GND NOR2
+.ends XOR2
+VDD vdd 0 5
+V_clk n2 0 PWL(0 0.4 4e-05 0.4 4.0002e-05 3.6 6e-05 3.6 6.0002e-05 0.4 8e-05 0.4 8.0002e-05 3.6 0.0001 3.6 0.000100002 0.4 0.00012 0.4 0.000120002 3.6 0.00014 3.6 0.000140002 0.4 0.00016 0.4 0.000160002 3.6 0.00018 3.6 0.000180002 0.4 0.0002 0.4 0.000200002 3.6 0.00022 3.6 0.000220002 0.4 0.00024 0.4 0.000240002 3.6 0.00026 3.6 0.000260002 0.4 0.00028 0.4 0.000280002 3.6 0.0003 3.6 0.000300002 0.4 0.00032 0.4 0.000320002 3.6)
+V_rst_n n3 0 PWL(0 0.4 2e-05 0.4 2.0002e-05 3.6)
+V_nivel_baixo n4 0 PWL(0 0.4 6e-05 0.4 6.0002e-05 3.6 0.0001 3.6 0.000100002 0.4 0.00014 0.4 0.000140002 3.6 0.00018 3.6 0.000180002 0.4 0.00022 0.4 0.000220002 3.6 0.00026 3.6 0.000260002 0.4 0.0003 0.4 0.000300002 3.6)
+V_nivel_alto n5 0 PWL(0 0.4 0.0001 0.4 0.000100002 3.6 0.00018 3.6 0.000180002 0.4 0.00026 0.4 0.000260002 3.6)
+XU1 n4 n6 vdd 0 INV
+XU2 n7 n8 vdd 0 INV
+XU3 n9 n10 vdd 0 INV
+XU4 n5 n11 vdd 0 INV
+XU5 n8 n9 n12 vdd 0 NOR2
+XU6 n8 n9 n5 n13 vdd 0 NOR3
+XU7 n7 n10 n11 n14 vdd 0 NOR3
+XU8 n13 n14 n15 vdd 0 NOR2
+XU9 n7 n9 n16 vdd 0 XOR2
+XU10 n6 n16 n17 vdd 0 NOR2
+XU11 n15 n16 n18 vdd 0 NAND2
+XU12 n13 n14 n17 n19 vdd 0 NOR3
+XU13 n7 n19 n20 vdd 0 XOR2
+XU14 n10 n19 n21 vdd 0 OR2
+XU15 n18 n21 n22 vdd 0 NAND2
+XFF1 n20 n2 n3 n7 vdd 0 DFFR
+XFF2 n22 n2 n3 n9 vdd 0 DFFR
+Xld_estado_0_ n7 ldo_estado_0__Y vdd 0 INV
+Xld_estado_1_ n9 ldo_estado_1__Y vdd 0 INV
+Xld_bomba n12 ldo_bomba_Y vdd 0 INV
+.tran 4e-08 0.00034
+.control
+run
+linearize
+set wr_singlescale
+set wr_vecnames
+wrdata tanque.dat v(n2) v(n3) v(n4) v(n5) v(n7) v(n9) v(n12)
+meas tran s_estado_0__0 FIND v(n7) AT=1.9e-05
+meas tran s_estado_1__0 FIND v(n9) AT=1.9e-05
+meas tran s_bomba_0 FIND v(n12) AT=1.9e-05
+meas tran s_estado_0__1 FIND v(n7) AT=3.9e-05
+meas tran s_estado_1__1 FIND v(n9) AT=3.9e-05
+meas tran s_bomba_1 FIND v(n12) AT=3.9e-05
+meas tran s_estado_0__2 FIND v(n7) AT=5.9e-05
+meas tran t_estado_0__2 WHEN v(n7)=1.5 CROSS=LAST FROM=4e-05 TO=6e-05
+meas tran s_estado_1__2 FIND v(n9) AT=5.9e-05
+meas tran s_bomba_2 FIND v(n12) AT=5.9e-05
+meas tran t_bomba_2 WHEN v(n12)=1.5 CROSS=LAST FROM=4e-05 TO=6e-05
+meas tran s_estado_0__3 FIND v(n7) AT=7.9e-05
+meas tran s_estado_1__3 FIND v(n9) AT=7.9e-05
+meas tran s_bomba_3 FIND v(n12) AT=7.9e-05
+meas tran s_estado_0__4 FIND v(n7) AT=9.9e-05
+meas tran s_estado_1__4 FIND v(n9) AT=9.9e-05
+meas tran s_bomba_4 FIND v(n12) AT=9.9e-05
+meas tran s_estado_0__5 FIND v(n7) AT=0.000119
+meas tran s_estado_1__5 FIND v(n9) AT=0.000119
+meas tran s_bomba_5 FIND v(n12) AT=0.000119
+meas tran s_estado_0__6 FIND v(n7) AT=0.000139
+meas tran t_estado_0__6 WHEN v(n7)=1.5 CROSS=LAST FROM=0.00012 TO=0.00014
+meas tran s_estado_1__6 FIND v(n9) AT=0.000139
+meas tran t_estado_1__6 WHEN v(n9)=1.5 CROSS=LAST FROM=0.00012 TO=0.00014
+meas tran s_bomba_6 FIND v(n12) AT=0.000139
+meas tran t_bomba_6 WHEN v(n12)=1.5 CROSS=LAST FROM=0.00012 TO=0.00014
+meas tran s_estado_0__7 FIND v(n7) AT=0.000159
+meas tran s_estado_1__7 FIND v(n9) AT=0.000159
+meas tran s_bomba_7 FIND v(n12) AT=0.000159
+meas tran s_estado_0__8 FIND v(n7) AT=0.000179
+meas tran s_estado_1__8 FIND v(n9) AT=0.000179
+meas tran s_bomba_8 FIND v(n12) AT=0.000179
+meas tran s_estado_0__9 FIND v(n7) AT=0.000199
+meas tran s_estado_1__9 FIND v(n9) AT=0.000199
+meas tran s_bomba_9 FIND v(n12) AT=0.000199
+meas tran s_estado_0__10 FIND v(n7) AT=0.000219
+meas tran t_estado_0__10 WHEN v(n7)=1.5 CROSS=LAST FROM=0.0002 TO=0.00022
+meas tran s_estado_1__10 FIND v(n9) AT=0.000219
+meas tran s_bomba_10 FIND v(n12) AT=0.000219
+meas tran s_estado_0__11 FIND v(n7) AT=0.000239
+meas tran s_estado_1__11 FIND v(n9) AT=0.000239
+meas tran s_bomba_11 FIND v(n12) AT=0.000239
+meas tran s_estado_0__12 FIND v(n7) AT=0.000259
+meas tran s_estado_1__12 FIND v(n9) AT=0.000259
+meas tran s_bomba_12 FIND v(n12) AT=0.000259
+meas tran s_estado_0__13 FIND v(n7) AT=0.000279
+meas tran s_estado_1__13 FIND v(n9) AT=0.000279
+meas tran s_bomba_13 FIND v(n12) AT=0.000279
+meas tran s_estado_0__14 FIND v(n7) AT=0.000299
+meas tran t_estado_0__14 WHEN v(n7)=1.5 CROSS=LAST FROM=0.00028 TO=0.0003
+meas tran s_estado_1__14 FIND v(n9) AT=0.000299
+meas tran t_estado_1__14 WHEN v(n9)=1.5 CROSS=LAST FROM=0.00028 TO=0.0003
+meas tran s_bomba_14 FIND v(n12) AT=0.000299
+meas tran s_estado_0__15 FIND v(n7) AT=0.000319
+meas tran s_estado_1__15 FIND v(n9) AT=0.000319
+meas tran s_bomba_15 FIND v(n12) AT=0.000319
+meas tran s_estado_0__16 FIND v(n7) AT=0.000339
+meas tran s_estado_1__16 FIND v(n9) AT=0.000339
+meas tran s_bomba_16 FIND v(n12) AT=0.000339
+quit
+.endc
+.end

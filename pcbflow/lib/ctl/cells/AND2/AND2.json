@@ -1,0 +1,4 @@
+{
+  "description": "AND de 2 entradas CTL (NAND2 + inversor)",
+  "max_fanout": 4
+}

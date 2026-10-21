@@ -1,0 +1,9 @@
+/* NOR2 — NOR de 2 entradas CTL (soma de fluxo em 1 núcleo + 1 NPN) */
+library(ctl_NOR2) {
+  cell(NOR2) {
+    area : 5;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "!(A|B)"; }
+  }
+}

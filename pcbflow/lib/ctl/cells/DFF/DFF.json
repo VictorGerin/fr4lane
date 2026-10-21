@@ -1,0 +1,4 @@
+{
+  "description": "flip-flop D, borda de subida (portas NOR2 + INV em lógica CTL)",
+  "max_fanout": 4
+}

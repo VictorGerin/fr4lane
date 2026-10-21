@@ -1,0 +1,58 @@
+{
+  "CORE": {
+    "kind": "core",
+    "part": "Toroid Ferrite",
+    "ref": "T",
+    "footprint": "pcbflow_Core:Ferrite_Toroid_5Pin_THT",
+    "pins": {
+      "W1": "1",
+      "W2": "2",
+      "WB": "3",
+      "S": "4",
+      "GND": "5"
+    }
+  },
+  "NPN": {
+    "kind": "npn",
+    "part": "BC548",
+    "beta_min": 110,
+    "vbe": 0.7,
+    "vce_sat": 0.2,
+    "ref": "Q",
+    "footprint": "Package_TO_SOT_THT:TO-92_Inline_Wide",
+    "pins": {
+      "C": "1",
+      "B": "2",
+      "E": "3"
+    }
+  },
+  "R": {
+    "kind": "resistor",
+    "ref": "R",
+    "footprint": "Resistor_THT:R_Axial_DIN0204_L3.6mm_D1.6mm_P2.54mm_Vertical",
+    "pins": {
+      "1": "1",
+      "2": "2"
+    }
+  },
+  "CDEC": {
+    "kind": "capacitor",
+    "value": "100n",
+    "ref": "C",
+    "footprint": "Capacitor_THT:C_Disc_D3.0mm_W1.6mm_P2.50mm",
+    "pins": {
+      "1": "1",
+      "2": "2"
+    }
+  },
+  "CBULK": {
+    "kind": "capacitor",
+    "value": "10u",
+    "ref": "C",
+    "footprint": "Capacitor_THT:CP_Radial_D5.0mm_P2.00mm",
+    "pins": {
+      "1": "1",
+      "2": "2"
+    }
+  }
+}

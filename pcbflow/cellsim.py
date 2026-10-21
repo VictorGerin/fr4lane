@@ -161,7 +161,7 @@ def spice_setup(lib):
         else:
             kind, params = _model_params(text, path)
             models[key] = Model(kind, params, spec.get("instance", ""))
-    need = {p for s in lib.subckts.values() for e in s.devices if e.letter in "QMDK" for p in [e.model]}
+    need = {p for s in lib.subckts.values() for e in s.devices if e.letter in "QMDKT" for p in [e.model]}
     missing = sorted(need - set(models))
     if missing:
         raise CellSimError(f"library.json: sem modelo SPICE para {', '.join(missing)} (spice.models)")
@@ -206,10 +206,10 @@ def subckt_text(lib, names, models=None):
                 out.append(f"{e.name} {' '.join(e.nodes)} {e.nodes[2]} {e.model}{inst(e)}")
             elif e.letter == "D":
                 out.append(f"{e.name} {' '.join(e.nodes)} {e.model}{inst(e)}")
-            elif e.letter == "K":                  # relé: instância do subcircuito do modelo
+            elif e.letter in ("K", "T"):           # relé ou núcleo de ferrite: instância do subcircuito do modelo
                 m = models.get(e.model)
                 if not m or m.kind != "SUBCKT":
-                    raise CellSimError(f"{n}: o relé {e.name} precisa de um modelo .subckt em spice.models")
+                    raise CellSimError(f"{n}: o componente {e.name} precisa de um modelo .subckt em spice.models")
                 out.append(f"X{e.name} {' '.join(e.nodes)} {m.subckt}")
             else:
                 raise CellSimError(f"{n}: elemento {e.name} ({e.letter}) sem equivalente no ngspice")
@@ -1176,8 +1176,8 @@ def export(lib, cells, outdir, res, corners, warns, log=print):
             f.unlink()
         shown[cell] = r["ok"]
         log(f"  {cell:<9} exportado ({'OK' if r['ok'] else 'FALHOU'})")
-    if set(cells) != set(lib.cells):
-        return                                   # só algumas células: o README e os resultados ficam
+    if set(cells) != set(lib.cells) and (outdir / "README.md").is_file():
+        return                                   # só algumas células: o README e os resultados já existentes ficam
     report(outdir / "resultados.md", lib, res, corners, warns)
     L = [f"# Células da família `{Path(lib.path).name}` no ngspice", "",
          "Cada célula da família é simulada como circuito de verdade, com o modelo SPICE dos componentes, "

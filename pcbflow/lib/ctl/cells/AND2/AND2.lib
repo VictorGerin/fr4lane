@@ -1,0 +1,9 @@
+/* AND2 — AND de 2 entradas CTL (NAND2 + inversor) */
+library(ctl_AND2) {
+  cell(AND2) {
+    area : 10;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "A&B"; }
+  }
+}

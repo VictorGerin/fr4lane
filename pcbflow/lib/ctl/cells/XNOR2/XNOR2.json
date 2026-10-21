@@ -1,0 +1,4 @@
+{
+  "description": "XNOR de 2 entradas CTL",
+  "max_fanout": 6
+}

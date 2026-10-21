@@ -1,0 +1,9 @@
+/* XNOR2 — XNOR de 2 entradas CTL */
+library(ctl_XNOR2) {
+  cell(XNOR2) {
+    area : 24;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "!(A^B)"; }
+  }
+}

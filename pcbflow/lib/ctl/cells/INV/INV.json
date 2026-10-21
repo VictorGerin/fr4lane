@@ -1,0 +1,10 @@
+{
+  "description": "inversor CTL (1 núcleo toroidal + 1 NPN + 2 resistores)",
+  "max_fanout": 4,
+  "layout": {
+    "rows": [
+      ["RL", "R1"],
+      ["T1", "Q1"]
+    ]
+  }
+}

@@ -1,0 +1,42 @@
+* Núcleo toroidal de ferrite CTL — modelo comportamental para simulação analógica (pcbflow-cellsim)
+*
+* Um núcleo de ferrite de laço retangular (square-loop) para lógica CTL possui
+* três enrolamentos de comando (W1 e W2 no sentido positivo, +N espiras; WB no
+* sentido oposto de inibição/bias, -N espiras) e um enrolamento de saída/sense S
+* que excita a base do transistor NPN regenerador (BC548).
+*
+* Física modelada:
+*   - Resistência CC de cada enrolamento: 10 Ω (escalada por kcore). A corrente
+*     de entrada é definida pelos resistores externos de 10 kΩ (~0,25 a 0,5 mA por
+*     unidade de corrente I0 conforme o fan-out da porta anterior);
+*   - Força magnetomotriz (FMM) líquida normalizada em mA:
+*       Immf = 1000 * (I(W1) + I(W2) - I(WB))
+*     Em NOR2/INV (WB=0), qualquer entrada alta gera >= 0,22 mA. Em NAND2, WB recebe
+*     uma corrente de polarização (bias) de VDD (via 27 kΩ) que cancela magneticamente
+*     o fluxo de uma única entrada alta, exigindo coincidência de corrente nas duas
+*     entradas (A=1 e B=1) para vencer a coercividade e comutar um único núcleo + 1 NPN;
+*   - Inércia de comutação de parede de domínio magnético (tempo de chaveamento
+*     de Peaker τ_sw ≈ 120 ns, modelado por Rmag=120 Ω e Cmag=1 nF) e laço de
+*     histerese retangular (SWCORE com limiar coercivo Ic = 0,12 mA ± 0,02 mA,
+*     escalado por kic conforme a temperatura do ferrite);
+*   - Acoplamento de saída S para a base do transistor regenerador através da
+*     impedância equivalente do enrolamento secundário (Rs = 10 kΩ).
+*
+* Pinos na convenção do pcbflow: w1, w2, wb, s, gnd.
+.param kcore=1.0 kic=1.0
+.subckt FCORE w1 w2 wb s gnd
+Vw1  w1  w1m 0
+Rw1  w1m gnd {10*kcore}
+Vw2  w2  w2m 0
+Rw2  w2m gnd {10*kcore}
+Vwb  wb  wbm 0
+Rwb  wbm gnd {10*kcore}
+Bmmf mmf gnd V = 1000 * (i(Vw1) + i(Vw2) - i(Vwb)) / kic
+Rmag mmf flx 120
+Cmag flx gnd 1n
+Vdrv vp  gnd 5.0
+Sc   vp  sc  flx gnd SWCORE
+Rsc  sc  gnd 100k
+Rs   sc  s   {10k*kcore}
+.model SWCORE SW(VT=0.12 VH=0.02 RON=10 ROFF=100MEG)
+.ends FCORE

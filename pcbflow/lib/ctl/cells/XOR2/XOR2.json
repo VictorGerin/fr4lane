@@ -1,0 +1,4 @@
+{
+  "description": "XOR de 2 entradas CTL (XNOR2 por inibição cruzada + inversor)",
+  "max_fanout": 4
+}

@@ -9,6 +9,10 @@ Elementos aceitos dentro de um .subckt:
   K<nome> c1 c2 com na nf MODELO              (relé SPDT: bobina c1/c2, contato comum,
                                                normalmente aberto e normalmente fechado;
                                                convenção do pcbflow, não é o K do SPICE)
+  T<nome> w1 w2 wb s gnd MODELO               (núcleo toroidal de ferrite: enrolamentos de
+                                               entrada w1/w2 (+N espiras), inibição/bias wb
+                                               (-N espiras), saída/sense s e retorno gnd;
+                                               convenção do pcbflow para lógica CTL)
   X<nome> nós... SUBCKT                       (instância de outro subcircuito)
 Parâmetros no formato chave=valor são ignorados. MODELO é uma chave do
 parts.json da família (ex.: NMOS, NPN).
@@ -24,7 +28,7 @@ class SpiceError(Exception):
 @dataclass
 class Element:
     name: str
-    letter: str           # M Q R C X
+    letter: str           # M Q R C D K T X
     nodes: list
     model: str = ""       # chave do parts.json ou nome do subcircuito (X)
     value: str = ""       # R/C
@@ -96,10 +100,12 @@ def read_subckts(path):
                 el = Element(name, "D", rest[0:2], model=rest[2])
             elif letter == "K":
                 el = Element(name, "K", rest[0:5], model=rest[5])
+            elif letter == "T":
+                el = Element(name, "T", rest[0:5], model=rest[5])
             elif letter == "X":
                 el = Element(name, "X", rest[:-1], model=rest[-1])
             else:
-                raise SpiceError(f"{path}: elemento '{name}' não suportado (use M, Q, R, C, D, K ou X)")
+                raise SpiceError(f"{path}: elemento '{name}' não suportado (use M, Q, R, C, D, K, T ou X)")
         except IndexError:
             raise SpiceError(f"{path}: linha incompleta: {line}") from None
         cur.elements.append(el)

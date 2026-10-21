@@ -1,0 +1,4 @@
+{
+  "description": "flip-flop D, borda de subida, clear assíncrono ativo baixo (lógica CTL)",
+  "max_fanout": 4
+}

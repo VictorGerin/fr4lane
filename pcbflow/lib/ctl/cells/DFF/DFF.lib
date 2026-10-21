@@ -1,0 +1,13 @@
+/* DFF — flip-flop D, borda de subida (núcleos de ferrite CTL) */
+library(ctl_DFF) {
+  cell(DFF) {
+    area : 43;
+    ff(IQ, IQN) {
+      clocked_on : "C";
+      next_state : "D";
+    }
+    pin(D) { direction : input; }
+    pin(C) { direction : input; clock : true; }
+    pin(Q) { direction : output; function : "IQ"; }
+  }
+}

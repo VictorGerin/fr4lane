@@ -1,0 +1,10 @@
+/* NOR3 — NOR de 3 entradas CTL (2 núcleos + 1 NPN) */
+library(ctl_NOR3) {
+  cell(NOR3) {
+    area : 8;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(C) { direction : input; }
+    pin(Y) { direction : output; function : "!(A|B|C)"; }
+  }
+}

@@ -1,0 +1,9 @@
+/* XOR2 — XOR de 2 entradas CTL (AND2 + 2 NOR2) */
+library(ctl_XOR2) {
+  cell(XOR2) {
+    area : 20;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "A^B"; }
+  }
+}

@@ -1,0 +1,4 @@
+{
+  "description": "buffer CTL (dois inversores)",
+  "max_fanout": 4
+}

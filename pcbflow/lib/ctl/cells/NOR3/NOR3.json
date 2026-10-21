@@ -1,0 +1,10 @@
+{
+  "description": "NOR de 3 entradas CTL (2 núcleos toroidais + 1 NPN)",
+  "max_fanout": 4,
+  "layout": {
+    "rows": [
+      ["RL", "R1", "R2", "R3"],
+      ["T1", "T2", "Q1"]
+    ]
+  }
+}

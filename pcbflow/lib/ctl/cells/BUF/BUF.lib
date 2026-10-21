@@ -1,0 +1,8 @@
+/* BUF — buffer CTL (dois inversores) */
+library(ctl_BUF) {
+  cell(BUF) {
+    area : 8;
+    pin(A) { direction : input; }
+    pin(Y) { direction : output; function : "A"; }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "description": "NAND de 2 entradas CTL por coincidência de corrente (1 núcleo + 1 NPN)",
+  "max_fanout": 4,
+  "layout": {
+    "rows": [
+      ["RL", "R1", "R2", "RB"],
+      ["T1", "Q1"]
+    ]
+  }
+}

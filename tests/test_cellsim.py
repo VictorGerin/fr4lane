@@ -38,12 +38,15 @@ def test_familia_sem_spice(tmp_path):
         cellsim.spice_setup(Library(dst))
 
 
-@pytest.mark.parametrize("family, keys", [("cmos", {"NMOS", "PMOS"}), ("relay", {"RELAY", "DIODE"})])
+@pytest.mark.parametrize("family, keys", [("cmos", {"NMOS", "PMOS"}), ("ctl", {"CORE", "NPN"}), ("relay", {"RELAY", "DIODE"})])
 def test_modelos_das_outras_familias(family, keys):
     models, corners = cellsim.spice_setup(Library(lib_path(family)))
     assert set(models) == keys
     if family == "relay":
         assert models["RELAY"].kind == "SUBCKT" and models["RELAY"].subckt == "G5V1"
+        assert {c.name for c in corners} == {"típico", "lento", "quente", "rápido"}
+    elif family == "ctl":
+        assert models["CORE"].kind == "SUBCKT" and models["CORE"].subckt == "FCORE"
         assert {c.name for c in corners} == {"típico", "lento", "quente", "rápido"}
     else:
         assert models["NMOS"].instance == "L=100u W=100u"

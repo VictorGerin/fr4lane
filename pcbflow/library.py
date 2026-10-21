@@ -44,12 +44,14 @@ KIND_ROLES = {
     "capacitor": ("1", "2"),
     # relé SPDT: bobina C1 (+) e C2 (no GND); contato comum, normalmente aberto, normalmente fechado
     "relay": ("C1", "C2", "COM", "NO", "NC"),
+    # núcleo toroidal de ferrite (CTL): enrolamentos de entrada W1/W2 (+), inibição WB (-), saída S e retorno GND
+    "core": ("W1", "W2", "WB", "S", "GND"),
     "diode": ("A", "K"),
 }
 SPICE_LETTER = {"nmos": "M", "pmos": "M", "npn": "Q", "pnp": "Q", "resistor": "R", "capacitor": "C",
-                "relay": "K", "diode": "D"}
-CONTROL_ROLES = {"G", "B", "C1", "C2"}
-KIND_ROW = {"pmos": 0, "pnp": 0, "resistor": 1, "capacitor": 1, "diode": 1, "nmos": 2, "npn": 2, "relay": 2}
+                "relay": "K", "core": "T", "diode": "D"}
+CONTROL_ROLES = {"G", "B", "C1", "C2", "W1", "W2", "WB"}
+KIND_ROW = {"pmos": 0, "pnp": 0, "resistor": 1, "capacitor": 1, "diode": 1, "core": 1, "nmos": 2, "npn": 2, "relay": 2}
 PASSIVE_KINDS = ("resistor", "capacitor", "diode")   # não dirigem a saída de um bloco
 
 # driver_type do Liberty nos barramentos: o nível que o driver força e o da terminação
@@ -288,6 +290,8 @@ class Library:
                 elif part["kind"] == "relay" and el.nodes[1] not in (self.gnd, "0"):
                     # a simulação liga o contato pela tensão de C1 (bobina do lado de C2 no GND)
                     p.append(f"{name}: {el.name}: o lado C2 da bobina deve ir ao {self.gnd}")
+                elif part["kind"] == "core" and el.nodes[4] not in (self.gnd, "0"):
+                    p.append(f"{name}: {el.name}: o pino GND do núcleo deve ir ao {self.gnd}")
             rows = self.meta_of(name).get("layout", {}).get("rows")
             if rows:
                 names = [n for row in rows for n in row]

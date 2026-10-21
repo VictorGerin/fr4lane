@@ -1,0 +1,4 @@
+{
+  "description": "OR de 2 entradas CTL (NOR2 + inversor)",
+  "max_fanout": 4
+}

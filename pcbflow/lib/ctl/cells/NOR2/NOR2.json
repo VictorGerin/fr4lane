@@ -1,0 +1,10 @@
+{
+  "description": "NOR de 2 entradas CTL (soma de fluxo em 1 núcleo + 1 NPN)",
+  "max_fanout": 4,
+  "layout": {
+    "rows": [
+      ["RL", "R1", "R2"],
+      ["T1", "Q1"]
+    ]
+  }
+}
