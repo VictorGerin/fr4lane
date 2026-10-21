@@ -1,0 +1,9 @@
+/* OR2 — porta OU a válvulas termiônicas (NOR2 + INV; 3 válvulas) */
+library(tube_OR2) {
+  cell(OR2) {
+    area : 8;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "A | B"; }
+  }
+}

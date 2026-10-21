@@ -1,0 +1,9 @@
+/* AND2 — porta E a válvulas termiônicas (NAND2 + INV; 3 válvulas) */
+library(tube_AND2) {
+  cell(AND2) {
+    area : 8;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "A & B"; }
+  }
+}

@@ -1,0 +1,4 @@
+{
+  "description": "latch D transparente a válvulas termiônicas (4 NOR2 + 1 INV; 9 válvulas JAN-6418)",
+  "max_fanout": 4
+}

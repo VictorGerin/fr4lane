@@ -1,0 +1,4 @@
+{
+  "description": "flip-flop D de borda de subida a válvulas termiônicas (5 NOR2 + 1 NOR3 + 1 INV; 14 válvulas JAN-6418)",
+  "max_fanout": 4
+}

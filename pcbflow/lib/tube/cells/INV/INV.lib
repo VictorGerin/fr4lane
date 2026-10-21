@@ -1,0 +1,8 @@
+/* INV — inversor a válvula termiônica (1 válvula JAN-6418 + 2 resistores) */
+library(tube_INV) {
+  cell(INV) {
+    area : 3;
+    pin(A) { direction : input; }
+    pin(Y) { direction : output; function : "!A"; }
+  }
+}

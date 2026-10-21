@@ -79,6 +79,23 @@ Na família **DTL** (*Diode-Transistor Logic*, estilo IBM 1401 / série 930), as
   <img src="../../docs/img/tanque_dtl_top.jpg" alt="Vista superior da placa tanque_dtl (171 x 131 mm, 9 fileiras)" width="780">
 </p>
 
+### Família de Válvulas Termiônicas a Vácuo (`--lib tube`)
+
+Na família **tube** (1ª geração de computadores, estilo ENIAC / IBM 604), toda a lógica é construída com **válvulas subminiatura a vácuo Raytheon `JAN-6418`** (encapsulamento de vidro com 5 terminais em linha THT) e resistores (`RL = 10 kΩ` de placa e `R1 = 47 kΩ` de grade):
+
+- **Células:** 19 (`2 DFFR`, `4 INV`, `4 NAND2`, `3 NOR2`, `3 NOR3`, `2 OR2`, `1 XOR2`)
+- **Componentes:** 188 (**75 válvulas a vácuo `JAN-6418`** e 113 resistores — zero semicondutores!) + capacitores de desacoplamento
+- **Dimensões:** 172 × 125 mm, 4 camadas, 8 fileiras
+- **Roteamento e DRC:** 100 % roteada em 7 iterações (2 s), 0 violações de folga e 0 erros no DRC do KiCad
+
+<p align="center">
+  <img src="../../docs/img/tanque_tube_3d.jpg" alt="Placa da máquina de estados tanque na família de válvulas a vácuo (75 válvulas JAN-6418 e 113 resistores)" width="780">
+</p>
+
+<p align="center">
+  <img src="../../docs/img/tanque_tube_top.jpg" alt="Vista superior da placa tanque_tube (172 x 125 mm, 8 fileiras)" width="780">
+</p>
+
 ## Como gerar e simular
 
 ```sh
@@ -87,8 +104,10 @@ pcbflow --top tanque --lib rtl                                    # gera a PCB n
 pcbflow --top tanque --lib dtl                                    # gera a PCB na família DTL (diodos + NPN)
 pcbflow --top tanque --lib ctl                                    # gera a PCB na família CTL (ferrite + NPN)
 pcbflow --top tanque --lib cdl                                    # gera a PCB na família CDL (ferrite + diodos)
+pcbflow --top tanque --lib tube                                   # gera a PCB na família de válvulas a vácuo (JAN-6418)
 pcbflow-cellsim --lib rtl --design tanque --src tanque.v          # simulação analógica SPICE nos 4 cantos (RTL)
 pcbflow-cellsim --lib dtl --design tanque --src tanque.v          # simulação analógica SPICE nos 4 cantos (DTL)
 pcbflow-cellsim --lib ctl --design tanque --src tanque.v          # simulação analógica SPICE nos 4 cantos (CTL)
 pcbflow-cellsim --lib cdl --design tanque --src tanque.v          # simulação analógica SPICE nos 4 cantos (CDL)
+pcbflow-cellsim --lib tube --design tanque --src tanque.v         # simulação analógica SPICE nos 4 cantos (válvulas)
 ```

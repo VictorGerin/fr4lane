@@ -43,6 +43,7 @@ def test_familia_sem_spice(tmp_path):
     ("dtl", {"NPN", "DIODE"}),
     ("ctl", {"CORE", "NPN"}),
     ("cdl", {"CORE", "DIODE"}),
+    ("tube", {"TUBE"}),
     ("relay", {"RELAY", "DIODE"}),
 ])
 def test_modelos_das_outras_familias(family, keys):
@@ -53,6 +54,9 @@ def test_modelos_das_outras_familias(family, keys):
         assert {c.name for c in corners} == {"típico", "lento", "quente", "rápido"}
     elif family == "dtl":
         assert models["NPN"].kind == "NPN" and models["DIODE"].kind == "D"
+        assert {c.name for c in corners} == {"típico", "lento", "quente", "rápido"}
+    elif family == "tube":
+        assert models["TUBE"].kind == "SUBCKT" and models["TUBE"].subckt == "JAN6418"
         assert {c.name for c in corners} == {"típico", "lento", "quente", "rápido"}
     elif family == "ctl":
         assert models["CORE"].kind == "SUBCKT" and models["CORE"].subckt == "FCORE"

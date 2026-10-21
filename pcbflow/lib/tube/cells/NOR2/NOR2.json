@@ -1,0 +1,10 @@
+{
+  "description": "NOR de 2 entradas a válvulas termiônicas (2 válvulas JAN-6418 em paralelo + 3 resistores)",
+  "max_fanout": 4,
+  "layout": {
+    "rows": [
+      ["RL", "R1", "R2"],
+      ["V1", "V2"]
+    ]
+  }
+}

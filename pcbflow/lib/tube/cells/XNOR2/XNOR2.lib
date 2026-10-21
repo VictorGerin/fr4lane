@@ -1,0 +1,9 @@
+/* XNOR2 — coincidência de 2 entradas a válvulas termiônicas (4 NOR2; 8 válvulas) */
+library(tube_XNOR2) {
+  cell(XNOR2) {
+    area : 20;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "!(A ^ B)"; }
+  }
+}

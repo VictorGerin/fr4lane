@@ -1,0 +1,8 @@
+/* BUF — buffer a válvulas termiônicas (2 inversores em cascata; 2 válvulas) */
+library(tube_BUF) {
+  cell(BUF) {
+    area : 6;
+    pin(A) { direction : input; }
+    pin(Y) { direction : output; function : "A"; }
+  }
+}

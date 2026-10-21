@@ -1,0 +1,10 @@
+{
+  "description": "inversor a válvula termiônica (1 válvula JAN-6418 + 2 resistores)",
+  "max_fanout": 4,
+  "layout": {
+    "rows": [
+      ["RL", "R1"],
+      ["V1"]
+    ]
+  }
+}

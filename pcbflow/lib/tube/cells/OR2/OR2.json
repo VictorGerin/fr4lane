@@ -1,0 +1,4 @@
+{
+  "description": "OU de 2 entradas a válvulas termiônicas (NOR2 + INV; 3 válvulas)",
+  "max_fanout": 4
+}

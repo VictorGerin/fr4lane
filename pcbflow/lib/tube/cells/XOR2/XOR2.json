@@ -1,0 +1,4 @@
+{
+  "description": "XOR de 2 entradas a válvulas termiônicas (4 NAND2; 8 válvulas JAN-6418)",
+  "max_fanout": 4
+}

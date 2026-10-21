@@ -322,6 +322,7 @@ SIM_PRIMITIVE = {
     "pmos": ("pmos", "D", "S", "G"),
     "npn": ("nmos", "C", "E", "B"),     # NPN saturado como chave para GND
     "pnp": ("pmos", "C", "E", "B"),
+    "tube": ("nmos", "P", "K", "G"),    # Válvula a vácuo: grade G positiva conduz placa P para o catodo K
 }
 
 

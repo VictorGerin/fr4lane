@@ -206,7 +206,7 @@ def subckt_text(lib, names, models=None):
                 out.append(f"{e.name} {' '.join(e.nodes)} {e.nodes[2]} {e.model}{inst(e)}")
             elif e.letter == "D":
                 out.append(f"{e.name} {' '.join(e.nodes)} {e.model}{inst(e)}")
-            elif e.letter in ("K", "T"):           # relé ou núcleo de ferrite: instância do subcircuito do modelo
+            elif e.letter in ("K", "T", "V"):      # relé, núcleo de ferrite ou válvula: instância do subcircuito do modelo
                 m = models.get(e.model)
                 if not m or m.kind != "SUBCKT":
                     raise CellSimError(f"{n}: o componente {e.name} precisa de um modelo .subckt em spice.models")

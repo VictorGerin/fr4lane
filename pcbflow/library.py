@@ -46,12 +46,14 @@ KIND_ROLES = {
     "relay": ("C1", "C2", "COM", "NO", "NC"),
     # núcleo toroidal de ferrite (CTL): enrolamentos de entrada W1/W2 (+), inibição WB (-), saída S e retorno GND
     "core": ("W1", "W2", "WB", "S", "GND"),
+    # válvula termiônica a vácuo (triodo/pentodo): placa P (anodo), grade de controle G e catodo K
+    "tube": ("P", "G", "K"),
     "diode": ("A", "K"),
 }
 SPICE_LETTER = {"nmos": "M", "pmos": "M", "npn": "Q", "pnp": "Q", "resistor": "R", "capacitor": "C",
-                "relay": "K", "core": "T", "diode": "D"}
+                "relay": "K", "core": "T", "tube": "V", "diode": "D"}
 CONTROL_ROLES = {"G", "B", "C1", "C2", "W1", "W2", "WB"}
-KIND_ROW = {"pmos": 0, "pnp": 0, "resistor": 1, "capacitor": 1, "diode": 1, "core": 1, "nmos": 2, "npn": 2, "relay": 2}
+KIND_ROW = {"pmos": 0, "pnp": 0, "resistor": 1, "capacitor": 1, "diode": 1, "core": 1, "nmos": 2, "npn": 2, "relay": 2, "tube": 2}
 PASSIVE_KINDS = ("resistor", "capacitor", "diode")   # não dirigem a saída de um bloco
 
 # driver_type do Liberty nos barramentos: o nível que o driver força e o da terminação

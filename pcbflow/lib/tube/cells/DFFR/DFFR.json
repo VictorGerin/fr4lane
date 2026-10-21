@@ -1,0 +1,4 @@
+{
+  "description": "flip-flop D com clear ativo baixo a válvulas termiônicas (3 NOR2 + 3 NOR3 + 2 INV; 17 válvulas JAN-6418)",
+  "max_fanout": 4
+}

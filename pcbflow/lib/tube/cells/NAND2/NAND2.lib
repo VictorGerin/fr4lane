@@ -1,0 +1,9 @@
+/* NAND2 — porta NAND de 2 entradas a válvulas termiônicas (2 válvulas em série + 3 resistores) */
+library(tube_NAND2) {
+  cell(NAND2) {
+    area : 5;
+    pin(A) { direction : input; }
+    pin(B) { direction : input; }
+    pin(Y) { direction : output; function : "!(A & B)"; }
+  }
+}

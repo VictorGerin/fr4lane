@@ -13,6 +13,9 @@ Elementos aceitos dentro de um .subckt:
                                                entrada w1/w2 (+N espiras), inibição/bias wb
                                                (-N espiras), saída/sense s e retorno gnd;
                                                convenção do pcbflow para lógica CTL)
+  V<nome> p g k MODELO                        (válvula termiônica a vácuo: placa/anodo p,
+                                               grade de controle g e catodo/filamento k;
+                                               convenção do pcbflow para lógica a válvulas)
   X<nome> nós... SUBCKT                       (instância de outro subcircuito)
 Parâmetros no formato chave=valor são ignorados. MODELO é uma chave do
 parts.json da família (ex.: NMOS, NPN).
@@ -102,10 +105,12 @@ def read_subckts(path):
                 el = Element(name, "K", rest[0:5], model=rest[5])
             elif letter == "T":
                 el = Element(name, "T", rest[0:5], model=rest[5])
+            elif letter == "V":
+                el = Element(name, "V", rest[0:3], model=rest[3])
             elif letter == "X":
                 el = Element(name, "X", rest[:-1], model=rest[-1])
             else:
-                raise SpiceError(f"{path}: elemento '{name}' não suportado (use M, Q, R, C, D, K, T ou X)")
+                raise SpiceError(f"{path}: elemento '{name}' não suportado (use M, Q, R, C, D, K, T, V ou X)")
         except IndexError:
             raise SpiceError(f"{path}: linha incompleta: {line}") from None
         cur.elements.append(el)

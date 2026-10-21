@@ -1,0 +1,4 @@
+{
+  "description": "buffer a válvulas termiônicas (2 inversores; 2 válvulas JAN-6418)",
+  "max_fanout": 4
+}

@@ -1,0 +1,4 @@
+{
+  "description": "E de 2 entradas a válvulas termiônicas (NAND2 + INV; 3 válvulas)",
+  "max_fanout": 4
+}
