@@ -110,3 +110,7 @@ XOR: K1 gera !A; K2 escolhe !A (B energizado) ou A
 
 ![XOR2](XOR2.png)
 
+## Circuito add4
+
+Um circuito inteiro, sintetizado pelo pcbflow: 20 células, 80 componentes e 512 vetores. Resultados e gráfico em [add4.md](add4.md); dados em [add4.csv](add4.csv); netlist em [add4.cir](add4.cir).
+

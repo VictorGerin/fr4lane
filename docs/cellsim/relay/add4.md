@@ -4,17 +4,12 @@
 
 | Canto | Resultado | Sem convergir | Caminho crítico |
 |---|---|---:|---|
-| típico | OK | 9 % | 45.1 ms (co no vetor 436) |
-| lento | OK | 47 % | 40.2 ms (co no vetor 121) |
-| quente | **1280 saídas erradas** | — | — |
-| rápido | OK | 16 % | 45.1 ms (co no vetor 376) |
+| típico | OK | 14 % | 45.2 ms (co no vetor 238) |
+| lento | OK | 5 % | 45.2 ms (co no vetor 238) |
+| quente | OK | 5 % | 45.2 ms (co no vetor 450) |
+| rápido | OK | 9 % | 45.2 ms (co no vetor 238) |
 
-"Sem convergir": a parte dos vetores em que o ngspice não chegou ao fim do lote (ele empaca nos
-chaveamentos em cadeia das chaves com histerese do modelo do relé); nesses vetores não há medida.
-Em todos os vetores medidos dos cantos típico, lento e rápido, nenhuma saída saiu errada. No canto
-quente, o relé não atraca (a bobina recebe menos que os 24 mA da ficha), e metade das saídas erra.
-
-Reproduzir (canto típico): `ngspice -b add4.cir`
+Dados completos de todos os vetores e cantos em [add4.csv](add4.csv). Reproduzir (canto típico): `ngspice -b add4.cir`
 
 ![add4](add4.png)
 

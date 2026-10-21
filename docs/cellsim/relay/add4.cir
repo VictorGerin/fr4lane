@@ -6,14 +6,14 @@
 * saída: 1 se >= 4.5 V, 0 se <= 0.5 V
 *
 * vetores de teste (medida: valor esperado):
-*   vetor 0 (0-50000 µs): a[0]=0 a[1]=0 a[2]=0 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__0: s[0]=0, s_s_1__0: s[1]=0, s_s_2__0: s[2]=0, s_s_3__0: s[3]=0, s_co_0: co=0
-*   vetor 1 (50000-100000 µs): a[0]=1 a[1]=0 a[2]=0 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__1: s[0]=1, s_s_1__1: s[1]=0, s_s_2__1: s[2]=0, s_s_3__1: s[3]=0, s_co_1: co=0
-*   vetor 2 (100000-150000 µs): a[0]=0 a[1]=1 a[2]=0 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__2: s[0]=0, s_s_1__2: s[1]=1, s_s_2__2: s[2]=0, s_s_3__2: s[3]=0, s_co_2: co=0
-*   vetor 3 (150000-200000 µs): a[0]=1 a[1]=1 a[2]=0 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__3: s[0]=1, s_s_1__3: s[1]=1, s_s_2__3: s[2]=0, s_s_3__3: s[3]=0, s_co_3: co=0
-*   vetor 4 (200000-250000 µs): a[0]=0 a[1]=0 a[2]=1 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__4: s[0]=0, s_s_1__4: s[1]=0, s_s_2__4: s[2]=1, s_s_3__4: s[3]=0, s_co_4: co=0
-*   vetor 5 (250000-300000 µs): a[0]=1 a[1]=0 a[2]=1 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__5: s[0]=1, s_s_1__5: s[1]=0, s_s_2__5: s[2]=1, s_s_3__5: s[3]=0, s_co_5: co=0
-*   vetor 6 (300000-350000 µs): a[0]=0 a[1]=1 a[2]=1 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__6: s[0]=0, s_s_1__6: s[1]=1, s_s_2__6: s[2]=1, s_s_3__6: s[3]=0, s_co_6: co=0
-*   vetor 7 (350000-400000 µs): a[0]=1 a[1]=1 a[2]=1 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__7: s[0]=1, s_s_1__7: s[1]=1, s_s_2__7: s[2]=1, s_s_3__7: s[3]=0, s_co_7: co=0
+*   vetor 0 (0-50000 µs): a[0]=1 a[1]=1 a[2]=0 a[3]=1 b[0]=0 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__0: s[0]=1, s_s_1__0: s[1]=0, s_s_2__0: s[2]=1, s_s_3__0: s[3]=1, s_co_0: co=0
+*   vetor 1 (50000-100000 µs): a[0]=1 a[1]=1 a[2]=0 a[3]=1 b[0]=1 b[1]=0 b[2]=1 b[3]=1 ci=1  ->  s_s_0__1: s[0]=1, s_s_1__1: s[1]=0, s_s_2__1: s[2]=0, s_s_3__1: s[3]=1, s_co_1: co=1
+*   vetor 2 (100000-150000 µs): a[0]=0 a[1]=1 a[2]=1 a[3]=0 b[0]=1 b[1]=0 b[2]=1 b[3]=0 ci=0  ->  s_s_0__2: s[0]=1, s_s_1__2: s[1]=1, s_s_2__2: s[2]=0, s_s_3__2: s[3]=1, s_co_2: co=0
+*   vetor 3 (150000-200000 µs): a[0]=1 a[1]=1 a[2]=1 a[3]=0 b[0]=1 b[1]=1 b[2]=1 b[3]=1 ci=1  ->  s_s_0__3: s[0]=1, s_s_1__3: s[1]=1, s_s_2__3: s[2]=1, s_s_3__3: s[3]=0, s_co_3: co=1
+*   vetor 4 (200000-250000 µs): a[0]=0 a[1]=1 a[2]=0 a[3]=0 b[0]=0 b[1]=1 b[2]=1 b[3]=0 ci=1  ->  s_s_0__4: s[0]=1, s_s_1__4: s[1]=0, s_s_2__4: s[2]=0, s_s_3__4: s[3]=1, s_co_4: co=0
+*   vetor 5 (250000-300000 µs): a[0]=0 a[1]=1 a[2]=1 a[3]=1 b[0]=1 b[1]=1 b[2]=0 b[3]=0 ci=1  ->  s_s_0__5: s[0]=0, s_s_1__5: s[1]=1, s_s_2__5: s[2]=0, s_s_3__5: s[3]=0, s_co_5: co=1
+*   vetor 6 (300000-350000 µs): a[0]=1 a[1]=1 a[2]=0 a[3]=0 b[0]=1 b[1]=0 b[2]=1 b[3]=0 ci=0  ->  s_s_0__6: s[0]=0, s_s_1__6: s[1]=0, s_s_2__6: s[2]=0, s_s_3__6: s[3]=1, s_co_6: co=0
+*   vetor 7 (350000-400000 µs): a[0]=1 a[1]=0 a[2]=1 a[3]=0 b[0]=0 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__7: s[0]=1, s_s_1__7: s[1]=1, s_s_2__7: s[2]=1, s_s_3__7: s[3]=0, s_co_7: co=0
 *
 * pcbflow-cellsim: canto típico
 .temp 23
@@ -26,9 +26,10 @@
 * da família, sempre do lado do pior caso:
 *   bobina 167 Ω (30 mA a 5 V); kcoil escala a resistência (tolerância e o
 *   aquecimento do cobre, +0,39 %/°C), e o canto o define;
-*   atraca com 24 mA (80 % da tensão nominal na bobina de 167 Ω: o máximo da
-*   ficha) e solta abaixo de 3 mA (10 %: o mínimo da ficha). O relé atraca pela
-*   corrente (ampère-espiras), então esses limiares não mudam com a temperatura;
+*   atraca com 21,8 mA (80 % da tensão nominal na bobina no limite de +10 %:
+*   4 V / 183,7 Ω, o máximo da ficha) e solta abaixo de 2,7 mA (10 %: 0,5 V /
+*   183,7 Ω, o mínimo da ficha). O relé atraca pela corrente (ampère-espiras),
+*   então esses limiares não mudam com a temperatura;
 *   os contatos mudam 5 ms depois de a corrente cruzar o limiar (o tempo máximo
 *   de operação e de liberação da ficha), numa linha de atraso ideal;
 *   contato fechado 0,1 Ω (resistência de contato máxima), aberto 1 GΩ.
@@ -44,8 +45,8 @@ Tdl s  0  sd 0 Z0=50 TD=5m
 Rtl sd 0  50
 Sno com no sd 0 SWNO
 Snc com nc 0 sd SWNC
-.model SWNO SW(VT=13.5 VH=10.5 RON=0.1 ROFF=1G)
-.model SWNC SW(VT=-13.5 VH=10.5 RON=0.1 ROFF=1G)
+.model SWNO SW(VT=12.25 VH=9.55 RON=0.1 ROFF=1G)
+.model SWNC SW(VT=-12.25 VH=9.55 RON=0.1 ROFF=1G)
 .ends G5V1
 .model DIODE D(IS=4.352E-9 N=1.906 BV=110 IBV=0.0001 RS=0.6458 CJO=7.048E-13 VJ=0.869 M=0.03 FC=0.5 TT=3.48E-9)
 .subckt NAND2 A B Y VDD GND
@@ -65,15 +66,15 @@ XK1 A GND Y GND VDD G5V1
 D1 GND A DIODE
 .ends INV
 VDD vdd 0 5
-V_a_0_ n2 0 PWL(0 0 0.05 0 0.05001 5 0.1 5 0.10001 0 0.15 0 0.15001 5 0.2 5 0.20001 0 0.25 0 0.25001 5 0.3 5 0.30001 0 0.35 0 0.35001 5)
-V_a_1_ n3 0 PWL(0 0 0.1 0 0.10001 5 0.2 5 0.20001 0 0.3 0 0.30001 5)
-V_a_2_ n4 0 PWL(0 0 0.2 0 0.20001 5)
-V_a_3_ n5 0 PWL(0 0)
-V_b_0_ n6 0 PWL(0 0)
-V_b_1_ n7 0 PWL(0 0)
-V_b_2_ n8 0 PWL(0 0)
-V_b_3_ n9 0 PWL(0 0)
-V_ci n10 0 PWL(0 0)
+V_a_0_ n2 0 PWL(0 5 0.1 5 0.10001 0 0.15 0 0.15001 5 0.2 5 0.20001 0 0.3 0 0.30001 5)
+V_a_1_ n3 0 PWL(0 5 0.35 5 0.35001 0)
+V_a_2_ n4 0 PWL(0 0 0.1 0 0.10001 5 0.2 5 0.20001 0 0.25 0 0.25001 5 0.3 5 0.30001 0 0.35 0 0.35001 5)
+V_a_3_ n5 0 PWL(0 5 0.1 5 0.10001 0 0.25 0 0.25001 5 0.3 5 0.30001 0)
+V_b_0_ n6 0 PWL(0 0 0.05 0 0.05001 5 0.2 5 0.20001 0 0.25 0 0.25001 5 0.35 5 0.35001 0)
+V_b_1_ n7 0 PWL(0 5 0.05 5 0.05001 0 0.15 0 0.15001 5 0.3 5 0.30001 0 0.35 0 0.35001 5)
+V_b_2_ n8 0 PWL(0 0 0.05 0 0.05001 5 0.25 5 0.25001 0 0.3 0 0.30001 5 0.35 5 0.35001 0)
+V_b_3_ n9 0 PWL(0 0 0.05 0 0.05001 5 0.1 5 0.10001 0 0.15 0 0.15001 5 0.2 5 0.20001 0)
+V_ci n10 0 PWL(0 0 0.05 0 0.05001 5 0.1 5 0.10001 0 0.15 0 0.15001 5 0.3 5 0.30001 0)
 XU1 n11 n12 n13 vdd 0 NAND2
 XU2 n2 n6 n11 vdd 0 NAND2
 XU3 n2 n6 n14 vdd 0 XOR2
@@ -112,50 +113,61 @@ meas tran s_s_2__0 FIND v(n25) AT=0.0475
 meas tran s_s_3__0 FIND v(n30) AT=0.0475
 meas tran s_co_0 FIND v(n28) AT=0.0475
 meas tran s_s_0__1 FIND v(n15) AT=0.0975
-meas tran t_s_0__1 WHEN v(n15)=2.5 CROSS=LAST FROM=0.05 TO=0.1
 meas tran s_s_1__1 FIND v(n20) AT=0.0975
 meas tran s_s_2__1 FIND v(n25) AT=0.0975
+meas tran t_s_2__1 WHEN v(n25)=2.5 CROSS=LAST FROM=0.05 TO=0.1
 meas tran s_s_3__1 FIND v(n30) AT=0.0975
 meas tran s_co_1 FIND v(n28) AT=0.0975
+meas tran t_co_1 WHEN v(n28)=2.5 CROSS=LAST FROM=0.05 TO=0.1
 meas tran s_s_0__2 FIND v(n15) AT=0.1475
-meas tran t_s_0__2 WHEN v(n15)=2.5 CROSS=LAST FROM=0.1 TO=0.15
 meas tran s_s_1__2 FIND v(n20) AT=0.1475
 meas tran t_s_1__2 WHEN v(n20)=2.5 CROSS=LAST FROM=0.1 TO=0.15
 meas tran s_s_2__2 FIND v(n25) AT=0.1475
 meas tran s_s_3__2 FIND v(n30) AT=0.1475
 meas tran s_co_2 FIND v(n28) AT=0.1475
+meas tran t_co_2 WHEN v(n28)=2.5 CROSS=LAST FROM=0.1 TO=0.15
 meas tran s_s_0__3 FIND v(n15) AT=0.1975
-meas tran t_s_0__3 WHEN v(n15)=2.5 CROSS=LAST FROM=0.15 TO=0.2
 meas tran s_s_1__3 FIND v(n20) AT=0.1975
 meas tran s_s_2__3 FIND v(n25) AT=0.1975
+meas tran t_s_2__3 WHEN v(n25)=2.5 CROSS=LAST FROM=0.15 TO=0.2
 meas tran s_s_3__3 FIND v(n30) AT=0.1975
+meas tran t_s_3__3 WHEN v(n30)=2.5 CROSS=LAST FROM=0.15 TO=0.2
 meas tran s_co_3 FIND v(n28) AT=0.1975
+meas tran t_co_3 WHEN v(n28)=2.5 CROSS=LAST FROM=0.15 TO=0.2
 meas tran s_s_0__4 FIND v(n15) AT=0.2475
-meas tran t_s_0__4 WHEN v(n15)=2.5 CROSS=LAST FROM=0.2 TO=0.25
 meas tran s_s_1__4 FIND v(n20) AT=0.2475
 meas tran t_s_1__4 WHEN v(n20)=2.5 CROSS=LAST FROM=0.2 TO=0.25
 meas tran s_s_2__4 FIND v(n25) AT=0.2475
 meas tran t_s_2__4 WHEN v(n25)=2.5 CROSS=LAST FROM=0.2 TO=0.25
 meas tran s_s_3__4 FIND v(n30) AT=0.2475
+meas tran t_s_3__4 WHEN v(n30)=2.5 CROSS=LAST FROM=0.2 TO=0.25
 meas tran s_co_4 FIND v(n28) AT=0.2475
+meas tran t_co_4 WHEN v(n28)=2.5 CROSS=LAST FROM=0.2 TO=0.25
 meas tran s_s_0__5 FIND v(n15) AT=0.2975
 meas tran t_s_0__5 WHEN v(n15)=2.5 CROSS=LAST FROM=0.25 TO=0.3
 meas tran s_s_1__5 FIND v(n20) AT=0.2975
+meas tran t_s_1__5 WHEN v(n20)=2.5 CROSS=LAST FROM=0.25 TO=0.3
 meas tran s_s_2__5 FIND v(n25) AT=0.2975
 meas tran s_s_3__5 FIND v(n30) AT=0.2975
+meas tran t_s_3__5 WHEN v(n30)=2.5 CROSS=LAST FROM=0.25 TO=0.3
 meas tran s_co_5 FIND v(n28) AT=0.2975
+meas tran t_co_5 WHEN v(n28)=2.5 CROSS=LAST FROM=0.25 TO=0.3
 meas tran s_s_0__6 FIND v(n15) AT=0.3475
-meas tran t_s_0__6 WHEN v(n15)=2.5 CROSS=LAST FROM=0.3 TO=0.35
 meas tran s_s_1__6 FIND v(n20) AT=0.3475
 meas tran t_s_1__6 WHEN v(n20)=2.5 CROSS=LAST FROM=0.3 TO=0.35
 meas tran s_s_2__6 FIND v(n25) AT=0.3475
 meas tran s_s_3__6 FIND v(n30) AT=0.3475
+meas tran t_s_3__6 WHEN v(n30)=2.5 CROSS=LAST FROM=0.3 TO=0.35
 meas tran s_co_6 FIND v(n28) AT=0.3475
+meas tran t_co_6 WHEN v(n28)=2.5 CROSS=LAST FROM=0.3 TO=0.35
 meas tran s_s_0__7 FIND v(n15) AT=0.3975
 meas tran t_s_0__7 WHEN v(n15)=2.5 CROSS=LAST FROM=0.35 TO=0.4
 meas tran s_s_1__7 FIND v(n20) AT=0.3975
+meas tran t_s_1__7 WHEN v(n20)=2.5 CROSS=LAST FROM=0.35 TO=0.4
 meas tran s_s_2__7 FIND v(n25) AT=0.3975
+meas tran t_s_2__7 WHEN v(n25)=2.5 CROSS=LAST FROM=0.35 TO=0.4
 meas tran s_s_3__7 FIND v(n30) AT=0.3975
+meas tran t_s_3__7 WHEN v(n30)=2.5 CROSS=LAST FROM=0.35 TO=0.4
 meas tran s_co_7 FIND v(n28) AT=0.3975
 quit
 .endc
