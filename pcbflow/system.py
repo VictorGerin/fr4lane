@@ -277,7 +277,7 @@ def main(argv=None):
         for kind, files in (("gate-level", [runs[b] / f"{b}_gates.v" for b in args.boards] + [models]),
                             ("componentes", [runs[b] / f"{b}_switch.v" for b in args.boards])):
             name = "sim_gates" if kind == "gate-level" else "sim_switch"
-            ok, text = run_sim(tb, pkgs + top_file + files, out, name, f"simulação do sistema ({kind})")
+            ok, text = run_sim(tb, top_file + files, out, name, f"simulação do sistema ({kind})", pre_files=pkgs)
             (out / f"{name}.log").write_text(text)
             sims[kind] = ok
             log(f"    {kind + ':':<17} {'OK' if ok else 'FALHOU'}")

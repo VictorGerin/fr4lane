@@ -3,15 +3,10 @@
 // o HLT e confere a sequência de valores na saída.
 //
 // Só usa as portas do sap1, porque o pcbflow roda o mesmo testbench contra o
-// netlist de portas e o de componentes, que não têm o sap1_pkg. Por isso os
-// opcodes são repetidos aqui.
-module tb_sap1;
-    typedef enum logic [3:0] {
-        NOP = 4'b0000, LDA = 4'b0001, ADD = 4'b0010, SUB = 4'b0011,
-        STA = 4'b0100, LDI = 4'b0101, JMP = 4'b0110, JC  = 4'b0111,
-        JZ  = 4'b1000, OUT = 4'b1110, HLT = 4'b1111
-    } opcode_t;
+// netlist de portas e o de componentes.
+import sap1_pkg::*;
 
+module tb_sap1;
     localparam int MAX_CYCLES = 2000;
 
     logic       clk = 0, rst_n = 0, prog = 0, prog_we = 0;
@@ -28,7 +23,7 @@ module tb_sap1;
 
     always #50 clk = ~clk;
 
-    function automatic logic [7:0] op(opcode_t code, logic [3:0] arg = '0);
+    function automatic logic [7:0] op(sap1_pkg::opcode_t code, logic [3:0] arg = '0);
         return {code, arg};
     endfunction
 

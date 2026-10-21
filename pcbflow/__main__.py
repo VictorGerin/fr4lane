@@ -53,13 +53,14 @@ def _run_watched(cmd, pg, what, cwd=None):
     return proc.wait(), "\n".join(out) + "\n"
 
 
-def run_sim(tb, dut_files, outdir, name, label="simulação"):
+def run_sim(tb, dut_files, outdir, name, label="simulação", pre_files=()):
     iverilog = shutil.which("iverilog") or "C:/msys64/ucrt64/bin/iverilog.exe"
     vvp = shutil.which("vvp") or "C:/msys64/ucrt64/bin/vvp.exe"
     out = (outdir / f"{name}.vvp").resolve()
+    files = [str(f) for f in pre_files] + [str(tb)] + [str(f) for f in dut_files]
     with progress.Progress(label, tick=True) as pg:
         pg.update(info="compilando (iverilog)")
-        rc, text = _run_watched([iverilog, "-g2012", "-o", str(out), str(tb)] + [str(f) for f in dut_files],
+        rc, text = _run_watched([iverilog, "-g2012", "-o", str(out)] + files,
                                 pg, "compilando")
         if rc != 0:
             if not text.strip():
@@ -460,10 +461,12 @@ def _simulate(args, lib, design, out, gates_v, models, sims, clock):
         log(f"      componentes:      {'OK' if ok2 else 'FALHOU'}")
         return
     clock.stage("[2/6] Simulação: netlist gate-level e de componentes")
-    ok, text = run_sim(args.tb, [gates_v, models], out, "sim_gates", "simulação gate-level")
+    pkgs = [Path(s) for s in args.src if re.search(r"^\s*package\s+\w+",
+                                                   Path(s).read_text(encoding="utf-8", errors="replace"), re.M)]
+    ok, text = run_sim(args.tb, [gates_v, models], out, "sim_gates", "simulação gate-level", pre_files=pkgs)
     log(f"      gate-level:       {'OK' if ok else 'FALHOU'}")
     (out / "sim_gates.log").write_text(text)
-    ok2, text2 = run_sim(args.tb, [sw], out, "sim_switch", "simulação de componentes")
+    ok2, text2 = run_sim(args.tb, [sw], out, "sim_switch", "simulação de componentes", pre_files=pkgs)
     log(f"      componentes:      {'OK' if ok2 else 'FALHOU'}")
     (out / "sim_switch.log").write_text(text2)
     if not (ok and ok2):
