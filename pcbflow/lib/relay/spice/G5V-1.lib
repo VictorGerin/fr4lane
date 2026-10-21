@@ -9,21 +9,36 @@
 *   4 V / 183,7 Ω, o máximo da ficha) e solta abaixo de 2,7 mA (10 %: 0,5 V /
 *   183,7 Ω, o mínimo da ficha). O relé atraca pela corrente (ampère-espiras),
 *   então esses limiares não mudam com a temperatura;
-*   os contatos mudam 5 ms depois de a corrente cruzar o limiar (o tempo máximo
-*   de operação e de liberação da ficha), numa linha de atraso ideal;
+*   os contatos mudam ~5 ms depois de a corrente cruzar o limiar (o tempo máximo
+*   de operação e de liberação da ficha), com inércia magnética/mecânica na
+*   bobina (RC de 0,4 ms) e repique aleatório dos contatos (bounce de ~0,4 a
+*   0,9 ms sorteado por instância via unif, controlado por .param bounce=1);
 *   contato fechado 0,1 Ω (resistência de contato máxima), aberto 1 GΩ.
-* Simplificações: sem a indutância da bobina (a ficha não informa) e sem o
-* intervalo em que os dois contatos ficam abertos (abre antes de fechar).
 *
 * Pinos na convenção do pcbflow: bobina c1 (+) e c2, contato comum, NA e NF.
-.subckt G5V1 c1 c2 com no nc
+.param bounce=1
+.subckt G5V1 c1 c2 com no nc tb1={unif(0.18m, 0.2)} tb2={unif(0.38m, 0.2)} tb3={unif(0.62m, 0.2)}
 Vs  c1 cm 0
 Rc  cm c2 {167*kcoil}
 Bs  s  0  V = 1000 * i(Vs)
-Tdl s  0  sd 0 Z0=50 TD=5m
-Rtl sd 0  50
-Sno com no sd 0 SWNO
-Snc com nc 0 sd SWNC
-.model SWNO SW(VT=12.25 VH=9.55 RON=0.1 ROFF=1G)
-.model SWNC SW(VT=-12.25 VH=9.55 RON=0.1 ROFF=1G)
+Rlp s  sm 400
+Clp sm 0  1u
+Vad vp 0  1
+Sa  vp arm sm 0 SWARM
+Ra  arm 0 50
+T0  arm 0 d0 0 Z0=50 TD=4.3m
+R0  d0  0 50
+B0  u0  0 V = 2 * v(d0)
+T1  u0  0 d1 0 Z0=50 TD={tb1}
+R1  d1  0 50
+T2  u0  0 d2 0 Z0=50 TD={tb2}
+R2  d2  0 50
+T3  u0  0 d3 0 Z0=50 TD={tb3}
+R3  d3  0 50
+Bno cno 0 V = v(u0) * (1 - bounce * (v(d1) - v(d2)) * v(d3))
+Bnc cnc 0 V = (1 - v(u0)) * (1 - bounce * ((1 - v(d1)) - (1 - v(d2))) * (1 - v(d3)))
+Sno com no cno 0 SWC
+Snc com nc cnc 0 SWC
+.model SWARM SW(VT=12.25 VH=9.55 RON=0.01 ROFF=1G)
+.model SWC   SW(VT=0.5   VH=0.1  RON=0.1  ROFF=1G)
 .ends G5V1
