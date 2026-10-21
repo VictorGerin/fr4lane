@@ -672,17 +672,25 @@ def build_design(lib, sources, top, outdir):
     if lib.variants:
         sizing.size_design(lib, design, el, drives)
     buffering.buffer_design(lib, design, el, drives)
-    seq = sorted({c for c, _ in design.instances.values() if lib.cells[c].seq})
-    if seq:
-        raise CellSimError(f"--design só simula circuitos combinacionais ({top} tem {', '.join(seq)})")
     return design
 
 
-def _evaluate(lib, design, env):
-    """Valor lógico de cada net para as entradas env {net: 0/1}."""
+def _eval_comb(lib, design, env, state=None):
+    """Propaga a lógica combinacional dado o estado {inst: 0/1} dos flip-flops/latches."""
     val = dict(env)
     val[design.vdd], val[design.gnd] = 1, 0
-    pending = dict(design.instances)
+    pending = {}
+    for inst, (cell, _) in design.instances.items():
+        c = lib.cells[cell]
+        if c.seq:
+            q = 0 if state is None else state.get(inst, 0)
+            s = c.seq
+            iq = {s["iq"]: q, s["iqn"]: 1 - q}
+            for o in c.outputs:
+                if o in design.conns[inst]:
+                    val[design.conns[inst][o]] = liberty.eval_expr(liberty.parse_expr(c.pins[o]["function"]), iq)
+        else:
+            pending[inst] = (cell, _)
     while pending:
         progress_ = False
         for inst, (cell, _) in list(pending.items()):
@@ -703,12 +711,73 @@ def _evaluate(lib, design, env):
     return val
 
 
+def _evaluate(lib, design, env, state=None, prev_val=None):
+    """Valor lógico de cada net para as entradas env {net: 0/1}, atualizando state (se houver células sequenciais)."""
+    if state is None:
+        return _eval_comb(lib, design, env)
+    for inst, (cell, _) in design.instances.items():
+        state.setdefault(inst, 0)
+    val = _eval_comb(lib, design, env, state)
+    # 1) borda de clock dos flip-flops (usa o D do ciclo anterior antes da borda e o clear atual)
+    changed = False
+    for inst, (cell, _) in design.instances.items():
+        c = lib.cells[cell]
+        if not c.ff:
+            continue
+        conns = design.conns[inst]
+        ins_now = {p: val.get(conns.get(p)) for p in c.inputs}
+        q = state[inst]
+        if "clear" in c.ff and liberty.eval_expr(liberty.parse_expr(c.ff["clear"]), ins_now):
+            q = 0
+        elif "preset" in c.ff and liberty.eval_expr(liberty.parse_expr(c.ff["preset"]), ins_now):
+            q = 1
+        elif prev_val is not None:
+            ins_prev = {p: prev_val.get(conns.get(p)) for p in c.inputs}
+            ck_prev = liberty.eval_expr(liberty.parse_expr(c.ff["clocked_on"]), ins_prev)
+            ck_now = liberty.eval_expr(liberty.parse_expr(c.ff["clocked_on"]), ins_now)
+            if not ck_prev and ck_now:
+                q = liberty.eval_expr(liberty.parse_expr(c.ff["next_state"]), ins_prev)
+        if q != state[inst]:
+            state[inst] = q
+            changed = True
+    if changed:
+        val = _eval_comb(lib, design, env, state)
+    # 2) latches transparentes (e clear/preset assíncronos que cascateiem)
+    for _ in range(len(design.instances) + 1):
+        lat_changed = False
+        for inst, (cell, _) in design.instances.items():
+            c = lib.cells[cell]
+            conns = design.conns[inst]
+            ins_now = {p: val.get(conns.get(p)) for p in c.inputs}
+            q = state[inst]
+            if c.ff:
+                if "clear" in c.ff and liberty.eval_expr(liberty.parse_expr(c.ff["clear"]), ins_now):
+                    q = 0
+                elif "preset" in c.ff and liberty.eval_expr(liberty.parse_expr(c.ff["preset"]), ins_now):
+                    q = 1
+            elif c.latch:
+                if "clear" in c.latch and liberty.eval_expr(liberty.parse_expr(c.latch["clear"]), ins_now):
+                    q = 0
+                elif "preset" in c.latch and liberty.eval_expr(liberty.parse_expr(c.latch["preset"]), ins_now):
+                    q = 1
+                elif liberty.eval_expr(liberty.parse_expr(c.latch["enable"]), ins_now):
+                    q = liberty.eval_expr(liberty.parse_expr(c.latch["data_in"]), ins_now)
+            if q != state[inst]:
+                state[inst] = q
+                lat_changed = True
+        if not lat_changed:
+            break
+        val = _eval_comb(lib, design, env, state)
+    return val
+
+
 def sim_design(lib, models, corner, design, vectors, work, ngspice, capture=None):
     """Simula o circuito com os vetores [{entrada: 0/1}], em lotes (timing.batch no library.json); cada
     lote começa repetindo o último vetor do anterior, para medir a transição."""
-    batch = int(corner.batch)
+    has_seq = any(lib.cells[c].seq for c, _ in design.instances.values())
+    batch = len(vectors) if has_seq else int(corner.batch)
     if capture:                                   # para publicar: só o primeiro lote
-        return _sim_batch(lib, models, corner, design, vectors[:batch], work, ngspice, capture, 0, False)
+        return _sim_batch(lib, models, corner, design, vectors[:int(corner.batch)], work, ngspice, capture, 0, False)
     out = {"ok": True, "fails": [], "vectors": len(vectors), "tpd": None, "where": None,
            "cells": len(design.instances), "parts": len(design.parts), "measured": 0, "missing": 0, "rows": []}
     for i in range(0, len(vectors), batch):
@@ -760,9 +829,11 @@ def _sim_batch(lib, models, corner, design, vectors, work, ngspice, capture, fir
         lines.append(instance(lib, rcell, f"ld_{_safe(p.name)}",
                               {rpin: node(p.net), **{x: f"ldo_{_safe(p.name)}_{x}" for x in others}}))
     expect = []
+    state = {} if any(lib.cells[c].seq for c, _ in design.instances.values()) else None
+    prev_val = None
     for v in vectors:
-        val = _evaluate(lib, design, {p.net: v[p.name] for p in ins})
-        expect.append({p.name: val.get(p.net) for p in outs})
+        prev_val = _evaluate(lib, design, {p.net: v[p.name] for p in ins}, state=state, prev_val=prev_val)
+        expect.append({p.name: prev_val.get(p.net) for p in outs})
     meas = []
     for k in range(len(vectors)):
         for p in outs:
