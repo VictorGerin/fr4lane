@@ -28,7 +28,7 @@ Verilog ──Yosys/ABC──▶ células (.lib) ──expansão (.sp)──▶ 
 
 - três famílias de células incluídas: **CMOS** (2N7002 + BSS84), **RTL** (BC548 + resistores) e **relés** (SPDT de 5 V), com portas, flip-flops e latches; e um formato simples para criar outras;
 - verificação de cada célula montada contra a função declarada, e simulação do circuito inteiro em nível de componente com o seu testbench;
-- [simulação analógica das células](https://github.com/VictorGerin/pcbflow/wiki/Simulação-analógica-das-células) no ngspice (família RTL, com o modelo do BC548), nos cantos de pior caso, com netlists e gráficos publicados para qualquer pessoa reproduzir;
+- [simulação analógica das células e de circuitos](https://github.com/VictorGerin/pcbflow/wiki/Simulação-analógica-das-células) no ngspice (famílias CMOS, RTL e de relés, além do somador `add4` e da máquina de estados [`tanque`](examples/tanque)), nos cantos de pior caso, com netlists, CSVs e gráficos publicados em [`docs/cellsim`](docs/cellsim/rtl) para qualquer pessoa reproduzir;
 - fan-out resolvido: células trocadas por variantes mais fortes e árvores de buffers balanceadas nas nets que ainda estouram (com drive em pior caso elétrico na família RTL);
 - floorplan com fences, regions, guides e keepouts, editado num [editor visual](https://github.com/VictorGerin/pcbflow/wiki/Editor-visual) no navegador, e [conectores](https://github.com/VictorGerin/pcbflow/wiki/Floorplan#conectores) em qualquer borda com a pinagem escolhida (para casar placas vizinhas);
 - placement por anelamento simulado e roteamento por negociação (PathFinder) em grade, compilados com numba;
@@ -78,7 +78,7 @@ O SAP-1 em [`examples/sap1`](examples/sap1) mostra um sistema de várias placas:
 | [Exemplo completo](https://github.com/VictorGerin/pcbflow/wiki/Exemplo-completo) | o `demo_top`, do floorplan à placa montada |
 | [Como funciona](https://github.com/VictorGerin/pcbflow/wiki/Como-funciona) | as seis etapas, simulação em nível de componente, placement e roteamento |
 | [Bibliotecas de células](https://github.com/VictorGerin/pcbflow/wiki/Bibliotecas-de-células) | formato das famílias, fan-out, verificações, latches, criar uma família nova |
-| [Simulação analógica das células](https://github.com/VictorGerin/pcbflow/wiki/Simulação-analógica-das-células) | `pcbflow-cellsim`: cada célula no ngspice, atrasos, flip-flops e os netlists em [`docs/cellsim`](docs/cellsim/rtl) |
+| [Simulação analógica das células](https://github.com/VictorGerin/pcbflow/wiki/Simulação-analógica-das-células) | `pcbflow-cellsim`: células e circuitos (`add4`, [`tanque`](examples/tanque)) no ngspice, atrasos, flip-flops, CSVs e netlists em [`docs/cellsim`](docs/cellsim/rtl) |
 | [Saídas e KiCad](https://github.com/VictorGerin/pcbflow/wiki/Saídas-e-KiCad) | arquivos gerados e revisão da placa no KiCad |
 | [Módulos e macros](https://github.com/VictorGerin/pcbflow/wiki/Módulos-e-macros) | hierarquia na placa e fluxo hierárquico |
 | [Floorplan](https://github.com/VictorGerin/pcbflow/wiki/Floorplan) | fences, regions, guides, keepouts, conectores, densidade |
