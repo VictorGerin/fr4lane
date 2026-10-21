@@ -108,7 +108,8 @@
         0.0005
       ],
       "resolution": 2e-05,
-      "edge": 1e-05
+      "edge": 1e-05,
+      "batch": 8
     }
   }
 }

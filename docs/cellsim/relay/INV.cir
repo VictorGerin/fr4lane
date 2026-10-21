@@ -1,0 +1,78 @@
+* INV — inversor: o contato liga a saída ao GND (energizado) ou ao VDD
+* família discrete_relay, canto típico (VDD 5 V, 23 °C; modelos RELAY: spice/G5V-1.lib, DIODE: spice/1N4148.lib)
+* gerado por pcbflow-cellsim --export; rodar: ngspice -b INV.cir (imprime as medidas e grava INV.dat)
+*
+* entradas no nível de pior caso: alto = 5 V, baixo = 0 V; Y leva 8 carga(s) INV.A
+* saída: 1 se >= 4.5 V, 0 se <= 0.5 V
+*
+* vetores de teste (medida: valor esperado):
+*   0-50000 µs  A=0  ->  s_Y_0: Y=1
+*   50000-100000 µs  A=1  ->  s_Y_1: Y=0
+*   100000-150000 µs  A=0  ->  s_Y_2: Y=1
+*
+* pcbflow-cellsim: canto típico
+.temp 23
+.param kup=1 kb=1
+.param kcoil=1.0
+* Relé SPDT de 5 V — modelo comportamental para a simulação analógica (pcbflow-cellsim)
+*
+* Um relé é mecânico e não tem modelo SPICE de fabricante. Este segue a ficha do
+* Omron G5V-1 (5 VDC), um relé SPDT de sinal com bobina de cerca de 30 mA, como o
+* da família, sempre do lado do pior caso:
+*   bobina 167 Ω (30 mA a 5 V); kcoil escala a resistência (tolerância e o
+*   aquecimento do cobre, +0,39 %/°C), e o canto o define;
+*   atraca com 24 mA (80 % da tensão nominal na bobina de 167 Ω: o máximo da
+*   ficha) e solta abaixo de 3 mA (10 %: o mínimo da ficha). O relé atraca pela
+*   corrente (ampère-espiras), então esses limiares não mudam com a temperatura;
+*   os contatos mudam 5 ms depois de a corrente cruzar o limiar (o tempo máximo
+*   de operação e de liberação da ficha), numa linha de atraso ideal;
+*   contato fechado 0,1 Ω (resistência de contato máxima), aberto 1 GΩ.
+* Simplificações: sem a indutância da bobina (a ficha não informa) e sem o
+* intervalo em que os dois contatos ficam abertos (abre antes de fechar).
+*
+* Pinos na convenção do pcbflow: bobina c1 (+) e c2, contato comum, NA e NF.
+.subckt G5V1 c1 c2 com no nc
+Vs  c1 cm 0
+Rc  cm c2 {167*kcoil}
+Bs  s  0  V = 1000 * i(Vs)
+Tdl s  0  sd 0 Z0=50 TD=5m
+Rtl sd 0  50
+Sno com no sd 0 SWNO
+Snc com nc 0 sd SWNC
+.model SWNO SW(VT=13.5 VH=10.5 RON=0.1 ROFF=1G)
+.model SWNC SW(VT=-13.5 VH=10.5 RON=0.1 ROFF=1G)
+.ends G5V1
+.model DIODE D(IS=4.352E-9 N=1.906 BV=110 IBV=0.0001 RS=0.6458 CJO=7.048E-13 VJ=0.869 M=0.03 FC=0.5 TT=3.48E-9)
+.subckt INV A Y VDD GND
+XK1 A GND Y GND VDD G5V1
+D1 GND A DIODE
+.ends INV
+VDD vdd 0 5
+V_A in_A 0 PWL(0 0 0.05 0 0.05001 5 0.1 5 0.10001 0)
+Xdut in_A out_Y vdd 0 INV
+Xld_out_Y_0 out_Y ld_out_Y_0_Y vdd 0 INV
+Xld_out_Y_1 out_Y ld_out_Y_1_Y vdd 0 INV
+Xld_out_Y_2 out_Y ld_out_Y_2_Y vdd 0 INV
+Xld_out_Y_3 out_Y ld_out_Y_3_Y vdd 0 INV
+Xld_out_Y_4 out_Y ld_out_Y_4_Y vdd 0 INV
+Xld_out_Y_5 out_Y ld_out_Y_5_Y vdd 0 INV
+Xld_out_Y_6 out_Y ld_out_Y_6_Y vdd 0 INV
+Xld_out_Y_7 out_Y ld_out_Y_7_Y vdd 0 INV
+.tran 0.0001 0.15
+.control
+run
+linearize
+set wr_singlescale
+set wr_vecnames
+wrdata INV.dat v(in_A) v(out_Y)
+meas tran s_Y_0 FIND v(out_Y) AT=0.0475
+meas tran l_Y_0 FIND v(ld_out_Y_0_Y) AT=0.0475
+meas tran s_Y_1 FIND v(out_Y) AT=0.0975
+meas tran l_Y_1 FIND v(ld_out_Y_0_Y) AT=0.0975
+meas tran d_Y_1 TRIG AT=0.05 TARG v(out_Y) VAL=2.5 TD=0.05 CROSS=1
+meas tran s_Y_2 FIND v(out_Y) AT=0.1475
+meas tran l_Y_2 FIND v(ld_out_Y_0_Y) AT=0.1475
+meas tran d_Y_2 TRIG AT=0.1 TARG v(out_Y) VAL=2.5 TD=0.1 CROSS=1
+quit
+.endc
+.end

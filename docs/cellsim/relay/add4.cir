@@ -1,0 +1,162 @@
+* add4 — circuito sintetizado pelo pcbflow (20 células: NAND2, XOR2; 80 componentes)
+* família discrete_relay, canto típico (VDD 5 V, 23 °C)
+* gerado por pcbflow-cellsim --design add4 --export; rodar: ngspice -b add4.cir
+*
+* entradas no nível de pior caso: alto = 5 V, baixo = 0 V; cada saída leva uma carga de referência
+* saída: 1 se >= 4.5 V, 0 se <= 0.5 V
+*
+* vetores de teste (medida: valor esperado):
+*   vetor 0 (0-50000 µs): a[0]=0 a[1]=0 a[2]=0 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__0: s[0]=0, s_s_1__0: s[1]=0, s_s_2__0: s[2]=0, s_s_3__0: s[3]=0, s_co_0: co=0
+*   vetor 1 (50000-100000 µs): a[0]=1 a[1]=0 a[2]=0 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__1: s[0]=1, s_s_1__1: s[1]=0, s_s_2__1: s[2]=0, s_s_3__1: s[3]=0, s_co_1: co=0
+*   vetor 2 (100000-150000 µs): a[0]=0 a[1]=1 a[2]=0 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__2: s[0]=0, s_s_1__2: s[1]=1, s_s_2__2: s[2]=0, s_s_3__2: s[3]=0, s_co_2: co=0
+*   vetor 3 (150000-200000 µs): a[0]=1 a[1]=1 a[2]=0 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__3: s[0]=1, s_s_1__3: s[1]=1, s_s_2__3: s[2]=0, s_s_3__3: s[3]=0, s_co_3: co=0
+*   vetor 4 (200000-250000 µs): a[0]=0 a[1]=0 a[2]=1 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__4: s[0]=0, s_s_1__4: s[1]=0, s_s_2__4: s[2]=1, s_s_3__4: s[3]=0, s_co_4: co=0
+*   vetor 5 (250000-300000 µs): a[0]=1 a[1]=0 a[2]=1 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__5: s[0]=1, s_s_1__5: s[1]=0, s_s_2__5: s[2]=1, s_s_3__5: s[3]=0, s_co_5: co=0
+*   vetor 6 (300000-350000 µs): a[0]=0 a[1]=1 a[2]=1 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__6: s[0]=0, s_s_1__6: s[1]=1, s_s_2__6: s[2]=1, s_s_3__6: s[3]=0, s_co_6: co=0
+*   vetor 7 (350000-400000 µs): a[0]=1 a[1]=1 a[2]=1 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__7: s[0]=1, s_s_1__7: s[1]=1, s_s_2__7: s[2]=1, s_s_3__7: s[3]=0, s_co_7: co=0
+*
+* pcbflow-cellsim: canto típico
+.temp 23
+.param kup=1 kb=1
+.param kcoil=1.0
+* Relé SPDT de 5 V — modelo comportamental para a simulação analógica (pcbflow-cellsim)
+*
+* Um relé é mecânico e não tem modelo SPICE de fabricante. Este segue a ficha do
+* Omron G5V-1 (5 VDC), um relé SPDT de sinal com bobina de cerca de 30 mA, como o
+* da família, sempre do lado do pior caso:
+*   bobina 167 Ω (30 mA a 5 V); kcoil escala a resistência (tolerância e o
+*   aquecimento do cobre, +0,39 %/°C), e o canto o define;
+*   atraca com 24 mA (80 % da tensão nominal na bobina de 167 Ω: o máximo da
+*   ficha) e solta abaixo de 3 mA (10 %: o mínimo da ficha). O relé atraca pela
+*   corrente (ampère-espiras), então esses limiares não mudam com a temperatura;
+*   os contatos mudam 5 ms depois de a corrente cruzar o limiar (o tempo máximo
+*   de operação e de liberação da ficha), numa linha de atraso ideal;
+*   contato fechado 0,1 Ω (resistência de contato máxima), aberto 1 GΩ.
+* Simplificações: sem a indutância da bobina (a ficha não informa) e sem o
+* intervalo em que os dois contatos ficam abertos (abre antes de fechar).
+*
+* Pinos na convenção do pcbflow: bobina c1 (+) e c2, contato comum, NA e NF.
+.subckt G5V1 c1 c2 com no nc
+Vs  c1 cm 0
+Rc  cm c2 {167*kcoil}
+Bs  s  0  V = 1000 * i(Vs)
+Tdl s  0  sd 0 Z0=50 TD=5m
+Rtl sd 0  50
+Sno com no sd 0 SWNO
+Snc com nc 0 sd SWNC
+.model SWNO SW(VT=13.5 VH=10.5 RON=0.1 ROFF=1G)
+.model SWNC SW(VT=-13.5 VH=10.5 RON=0.1 ROFF=1G)
+.ends G5V1
+.model DIODE D(IS=4.352E-9 N=1.906 BV=110 IBV=0.0001 RS=0.6458 CJO=7.048E-13 VJ=0.869 M=0.03 FC=0.5 TT=3.48E-9)
+.subckt NAND2 A B Y VDD GND
+XK1 A GND n GND VDD G5V1
+XK2 B GND Y n VDD G5V1
+D1 GND A DIODE
+D2 GND B DIODE
+.ends NAND2
+.subckt XOR2 A B Y VDD GND
+XK1 A GND n GND VDD G5V1
+XK2 B GND Y n A G5V1
+D1 GND A DIODE
+D2 GND B DIODE
+.ends XOR2
+.subckt INV A Y VDD GND
+XK1 A GND Y GND VDD G5V1
+D1 GND A DIODE
+.ends INV
+VDD vdd 0 5
+V_a_0_ n2 0 PWL(0 0 0.05 0 0.05001 5 0.1 5 0.10001 0 0.15 0 0.15001 5 0.2 5 0.20001 0 0.25 0 0.25001 5 0.3 5 0.30001 0 0.35 0 0.35001 5)
+V_a_1_ n3 0 PWL(0 0 0.1 0 0.10001 5 0.2 5 0.20001 0 0.3 0 0.30001 5)
+V_a_2_ n4 0 PWL(0 0 0.2 0 0.20001 5)
+V_a_3_ n5 0 PWL(0 0)
+V_b_0_ n6 0 PWL(0 0)
+V_b_1_ n7 0 PWL(0 0)
+V_b_2_ n8 0 PWL(0 0)
+V_b_3_ n9 0 PWL(0 0)
+V_ci n10 0 PWL(0 0)
+XU1 n11 n12 n13 vdd 0 NAND2
+XU2 n2 n6 n11 vdd 0 NAND2
+XU3 n2 n6 n14 vdd 0 XOR2
+XU4 n10 n14 n12 vdd 0 NAND2
+XU5 n10 n14 n15 vdd 0 XOR2
+XU6 n16 n17 n18 vdd 0 NAND2
+XU7 n3 n7 n16 vdd 0 NAND2
+XU8 n3 n7 n19 vdd 0 XOR2
+XU9 n13 n19 n17 vdd 0 NAND2
+XU10 n13 n19 n20 vdd 0 XOR2
+XU11 n21 n22 n23 vdd 0 NAND2
+XU12 n4 n8 n21 vdd 0 NAND2
+XU13 n4 n8 n24 vdd 0 XOR2
+XU14 n18 n24 n22 vdd 0 NAND2
+XU15 n18 n24 n25 vdd 0 XOR2
+XU16 n26 n27 n28 vdd 0 NAND2
+XU17 n5 n9 n26 vdd 0 NAND2
+XU18 n5 n9 n29 vdd 0 XOR2
+XU19 n23 n29 n27 vdd 0 NAND2
+XU20 n23 n29 n30 vdd 0 XOR2
+Xld_s_0_ n15 ldo_s_0__Y vdd 0 INV
+Xld_s_1_ n20 ldo_s_1__Y vdd 0 INV
+Xld_s_2_ n25 ldo_s_2__Y vdd 0 INV
+Xld_s_3_ n30 ldo_s_3__Y vdd 0 INV
+Xld_co n28 ldo_co_Y vdd 0 INV
+.tran 0.0001 0.4
+.control
+run
+linearize
+set wr_singlescale
+set wr_vecnames
+wrdata add4.dat v(n2) v(n3) v(n4) v(n5) v(n6) v(n7) v(n8) v(n9) v(n10) v(n15) v(n20) v(n25) v(n30) v(n28)
+meas tran s_s_0__0 FIND v(n15) AT=0.0475
+meas tran s_s_1__0 FIND v(n20) AT=0.0475
+meas tran s_s_2__0 FIND v(n25) AT=0.0475
+meas tran s_s_3__0 FIND v(n30) AT=0.0475
+meas tran s_co_0 FIND v(n28) AT=0.0475
+meas tran s_s_0__1 FIND v(n15) AT=0.0975
+meas tran t_s_0__1 WHEN v(n15)=2.5 CROSS=LAST FROM=0.05 TO=0.1
+meas tran s_s_1__1 FIND v(n20) AT=0.0975
+meas tran s_s_2__1 FIND v(n25) AT=0.0975
+meas tran s_s_3__1 FIND v(n30) AT=0.0975
+meas tran s_co_1 FIND v(n28) AT=0.0975
+meas tran s_s_0__2 FIND v(n15) AT=0.1475
+meas tran t_s_0__2 WHEN v(n15)=2.5 CROSS=LAST FROM=0.1 TO=0.15
+meas tran s_s_1__2 FIND v(n20) AT=0.1475
+meas tran t_s_1__2 WHEN v(n20)=2.5 CROSS=LAST FROM=0.1 TO=0.15
+meas tran s_s_2__2 FIND v(n25) AT=0.1475
+meas tran s_s_3__2 FIND v(n30) AT=0.1475
+meas tran s_co_2 FIND v(n28) AT=0.1475
+meas tran s_s_0__3 FIND v(n15) AT=0.1975
+meas tran t_s_0__3 WHEN v(n15)=2.5 CROSS=LAST FROM=0.15 TO=0.2
+meas tran s_s_1__3 FIND v(n20) AT=0.1975
+meas tran s_s_2__3 FIND v(n25) AT=0.1975
+meas tran s_s_3__3 FIND v(n30) AT=0.1975
+meas tran s_co_3 FIND v(n28) AT=0.1975
+meas tran s_s_0__4 FIND v(n15) AT=0.2475
+meas tran t_s_0__4 WHEN v(n15)=2.5 CROSS=LAST FROM=0.2 TO=0.25
+meas tran s_s_1__4 FIND v(n20) AT=0.2475
+meas tran t_s_1__4 WHEN v(n20)=2.5 CROSS=LAST FROM=0.2 TO=0.25
+meas tran s_s_2__4 FIND v(n25) AT=0.2475
+meas tran t_s_2__4 WHEN v(n25)=2.5 CROSS=LAST FROM=0.2 TO=0.25
+meas tran s_s_3__4 FIND v(n30) AT=0.2475
+meas tran s_co_4 FIND v(n28) AT=0.2475
+meas tran s_s_0__5 FIND v(n15) AT=0.2975
+meas tran t_s_0__5 WHEN v(n15)=2.5 CROSS=LAST FROM=0.25 TO=0.3
+meas tran s_s_1__5 FIND v(n20) AT=0.2975
+meas tran s_s_2__5 FIND v(n25) AT=0.2975
+meas tran s_s_3__5 FIND v(n30) AT=0.2975
+meas tran s_co_5 FIND v(n28) AT=0.2975
+meas tran s_s_0__6 FIND v(n15) AT=0.3475
+meas tran t_s_0__6 WHEN v(n15)=2.5 CROSS=LAST FROM=0.3 TO=0.35
+meas tran s_s_1__6 FIND v(n20) AT=0.3475
+meas tran t_s_1__6 WHEN v(n20)=2.5 CROSS=LAST FROM=0.3 TO=0.35
+meas tran s_s_2__6 FIND v(n25) AT=0.3475
+meas tran s_s_3__6 FIND v(n30) AT=0.3475
+meas tran s_co_6 FIND v(n28) AT=0.3475
+meas tran s_s_0__7 FIND v(n15) AT=0.3975
+meas tran t_s_0__7 WHEN v(n15)=2.5 CROSS=LAST FROM=0.35 TO=0.4
+meas tran s_s_1__7 FIND v(n20) AT=0.3975
+meas tran s_s_2__7 FIND v(n25) AT=0.3975
+meas tran s_s_3__7 FIND v(n30) AT=0.3975
+meas tran s_co_7 FIND v(n28) AT=0.3975
+quit
+.endc
+.end

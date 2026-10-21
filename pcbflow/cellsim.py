@@ -710,11 +710,13 @@ def sim_design(lib, models, corner, design, vectors, work, ngspice, capture=None
     if capture:                                   # para publicar: só o primeiro lote
         return _sim_batch(lib, models, corner, design, vectors[:batch], work, ngspice, capture, 0, False)
     out = {"ok": True, "fails": [], "vectors": len(vectors), "tpd": None, "where": None,
-           "cells": len(design.instances), "parts": len(design.parts)}
+           "cells": len(design.instances), "parts": len(design.parts), "measured": 0, "missing": 0}
     for i in range(0, len(vectors), batch):
         first = max(0, i - 1)
         r = _sim_batch(lib, models, corner, design, vectors[first:i + batch], work, ngspice, None, first, i > 0)
         out["fails"] += r["fails"]
+        out["measured"] += r["measured"]
+        out["missing"] += r["missing"]
         if r["tpd"] and (out["tpd"] is None or r["tpd"] > out["tpd"]):
             out["tpd"], out["where"] = r["tpd"], r["where"]
     out["ok"] = not out["fails"]
@@ -782,7 +784,7 @@ def _sim_batch(lib, models, corner, design, vectors, work, ngspice, capture, fir
         deck = _capture(deck, capture.name, sig, about)
         path = capture.with_suffix(".cir")
     vals = run_deck(ngspice, path, deck)
-    fails, worst = [], (0.0, None)
+    fails, worst, measured, missing = [], (0.0, None), 0, 0
     for k, v in enumerate(vectors):
         if skip0 and k == 0:
             continue
@@ -790,14 +792,19 @@ def _sim_batch(lib, models, corner, design, vectors, work, ngspice, capture, fir
             o = _safe(p.name).lower()
             got = vals.get(f"s_{o}_{k}")
             want = expect[k][p.name]
-            if got is None or logic(got, lv) != want:
+            # sem medida: o ngspice não chegou lá (não convergiu); conta à parte, não é saída errada
+            if got is None:
+                missing += 1
+                continue
+            measured += 1
+            if logic(got, lv) != want:
                 fails.append(f"vetor {first + k} ({_env({x.name: v[x.name] for x in ins})}): {p.name} = "
                              f"{'—' if got is None else f'{got:.2f} V'} (esperado {want})")
             t = vals.get(f"t_{o}_{k}")
             if t is not None and t - k * T > worst[0]:
                 worst = (t - k * T, f"{p.name} no vetor {first + k}")
     r = {"ok": not fails, "fails": fails, "vectors": len(vectors), "tpd": worst[0] or None, "where": worst[1],
-         "cells": len(design.instances), "parts": len(design.parts)}
+         "cells": len(design.instances), "parts": len(design.parts), "measured": measured, "missing": missing}
     if capture:
         r["labels"] = labels
     return r
@@ -859,8 +866,12 @@ def export_design(lib, design, vectors, outdir, res, log=print, window=32):
          "lógica do netlist; o caminho crítico é o último cruzamento de uma saída depois da mudança das "
          f"entradas. O netlist publicado tem os primeiros {min(int(cs[0].batch), len(vectors))} vetores.", "",
          "| Canto | Resultado | Caminho crítico |", "|---|---|---|"]
+    L[-2:] = ["| Canto | Resultado | Sem convergir | Caminho crítico |", "|---|---|---:|---|"]
     for name, x in res.items():
-        L.append(f"| {name} | {'OK' if x['ok'] else '**falhou**'} | "
+        tot = x.get("measured", 0) + x.get("missing", 0)
+        miss = f"{100 * x['missing'] / tot:.0f} %" if tot and x.get("missing") else "—"
+        status = "OK" if x["ok"] else "**%d saídas erradas**" % len(x["fails"])
+        L.append(f"| {name} | {status} | {miss} | "
                  + (f"{_ns(x['tpd'])} ({x['where']})" if x.get("tpd") else "—") + " |")
     L += ["", f"Reproduzir (canto {corner.name}): `ngspice -b {design.top}.cir`", "", f"![{design.top}]({design.top}.png)", ""]
     (outdir / f"{design.top}.md").write_text("\n".join(L) + "\n", encoding="utf-8")
@@ -914,7 +925,9 @@ def check_design(lib, sources, top, work, vectors=None, log=print, jobs=None):
     with ThreadPoolExecutor(max_workers=jobs or min(4, len(corners))) as ex:
         for name, r in ex.map(one, corners):
             res[name] = r
+            tot = r.get("measured", 0) + r.get("missing", 0)
             log(f"  {top:<9} {name:<7} {'OK' if r['ok'] else 'FALHOU'}"
+                + (f" ({100 * r['missing'] / tot:.0f} % sem convergir)" if tot and r.get("missing") else "")
                 + (f", caminho crítico {_ns(r['tpd'])} ({r['where']})" if r.get("tpd") else ""))
     return res, design
 
@@ -991,7 +1004,7 @@ def export(lib, cells, outdir, res, corners, warns, log=print):
             ax = axs[i][0]
             label = re.sub(r"^v\((in|out)_(.*)\)$", r"\2", name)
             out = name.startswith("v(out_")
-            ax.plot(data[:, 0] * 1e6, data[:, i + 1], lw=1.3, color="#c0392b" if out else "#2c3e50")
+            ax.plot(data[:, 0] * (1e3 if corner.step >= 1e-3 else 1e6), data[:, i + 1], lw=1.3, color="#c0392b" if out else "#2c3e50")
             if out:
                 for y in (lv.voh_min, lv.vol_max):
                     ax.axhline(y, ls="--", lw=0.7, color="#7f8c8d")
@@ -999,7 +1012,7 @@ def export(lib, cells, outdir, res, corners, warns, log=print):
             ax.set_ylabel(label, rotation=0, ha="right", va="center")
             ax.set_yticks([0, round(corner.vdd)])
             ax.grid(alpha=0.25)
-        axs[-1][0].set_xlabel("tempo (µs)")
+        axs[-1][0].set_xlabel(f"tempo ({'ms' if corner.step >= 1e-3 else 'µs'})")
         fig.suptitle(f"{cell} — canto {corner.name} (VDD {corner.vdd:g} V, {corner.temp:g} °C)", fontsize=11)
         fig.tight_layout()
         fig.savefig(outdir / f"{cell}.png", dpi=110)

@@ -1,0 +1,101 @@
+* DFF — flip-flop D, borda de subida: mestre (transparente com C=0) e escravo (com C=1), cada um com um relé de seleção e um relé autotravado
+* família discrete_relay, canto típico (VDD 5 V, 23 °C; modelos RELAY: spice/G5V-1.lib, DIODE: spice/1N4148.lib)
+* gerado por pcbflow-cellsim --export; rodar: ngspice -b DFF.cir (imprime as medidas e grava DFF.dat)
+*
+* entradas no nível de pior caso: alto = 5 V, baixo = 0 V; Q leva 8 carga(s) INV.A
+* saída: 1 se >= 4.5 V, 0 se <= 0.5 V
+*
+* vetores de teste (medida: valor esperado):
+*   borda de subida 1 em 100 ms: D=1 (muda 25 ms antes)  ->  q_0: Q=1
+*   borda de subida 2 em 200 ms: D=0 (muda 25 ms antes)  ->  q_1: Q=0
+*   borda de subida 3 em 300 ms: D=1 (muda 25 ms antes)  ->  q_2: Q=1
+*   borda de subida 4 em 400 ms: D=1 (muda 25 ms antes)  ->  q_3: Q=1
+*   borda de subida 5 em 500 ms: D=0 (muda 25 ms antes)  ->  q_4: Q=0
+*   borda de subida 6 em 600 ms: D=0 (muda 25 ms antes)  ->  q_5: Q=0
+*   borda de subida 7 em 700 ms: D=1 (muda 25 ms antes)  ->  q_6: Q=1
+*   borda de subida 8 em 800 ms: D=0 (muda 25 ms antes)  ->  q_7: Q=0
+*   borda de subida 9 em 900 ms: D=1 (muda 25 ms antes)  ->  q_8: Q=1
+*   borda de subida 10 em 1e+03 ms: D=1 (muda 25 ms antes)  ->  q_9: Q=1
+*   borda de subida 11 em 1.1e+03 ms: D=1 (muda 25 ms antes)  ->  q_10: Q=1
+*   borda de subida 12 em 1.2e+03 ms: D=0 (muda 25 ms antes)  ->  q_11: Q=0
+*
+* pcbflow-cellsim: canto típico
+.temp 23
+.param kup=1 kb=1
+.param kcoil=1.0
+* Relé SPDT de 5 V — modelo comportamental para a simulação analógica (pcbflow-cellsim)
+*
+* Um relé é mecânico e não tem modelo SPICE de fabricante. Este segue a ficha do
+* Omron G5V-1 (5 VDC), um relé SPDT de sinal com bobina de cerca de 30 mA, como o
+* da família, sempre do lado do pior caso:
+*   bobina 167 Ω (30 mA a 5 V); kcoil escala a resistência (tolerância e o
+*   aquecimento do cobre, +0,39 %/°C), e o canto o define;
+*   atraca com 24 mA (80 % da tensão nominal na bobina de 167 Ω: o máximo da
+*   ficha) e solta abaixo de 3 mA (10 %: o mínimo da ficha). O relé atraca pela
+*   corrente (ampère-espiras), então esses limiares não mudam com a temperatura;
+*   os contatos mudam 5 ms depois de a corrente cruzar o limiar (o tempo máximo
+*   de operação e de liberação da ficha), numa linha de atraso ideal;
+*   contato fechado 0,1 Ω (resistência de contato máxima), aberto 1 GΩ.
+* Simplificações: sem a indutância da bobina (a ficha não informa) e sem o
+* intervalo em que os dois contatos ficam abertos (abre antes de fechar).
+*
+* Pinos na convenção do pcbflow: bobina c1 (+) e c2, contato comum, NA e NF.
+.subckt G5V1 c1 c2 com no nc
+Vs  c1 cm 0
+Rc  cm c2 {167*kcoil}
+Bs  s  0  V = 1000 * i(Vs)
+Tdl s  0  sd 0 Z0=50 TD=5m
+Rtl sd 0  50
+Sno com no sd 0 SWNO
+Snc com nc 0 sd SWNC
+.model SWNO SW(VT=13.5 VH=10.5 RON=0.1 ROFF=1G)
+.model SWNC SW(VT=-13.5 VH=10.5 RON=0.1 ROFF=1G)
+.ends G5V1
+.model DIODE D(IS=4.352E-9 N=1.906 BV=110 IBV=0.0001 RS=0.6458 CJO=7.048E-13 VJ=0.869 M=0.03 FC=0.5 TT=3.48E-9)
+.subckt DFF D C Q VDD GND
+XK1 C GND X1 Q1 D G5V1
+XK2 X1 GND Q1 VDD GND G5V1
+XK3 C GND X2 Q1 Q G5V1
+XK4 X2 GND Q VDD GND G5V1
+D1 GND C DIODE
+D2 GND X1 DIODE
+D3 GND X2 DIODE
+.ends DFF
+.subckt INV A Y VDD GND
+XK1 A GND Y GND VDD G5V1
+D1 GND A DIODE
+.ends INV
+VDD vdd 0 5
+V_C in_C 0 PULSE(0 5 0.1 1e-05 1e-05 0.04999 0.1)
+V_D in_D 0 PWL(0 0 0.075 0 0.07501 5 0.175 5 0.17501 0 0.275 0 0.27501 5 0.475 5 0.47501 0 0.675 0 0.67501 5 0.775 5 0.77501 0 0.875 0 0.87501 5 1.175 5 1.17501 0)
+Xdut in_D in_C out_Q vdd 0 DFF
+Xld_out_Q_0 out_Q ld_out_Q_0_Y vdd 0 INV
+Xld_out_Q_1 out_Q ld_out_Q_1_Y vdd 0 INV
+Xld_out_Q_2 out_Q ld_out_Q_2_Y vdd 0 INV
+Xld_out_Q_3 out_Q ld_out_Q_3_Y vdd 0 INV
+Xld_out_Q_4 out_Q ld_out_Q_4_Y vdd 0 INV
+Xld_out_Q_5 out_Q ld_out_Q_5_Y vdd 0 INV
+Xld_out_Q_6 out_Q ld_out_Q_6_Y vdd 0 INV
+Xld_out_Q_7 out_Q ld_out_Q_7_Y vdd 0 INV
+.tran 0.00025 1.3
+.control
+run
+linearize
+set wr_singlescale
+set wr_vecnames
+wrdata DFF.dat v(in_C) v(in_D) v(out_Q)
+meas tran q_0 FIND v(out_Q) AT=0.145
+meas tran q_1 FIND v(out_Q) AT=0.245
+meas tran q_2 FIND v(out_Q) AT=0.345
+meas tran q_3 FIND v(out_Q) AT=0.445
+meas tran q_4 FIND v(out_Q) AT=0.545
+meas tran q_5 FIND v(out_Q) AT=0.645
+meas tran q_6 FIND v(out_Q) AT=0.745
+meas tran q_7 FIND v(out_Q) AT=0.845
+meas tran q_8 FIND v(out_Q) AT=0.945
+meas tran q_9 FIND v(out_Q) AT=1.045
+meas tran q_10 FIND v(out_Q) AT=1.145
+meas tran q_11 FIND v(out_Q) AT=1.245
+quit
+.endc
+.end

@@ -1,0 +1,90 @@
+* DLAT — latch D transparente com E = 1: K1 liga a bobina de K2 a D (E energizado) ou à própria saída (E solto), e K2 se autotrava
+* família discrete_relay, canto típico (VDD 5 V, 23 °C; modelos RELAY: spice/G5V-1.lib, DIODE: spice/1N4148.lib)
+* gerado por pcbflow-cellsim --export; rodar: ngspice -b DLAT.cir (imprime as medidas e grava DLAT.dat)
+*
+* entradas no nível de pior caso: alto = 5 V, baixo = 0 V; Q leva 8 carga(s) INV.A
+* saída: 1 se >= 4.5 V, 0 se <= 0.5 V
+*
+* vetores de teste (medida: valor esperado):
+*   E ligado até 200000 µs; D muda em 20, 40, 60, 100 e 120 µs
+*   45000 µs (transparente)  ->  s_0: Q=0
+*   95000 µs (transparente)  ->  s_1: Q=1
+*   145000 µs (transparente)  ->  s_2: Q=0
+*   195000 µs (transparente)  ->  s_3: Q=1
+*   295000 µs (travado)  ->  s_4: Q=1
+*   345000 µs (travado)  ->  s_5: Q=1
+*
+* pcbflow-cellsim: canto típico
+.temp 23
+.param kup=1 kb=1
+.param kcoil=1.0
+* Relé SPDT de 5 V — modelo comportamental para a simulação analógica (pcbflow-cellsim)
+*
+* Um relé é mecânico e não tem modelo SPICE de fabricante. Este segue a ficha do
+* Omron G5V-1 (5 VDC), um relé SPDT de sinal com bobina de cerca de 30 mA, como o
+* da família, sempre do lado do pior caso:
+*   bobina 167 Ω (30 mA a 5 V); kcoil escala a resistência (tolerância e o
+*   aquecimento do cobre, +0,39 %/°C), e o canto o define;
+*   atraca com 24 mA (80 % da tensão nominal na bobina de 167 Ω: o máximo da
+*   ficha) e solta abaixo de 3 mA (10 %: o mínimo da ficha). O relé atraca pela
+*   corrente (ampère-espiras), então esses limiares não mudam com a temperatura;
+*   os contatos mudam 5 ms depois de a corrente cruzar o limiar (o tempo máximo
+*   de operação e de liberação da ficha), numa linha de atraso ideal;
+*   contato fechado 0,1 Ω (resistência de contato máxima), aberto 1 GΩ.
+* Simplificações: sem a indutância da bobina (a ficha não informa) e sem o
+* intervalo em que os dois contatos ficam abertos (abre antes de fechar).
+*
+* Pinos na convenção do pcbflow: bobina c1 (+) e c2, contato comum, NA e NF.
+.subckt G5V1 c1 c2 com no nc
+Vs  c1 cm 0
+Rc  cm c2 {167*kcoil}
+Bs  s  0  V = 1000 * i(Vs)
+Tdl s  0  sd 0 Z0=50 TD=5m
+Rtl sd 0  50
+Sno com no sd 0 SWNO
+Snc com nc 0 sd SWNC
+.model SWNO SW(VT=13.5 VH=10.5 RON=0.1 ROFF=1G)
+.model SWNC SW(VT=-13.5 VH=10.5 RON=0.1 ROFF=1G)
+.ends G5V1
+.model DIODE D(IS=4.352E-9 N=1.906 BV=110 IBV=0.0001 RS=0.6458 CJO=7.048E-13 VJ=0.869 M=0.03 FC=0.5 TT=3.48E-9)
+.subckt DLAT D E Q VDD GND
+XK1 E GND x D Q G5V1
+XK2 x GND Q VDD GND G5V1
+D1 GND E DIODE
+D2 GND x DIODE
+.ends DLAT
+.subckt INV A Y VDD GND
+XK1 A GND Y GND VDD G5V1
+D1 GND A DIODE
+.ends INV
+VDD vdd 0 5
+V_E in_E 0 PWL(0 5 0.2 5 0.20001 0)
+V_D in_D 0 PWL(0 0 0.05 0 0.05001 5 0.1 5 0.10001 0 0.15 0 0.15001 5 0.25 5 0.25001 0 0.3 0 0.30001 5)
+Xdut in_D in_E out_Q vdd 0 DLAT
+Xld_out_Q_0 out_Q ld_out_Q_0_Y vdd 0 INV
+Xld_out_Q_1 out_Q ld_out_Q_1_Y vdd 0 INV
+Xld_out_Q_2 out_Q ld_out_Q_2_Y vdd 0 INV
+Xld_out_Q_3 out_Q ld_out_Q_3_Y vdd 0 INV
+Xld_out_Q_4 out_Q ld_out_Q_4_Y vdd 0 INV
+Xld_out_Q_5 out_Q ld_out_Q_5_Y vdd 0 INV
+Xld_out_Q_6 out_Q ld_out_Q_6_Y vdd 0 INV
+Xld_out_Q_7 out_Q ld_out_Q_7_Y vdd 0 INV
+.tran 0.0001 0.35
+.control
+run
+linearize
+set wr_singlescale
+set wr_vecnames
+wrdata DLAT.dat v(in_E) v(in_D) v(out_Q)
+meas tran s_0 FIND v(out_Q) AT=0.045
+meas tran s_1 FIND v(out_Q) AT=0.095
+meas tran s_2 FIND v(out_Q) AT=0.145
+meas tran s_3 FIND v(out_Q) AT=0.195
+meas tran s_4 FIND v(out_Q) AT=0.295
+meas tran s_5 FIND v(out_Q) AT=0.345
+meas tran dq_0 TRIG AT=0.05 TARG v(out_Q) VAL=2.5 TD=0.05 CROSS=1
+meas tran dq_1 TRIG AT=0.1 TARG v(out_Q) VAL=2.5 TD=0.1 CROSS=1
+meas tran dq_2 TRIG AT=0.15 TARG v(out_Q) VAL=2.5 TD=0.15 CROSS=1
+quit
+.endc
+.end
