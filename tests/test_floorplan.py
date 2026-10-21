@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from pcbflow import floorplan
-from pcbflow.floorplan import FloorplanError
+from fr4lane import floorplan
+from fr4lane.floorplan import FloorplanError
 
 
 def test_floorplan_completo():

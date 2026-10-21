@@ -1,6 +1,6 @@
 * DFF — flip-flop D, borda de subida (6 NANDs)
 * família discrete_cmos, canto típico (VDD 5 V, 27 °C; modelos NMOS: {'file': 'spice/2N7002.lib', 'instance': 'L=100u W=100u'}, PMOS: {'file': 'spice/BSS84.lib', 'instance': 'L=100u W=100u'})
-* gerado por pcbflow-cellsim --export; rodar: ngspice -b DFF.cir (imprime as medidas e grava DFF.dat)
+* gerado por fr4lane-cellsim --export; rodar: ngspice -b DFF.cir (imprime as medidas e grava DFF.dat)
 *
 * entradas no nível de pior caso: alto = 4.5 V, baixo = 0.5 V; Q leva 1 carga(s) INV.A
 * saída: 1 se >= 3.5 V, 0 se <= 1.5 V
@@ -19,7 +19,7 @@
 *   borda de subida 11 em 22 µs: D=1 (muda 0.5 µs antes)  ->  q_10: Q=1
 *   borda de subida 12 em 24 µs: D=0 (muda 0.5 µs antes)  ->  q_11: Q=0
 *
-* pcbflow-cellsim: canto típico
+* fr4lane-cellsim: canto típico
 .temp 27
 .param kup=1 kb=1
 .model NMOS NMOS(LEVEL=1 VTO=2.50 KP=32.0m GAMMA=3.10 PHI=.75 LAMBDA=39.9u RD=1.05 RS=1.05 IS=57.5f PB=0.800 MJ=0.460 CBD=98.8p CBS=119p CGSO=60.0n CGDO=50.0n CGBO=390n)

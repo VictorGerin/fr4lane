@@ -1,6 +1,6 @@
-* add4 — circuito sintetizado pelo pcbflow (20 células: NAND2, XOR2; 80 componentes)
+* add4 — circuito sintetizado pelo fr4lane (20 células: NAND2, XOR2; 80 componentes)
 * família discrete_relay, canto típico (VDD 5 V, 23 °C)
-* gerado por pcbflow-cellsim --design add4 --export; rodar: ngspice -b add4.cir
+* gerado por fr4lane-cellsim --design add4 --export; rodar: ngspice -b add4.cir
 *
 * entradas no nível de pior caso: alto = 5 V, baixo = 0 V; cada saída leva uma carga de referência
 * saída: 1 se >= 4.5 V, 0 se <= 0.5 V
@@ -15,11 +15,11 @@
 *   vetor 6 (300000-350000 µs): a[0]=1 a[1]=0 a[2]=0 a[3]=0 b[0]=1 b[1]=1 b[2]=1 b[3]=0 ci=1  ->  s_s_0__6: s[0]=1, s_s_1__6: s[1]=0, s_s_2__6: s[2]=0, s_s_3__6: s[3]=1, s_co_6: co=0
 *   vetor 7 (350000-400000 µs): a[0]=0 a[1]=1 a[2]=1 a[3]=1 b[0]=0 b[1]=1 b[2]=0 b[3]=1 ci=0  ->  s_s_0__7: s[0]=0, s_s_1__7: s[1]=0, s_s_2__7: s[2]=0, s_s_3__7: s[3]=1, s_co_7: co=1
 *
-* pcbflow-cellsim: canto típico
+* fr4lane-cellsim: canto típico
 .temp 23
 .param kup=1 kb=1
 .param kcoil=1.0
-* Relé SPDT de 5 V — modelo comportamental para a simulação analógica (pcbflow-cellsim)
+* Relé SPDT de 5 V — modelo comportamental para a simulação analógica (fr4lane-cellsim)
 *
 * Um relé é mecânico e não tem modelo SPICE de fabricante. Este segue a ficha do
 * Omron G5V-1 (5 VDC), um relé SPDT de sinal com bobina de cerca de 30 mA, como o
@@ -36,7 +36,7 @@
 *   0,9 ms sorteado por instância via unif, controlado por .param bounce=1);
 *   contato fechado 0,1 Ω (resistência de contato máxima), aberto 1 GΩ.
 *
-* Pinos na convenção do pcbflow: bobina c1 (+) e c2, contato comum, NA e NF.
+* Pinos na convenção do fr4lane: bobina c1 (+) e c2, contato comum, NA e NF.
 .param bounce=1
 .subckt G5V1 c1 c2 com no nc tb1={unif(0.18m, 0.2)} tb2={unif(0.38m, 0.2)} tb3={unif(0.62m, 0.2)}
 Vs  c1 cm 0

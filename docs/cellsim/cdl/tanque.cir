@@ -1,6 +1,6 @@
-* tanque — circuito sintetizado pelo pcbflow (15 células: AND2, DFFR, INV, NOR2, NOR3, OR2, XNOR2; 201 componentes)
+* tanque — circuito sintetizado pelo fr4lane (15 células: AND2, DFFR, INV, NOR2, NOR3, OR2, XNOR2; 201 componentes)
 * família discrete_cdl, canto típico (VDD 5 V, 27 °C)
-* gerado por pcbflow-cellsim --design tanque --export; rodar: ngspice -b tanque.cir
+* gerado por fr4lane-cellsim --design tanque --export; rodar: ngspice -b tanque.cir
 *
 * entradas no nível de pior caso: alto = 4 V, baixo = 0.25 V; cada saída leva uma carga de referência
 * saída: 1 se >= 3.25 V, 0 se <= 0.4 V
@@ -24,11 +24,11 @@
 *   vetor 15 (300-320 µs): clk=0 rst_n=1 nivel_baixo=1 nivel_alto=1  ->  s_estado_0__15: estado[0]=0, s_estado_1__15: estado[1]=0, s_bomba_15: bomba=0
 *   vetor 16 (320-340 µs): clk=1 rst_n=1 nivel_baixo=1 nivel_alto=1  ->  s_estado_0__16: estado[0]=0, s_estado_1__16: estado[1]=0, s_bomba_16: bomba=0
 *
-* pcbflow-cellsim: canto típico
+* fr4lane-cellsim: canto típico
 .temp 27
 .param kup=1 kb=1
 .param kcore=1.0 kic=1.0
-* Núcleo toroidal de ferrite CDL (Core-Diode Logic) — modelo para simulação analógica (pcbflow-cellsim)
+* Núcleo toroidal de ferrite CDL (Core-Diode Logic) — modelo para simulação analógica (fr4lane-cellsim)
 *
 * Na lógica CDL pura (sem transistores), o núcleo toroidal de ferrite atua como
 * estágio magnético de limiar e amplificação: os sinais de entrada passam por
@@ -55,7 +55,7 @@
 *     representando a tensão secundária retificada) e retorno a 0 V pelo resistor de carga
 *     externo RL (2,2 kΩ ao GND) quando o núcleo é inibido/resetado.
 *
-* Pinos na convenção do pcbflow: w1, w2, wb, s, gnd.
+* Pinos na convenção do fr4lane: w1, w2, wb, s, gnd.
 .param kcore=1.0 kic=1.0
 .subckt MCORE w1 w2 wb s gnd
 Vw1  w1  w1m 0

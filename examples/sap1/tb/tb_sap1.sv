@@ -2,7 +2,7 @@
 // Testbench do SAP-1: grava cada programa pela porta de programação, roda até
 // o HLT e confere a sequência de valores na saída.
 //
-// Só usa as portas do sap1, porque o pcbflow roda o mesmo testbench contra o
+// Só usa as portas do sap1, porque o fr4lane roda o mesmo testbench contra o
 // netlist de portas e o de componentes.
 import sap1_pkg::*;
 

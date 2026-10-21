@@ -2,7 +2,7 @@
 (PULLUP, driver_type pull_up) da família RTL, o check do Yosys com vários
 drivers, a troca de $_TBUF_ pelo driver da família, a terminação por linha e o
 fluxo completo num barramento. Pilha de placas: porta inout, terminação só em
-algumas linhas, buffers nas portas e o pcbflow-system (drive entre placas e
+algumas linhas, buffers nas portas e o fr4lane-system (drive entre placas e
 simulação do sistema)."""
 
 import os
@@ -13,10 +13,10 @@ import sys
 
 import pytest
 
-from conftest import LIB, PCBFLOW, data, lib_path, run_flow
-from pcbflow import buffering, drive, floorplan, synth
-from pcbflow.library import Library, LibraryError
-from pcbflow.netlist import Design, Port, add_termination, elaborate, write_switch_level_verilog
+from conftest import LIB, FR4LANE, data, lib_path, run_flow
+from fr4lane import buffering, drive, floorplan, synth
+from fr4lane.library import Library, LibraryError
+from fr4lane.netlist import Design, Port, add_termination, elaborate, write_switch_level_verilog
 
 BUS = ["--top", "bus4", "--src", data("bus4.v"), "--tb", data("tb_bus4.v")]
 
@@ -29,7 +29,7 @@ def rtl():
 def test_familias_com_e_sem_barramento(rtl):
     assert rtl.tristate == {"cell": "TBUF", "data": "A", "enable": "E", "out": "Y", "drives": 0}
     assert rtl.terminator == {"cell": "PULLUP", "pin": "Y", "level": 1}
-    # o Yosys não escolhe nenhuma das duas: o pcbflow as põe depois da síntese
+    # o Yosys não escolhe nenhuma das duas: o fr4lane as põe depois da síntese
     assert not rtl.usable("TBUF") and not rtl.usable("PULLUP")
     for family in ("cmos", "relay"):
         lib = Library(lib_path(family))
@@ -180,14 +180,14 @@ def test_buffer_nas_portas(rtl):
 def _stack_project(tmp_path):
     for f in ("stack_boards.v", "stack.v", "tb_stack.v"):
         (tmp_path / f).write_text(data(f).read_text(encoding="utf-8"), encoding="utf-8")
-    (tmp_path / "pcbflow.json").write_text(
+    (tmp_path / "fr4lane.json").write_text(
         '{"src": ["stack_boards.v", "stack.v"], "tb": "tb_{top}.v", "out": "build"}', encoding="utf-8")
     return tmp_path
 
 
 def _run_system(cwd, *args):
-    env = dict(os.environ, PYTHONPATH=str(PCBFLOW), PYTHONIOENCODING="utf-8")
-    r = subprocess.run([sys.executable, "-m", "pcbflow.system", *args], cwd=cwd, env=env,
+    env = dict(os.environ, PYTHONPATH=str(FR4LANE), PYTHONIOENCODING="utf-8")
+    r = subprocess.run([sys.executable, "-m", "fr4lane.system", *args], cwd=cwd, env=env,
                        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600)
     return r.returncode, r.stdout + r.stderr
 

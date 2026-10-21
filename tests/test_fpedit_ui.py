@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from conftest import chrome_binary, data, lib_path
-from pcbflow import fpedit, project
+from fr4lane import fpedit, project
 
 pytestmark = [pytest.mark.ui, pytest.mark.slow]
 

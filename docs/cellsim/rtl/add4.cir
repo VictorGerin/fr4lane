@@ -1,6 +1,6 @@
-* add4 — circuito sintetizado pelo pcbflow (36 células: AND2, NAND2, NOR2; 204 componentes)
+* add4 — circuito sintetizado pelo fr4lane (36 células: AND2, NAND2, NOR2; 204 componentes)
 * família discrete_rtl, canto típico (VDD 5 V, 27 °C)
-* gerado por pcbflow-cellsim --design add4 --export; rodar: ngspice -b add4.cir
+* gerado por fr4lane-cellsim --design add4 --export; rodar: ngspice -b add4.cir
 *
 * entradas no nível de pior caso: alto = 1.5 V, baixo = 0.4 V; cada saída leva uma carga de referência
 * saída: 1 se >= 1.5 V, 0 se <= 0.5 V
@@ -71,7 +71,7 @@
 *   vetor 62 (1240-1260 µs): a[0]=1 a[1]=0 a[2]=0 a[3]=0 b[0]=0 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__62: s[0]=1, s_s_1__62: s[1]=1, s_s_2__62: s[2]=0, s_s_3__62: s[3]=0, s_co_62: co=0
 *   vetor 63 (1260-1280 µs): a[0]=0 a[1]=1 a[2]=0 a[3]=0 b[0]=0 b[1]=1 b[2]=1 b[3]=0 ci=0  ->  s_s_0__63: s[0]=0, s_s_1__63: s[1]=0, s_s_2__63: s[2]=0, s_s_3__63: s[3]=1, s_co_63: co=0
 *
-* pcbflow-cellsim: canto típico
+* fr4lane-cellsim: canto típico
 .temp 27
 .param kup=1 kb=1
 .model NPN NPN(Is=7.049f Xti=3 Eg=1.11 Vaf=54.76 Bf=250 Ise=78.17f Ne=1.479 Ikf=24.96m Nkf=.5381 Xtb=1.5 Br=1.2 Isc=27.51f Nc=1.775 Ikr=3.321 Rc=.9706 Cjc=4.25p Mjc=.3147 Vjc=.5697 Fc=.5 Cje=11.5p Mje=.6715 Vje=.5 Tr=10n Tf=410.7p Itf=1.12 Xtf=26.19 Vtf=10)

@@ -1,4 +1,4 @@
-"""pcbflow.json: o projeto que usa o pcbflow (fontes, testbench, floorplan, saída)."""
+"""fr4lane.json: o projeto que usa o fr4lane (fontes, testbench, floorplan, saída)."""
 
 import json
 import re
@@ -7,8 +7,8 @@ import shutil
 import pytest
 
 from conftest import data, run_flow
-from pcbflow import project
-from pcbflow.project import ProjectError
+from fr4lane import project
+from fr4lane.project import ProjectError
 
 
 @pytest.fixture
@@ -19,24 +19,24 @@ def root(tmp_path):
         (tmp_path / f).write_text("", encoding="utf-8")
     cfg = {"src": ["rtl/**/*.v", "rtl/**/*.sv"], "exclude": ["rtl/sva/*"], "tb": "sim/tb_{top}.v",
            "floorplan": ["rtl/**/{top}.floorplan.json"], "out": "saida"}
-    (tmp_path / "pcbflow.json").write_text(json.dumps(cfg), encoding="utf-8")
+    (tmp_path / "fr4lane.json").write_text(json.dumps(cfg), encoding="utf-8")
     return tmp_path
 
 
 def test_le_o_projeto(root):
-    p = project.load(root / "pcbflow.json")
+    p = project.load(root / "fr4lane.json")
     assert [p.rel(f) for f in p.sources()] == ["rtl/sub/m.v", "rtl/top.v", "rtl/x.sv"]   # sem rtl/sva
     assert p.rel(p.testbench("top")) == "sim/tb_top.v" and p.testbench("outro") is None
     assert p.rel(p.find_floorplan("top")) == "rtl/sub/top.floorplan.json" and p.find_floorplan("m") is None
     assert p.out_dir("top_cmos") == root / "saida" / "top_cmos"
 
 
-def test_procura_o_pcbflow_json_nas_pastas_de_cima(root):
+def test_procura_o_fr4lane_json_nas_pastas_de_cima(root):
     assert project.find(root / "rtl" / "sub").root == root
-    assert project.find(root / "rtl" / "top.v").config == root / "pcbflow.json"
+    assert project.find(root / "rtl" / "top.v").config == root / "fr4lane.json"
 
 
-def test_sem_pcbflow_json(tmp_path):
+def test_sem_fr4lane_json(tmp_path):
     p = project.find(tmp_path)
     assert p.root == tmp_path and p.config is None and p.sources() == [] and p.testbench("x") is None
     assert p.out_dir("t") == tmp_path / "build" / "pcb" / "t"
@@ -50,23 +50,23 @@ def test_sem_pcbflow_json(tmp_path):
     ([], "esperado um objeto"),
 ])
 def test_recusa(tmp_path, cfg, msg):
-    f = tmp_path / "pcbflow.json"
+    f = tmp_path / "fr4lane.json"
     f.write_text(json.dumps(cfg), encoding="utf-8")
     with pytest.raises(ProjectError, match=re.escape(msg)):
         project.load(f)
 
 
 @pytest.mark.slow
-def test_fluxo_usa_o_pcbflow_json(tmp_path):
-    """pcbflow --top hier8 dentro do projeto: fontes, testbench e floorplan vêm do
-    pcbflow.json e a rodada vai para a pasta 'out' dele."""
+def test_fluxo_usa_o_fr4lane_json(tmp_path):
+    """fr4lane --top hier8 dentro do projeto: fontes, testbench e floorplan vêm do
+    fr4lane.json e a rodada vai para a pasta 'out' dele."""
     (tmp_path / "rtl").mkdir()
     (tmp_path / "sim").mkdir()
     shutil.copy(data("hier8.v"), tmp_path / "rtl")
     shutil.copy(data("tb_hier8.v"), tmp_path / "sim")
     (tmp_path / "rtl" / "hier8.floorplan.json").write_text(
         json.dumps({"modules": {"lo": {"type": "region", "rect": [20, 10, 400, 200]}}}), encoding="utf-8")
-    (tmp_path / "pcbflow.json").write_text(json.dumps({
+    (tmp_path / "fr4lane.json").write_text(json.dumps({
         "src": ["rtl/*.v"], "tb": "sim/tb_{top}.v", "floorplan": ["rtl/{top}.floorplan.json"],
         "out": "placas"}), encoding="utf-8")
     r = run_flow(None, "--top", "hier8", "--lib", "rtl", "--synth-only", cwd=tmp_path / "rtl")   # de uma subpasta

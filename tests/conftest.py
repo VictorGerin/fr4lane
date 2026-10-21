@@ -1,4 +1,4 @@
-"""Configuração comum dos testes do pcbflow.
+"""Configuração comum dos testes do fr4lane.
 
 Camadas (marcadores do pytest.ini):
   sem marcador  unidade: só Python, rodam em segundos
@@ -18,14 +18,14 @@ from pathlib import Path
 
 import pytest
 
-PCBFLOW = Path(__file__).resolve().parents[1]          # raiz do repositório (pacote, examples, tests)
+FR4LANE = Path(__file__).resolve().parents[1]          # raiz do repositório (pacote, examples, tests)
 DATA = Path(__file__).resolve().parent / "data"
-LIB = PCBFLOW / "pcbflow" / "lib"                       # famílias incluídas no pacote
+LIB = FR4LANE / "fr4lane" / "lib"                       # famílias incluídas no pacote
 
-if str(PCBFLOW) not in sys.path:
-    sys.path.insert(0, str(PCBFLOW))
+if str(FR4LANE) not in sys.path:
+    sys.path.insert(0, str(FR4LANE))
 
-from pcbflow.library import families  # noqa: E402
+from fr4lane.library import families  # noqa: E402
 
 FAMILIES = families()
 
@@ -39,7 +39,7 @@ HAVE_TOOLS = bool(_which("yosys", "C:/msys64/ucrt64/bin/yosys.exe")
 
 
 def _have_kicad():
-    from pcbflow import drc
+    from fr4lane import drc
     return drc.find_cli() is not None
 
 
@@ -79,13 +79,13 @@ def pytest_collection_modifyitems(config, items):
             if not ui:
                 item.add_marker(pytest.mark.skip(reason="Selenium ou Chrome não encontrados"))
         if "spice" in item.keywords:
-            from pcbflow.cellsim import find_ngspice
+            from fr4lane.cellsim import find_ngspice
             if not find_ngspice():
                 item.add_marker(pytest.mark.skip(reason="ngspice não encontrado"))
 
 
 class FlowRun:
-    """Resultado de uma execução de python -m pcbflow."""
+    """Resultado de uma execução de python -m fr4lane."""
 
     def __init__(self, rc, log, out):
         self.rc, self.log, self.out = rc, log, Path(out) if out else None
@@ -103,10 +103,10 @@ class FlowRun:
 
 def run_flow(out, *args, timeout=900, cwd=None):
     """Roda o fluxo como o usuário roda (outro processo). out=None: a pasta de
-    saída padrão (a do pcbflow.json do projeto em cwd)."""
-    env = dict(os.environ, PYTHONPATH=str(PCBFLOW), PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
-    cmd = [sys.executable, "-m", "pcbflow", *map(str, args)] + (["--out", str(out)] if out else [])
-    r = subprocess.run(cmd, cwd=cwd or PCBFLOW, env=env, capture_output=True, text=True, encoding="utf-8",
+    saída padrão (a do fr4lane.json do projeto em cwd)."""
+    env = dict(os.environ, PYTHONPATH=str(FR4LANE), PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
+    cmd = [sys.executable, "-m", "fr4lane", *map(str, args)] + (["--out", str(out)] if out else [])
+    r = subprocess.run(cmd, cwd=cwd or FR4LANE, env=env, capture_output=True, text=True, encoding="utf-8",
                        errors="replace", timeout=timeout)
     return FlowRun(r.returncode, r.stdout + r.stderr, out)
 

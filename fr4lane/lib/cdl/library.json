@@ -1,0 +1,91 @@
+{
+  "name": "discrete_cdl",
+  "family": "cdl",
+  "description": "Lógica CDL (Core-Diode Logic) sem transistores, usando exclusivamente núcleos toroidais de ferrite, diodos 1N4148 em DO-35 e resistores de 1/4 W. As portas OR, AND (coincidência de corrente) e INV/NOR (inibição de fluxo magnético) operam pela soma de forças magnetomotrizes nos enrolamentos do toroide com isolamento unidirecional por diodos.",
+  "supply": {
+    "vdd": "VDD",
+    "gnd": "GND",
+    "voltage": "5V"
+  },
+  "footprints": "footprints.json",
+  "liberty_header": [
+    "delay_model : table_lookup;",
+    "time_unit : \"1ns\";",
+    "voltage_unit : \"1V\";",
+    "current_unit : \"1mA\";",
+    "capacitive_load_unit (1, pf);",
+    "pulling_resistance_unit : \"1kohm\";"
+  ],
+  "decoupling": {
+    "row": "CDEC",
+    "bulk": "CBULK"
+  },
+  "placement": {
+    "part_gap": 1.0,
+    "row_gap": 6.0
+  },
+  "spice": {
+    "_comment": "Simulação analógica das células CDL (fr4lane-cellsim): amplificador magnético de núcleo toroidal de ferrite (spice/MAGAMP.lib) e diodos 1N4148 (spice/1N4148.lib), zero transistores. Nos cantos, kcore escala a resistência dos enrolamentos e kic a corrente coerciva do ferrite.",
+    "models": {
+      "CORE": "spice/MAGAMP.lib",
+      "DIODE": "spice/1N4148.lib"
+    },
+    "corners": {
+      "típico": {
+        "vdd": 5.0,
+        "temp": 27,
+        "pull_up": 1.0,
+        "base": 1.0,
+        "params": {
+          "CORE": {
+            "kcore": 1.0,
+            "kic": 1.0
+          }
+        }
+      },
+      "lento": {
+        "vdd": 4.75,
+        "temp": 0,
+        "pull_up": 1.05,
+        "base": 1.05,
+        "params": {
+          "CORE": {
+            "kcore": 1.05,
+            "kic": 1.1
+          }
+        }
+      },
+      "rápido": {
+        "vdd": 5.25,
+        "temp": 70,
+        "pull_up": 0.95,
+        "base": 0.95,
+        "params": {
+          "CORE": {
+            "kcore": 0.95,
+            "kic": 0.85
+          }
+        }
+      },
+      "quente": {
+        "vdd": 4.75,
+        "temp": 70,
+        "pull_up": 1.05,
+        "base": 1.05,
+        "params": {
+          "CORE": {
+            "kcore": 1.1,
+            "kic": 0.9
+          }
+        }
+      }
+    },
+    "levels": {
+      "vih": 0.8,
+      "vil": 0.05,
+      "voh_min": 0.65,
+      "vol_max": 0.08,
+      "vth": 0.35
+    }
+  }
+}

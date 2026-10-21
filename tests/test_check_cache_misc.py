@@ -3,9 +3,9 @@ rodadas e utilitários pequenos."""
 
 import pytest
 
-from pcbflow import cache, check, drive, netlist, progress
-from pcbflow.floorplan import Floorplan, Keepout
-from pcbflow.layout import Board, Footprint, Pad, Track, Via
+from fr4lane import cache, check, drive, netlist, progress
+from fr4lane.floorplan import Floorplan, Keepout
+from fr4lane.layout import Board, Footprint, Pad, Track, Via
 
 
 def _board(tracks=(), vias=(), layers=2):

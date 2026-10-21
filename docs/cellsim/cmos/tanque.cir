@@ -1,6 +1,6 @@
-* tanque — circuito sintetizado pelo pcbflow (21 células: DFFR, INV, NAND2, NAND3, NOR2, NOR3, OAI21; 152 componentes)
+* tanque — circuito sintetizado pelo fr4lane (21 células: DFFR, INV, NAND2, NAND3, NOR2, NOR3, OAI21; 152 componentes)
 * família discrete_cmos, canto típico (VDD 5 V, 27 °C)
-* gerado por pcbflow-cellsim --design tanque --export; rodar: ngspice -b tanque.cir
+* gerado por fr4lane-cellsim --design tanque --export; rodar: ngspice -b tanque.cir
 *
 * entradas no nível de pior caso: alto = 4.5 V, baixo = 0.5 V; cada saída leva uma carga de referência
 * saída: 1 se >= 3.5 V, 0 se <= 1.5 V
@@ -24,7 +24,7 @@
 *   vetor 15 (30-32 µs): clk=0 rst_n=1 nivel_baixo=1 nivel_alto=1  ->  s_estado_0__15: estado[0]=0, s_estado_1__15: estado[1]=0, s_bomba_15: bomba=0
 *   vetor 16 (32-34 µs): clk=1 rst_n=1 nivel_baixo=1 nivel_alto=1  ->  s_estado_0__16: estado[0]=0, s_estado_1__16: estado[1]=0, s_bomba_16: bomba=0
 *
-* pcbflow-cellsim: canto típico
+* fr4lane-cellsim: canto típico
 .temp 27
 .param kup=1 kb=1
 .model NMOS NMOS(LEVEL=1 VTO=2.50 KP=32.0m GAMMA=3.10 PHI=.75 LAMBDA=39.9u RD=1.05 RS=1.05 IS=57.5f PB=0.800 MJ=0.460 CBD=98.8p CBS=119p CGSO=60.0n CGDO=50.0n CGBO=390n)

@@ -10,8 +10,8 @@ from http.server import ThreadingHTTPServer
 import pytest
 
 from conftest import data, lib_path
-from pcbflow import fpedit, project
-from pcbflow.floorplan import FloorplanError
+from fr4lane import fpedit, project
+from fr4lane.floorplan import FloorplanError
 
 
 # ------------------------------------------------------------ uma rodada
@@ -112,12 +112,12 @@ def test_check_rodada_antiga(hier_run):
 # ------------------------------------------------------------ utilitários
 @pytest.fixture
 def proj(tmp_path, monkeypatch):
-    """Projeto temporário com pcbflow.json (fontes em rtl/, testbench em sim/)."""
+    """Projeto temporário com fr4lane.json (fontes em rtl/, testbench em sim/)."""
     (tmp_path / "rtl" / "sub").mkdir(parents=True)
     (tmp_path / "rtl" / "a.v").write_text("module a; endmodule\n", encoding="utf-8")
     (tmp_path / "rtl" / "sub" / "b.v").write_text("module b; endmodule\n", encoding="utf-8")
-    (tmp_path / "pcbflow.json").write_text(json.dumps({"src": ["rtl/**/*.v"]}), encoding="utf-8")
-    p = project.load(tmp_path / "pcbflow.json")
+    (tmp_path / "fr4lane.json").write_text(json.dumps({"src": ["rtl/**/*.v"]}), encoding="utf-8")
+    p = project.load(tmp_path / "fr4lane.json")
     monkeypatch.setattr(fpedit, "PROJ", p)
     return p
 
@@ -142,7 +142,7 @@ def test_drop_legacy():
 
 
 def test_fontes_passadas_ao_fluxo(proj, tmp_path):
-    # top entre os fontes do pcbflow.json: o pcbflow usa os do projeto
+    # top entre os fontes do fr4lane.json: o fr4lane usa os do projeto
     assert fpedit.flow_sources(proj.root / "rtl" / "a.v") == []
     # top fora deles: os do projeto mais ele
     extra = tmp_path / "outro" / "c.sv"
@@ -151,7 +151,7 @@ def test_fontes_passadas_ao_fluxo(proj, tmp_path):
     assert fpedit.flow_sources(extra) == ["rtl/a.v", "rtl/sub/b.v", "outro/c.sv"]
 
 
-def test_fontes_sem_pcbflow_json(tmp_path, monkeypatch):
+def test_fontes_sem_fr4lane_json(tmp_path, monkeypatch):
     monkeypatch.setattr(fpedit, "PROJ", project.Project(tmp_path))
     (tmp_path / "x" / "y").mkdir(parents=True)
     for f in ("x/top.v", "x/y/m.sv", "z.v"):
@@ -160,14 +160,14 @@ def test_fontes_sem_pcbflow_json(tmp_path, monkeypatch):
 
 
 def test_comando_do_menu(proj, monkeypatch):
-    # o botão monta um comando python -m pcbflow com valores conhecidos (sem rodar)
+    # o botão monta um comando python -m fr4lane com valores conhecidos (sem rodar)
     got = {}
     monkeypatch.setattr(fpedit.Job, "start", lambda self, cmd, info: got.update(cmd=cmd, info=info))
     ed = fpedit.Editor()
     ed.set(proj.root / "rtl" / "a.floorplan.json", None, proj.root / "rtl" / "a.v")
     ed.start("place", "rtl", 2, sim=False)
     cmd = got["cmd"]
-    assert cmd[1:3] == ["-m", "pcbflow"] and cmd[cmd.index("--top") + 1] == "a"
+    assert cmd[1:3] == ["-m", "fr4lane"] and cmd[cmd.index("--top") + 1] == "a"
     assert ["--lib", "rtl"] == cmd[cmd.index("--lib"):cmd.index("--lib") + 2]
     assert "--place-only" in cmd and "--no-tb" in cmd and "--no-floorplan" in cmd and "--src" not in cmd
     assert got["info"]["run"] == "a_rtl_2l"
@@ -199,7 +199,7 @@ class Api:
 
 @pytest.fixture
 def server(tmp_path, monkeypatch):
-    """Editor com o floorplan num projeto temporário (sem pcbflow.json); a rodada
+    """Editor com o floorplan num projeto temporário (sem fr4lane.json); a rodada
     é procurada em <projeto>/build/pcb/<top>_*/placement.json."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(fpedit, "PROJ", project.Project(tmp_path))
@@ -304,14 +304,14 @@ def test_api_rodada_e_check(server, hier_run):
 # ------------------------------------------- execução de verdade pelo menu
 @pytest.fixture
 def hier_project(tmp_path, monkeypatch):
-    """Projeto com pcbflow.json e o hier8 (fonte, testbench)."""
+    """Projeto com fr4lane.json e o hier8 (fonte, testbench)."""
     import shutil
     (tmp_path / "rtl").mkdir()
     shutil.copy(data("hier8.v"), tmp_path / "rtl")
     shutil.copy(data("tb_hier8.v"), tmp_path / "rtl")
-    (tmp_path / "pcbflow.json").write_text(json.dumps({"src": ["rtl/hier8.v"], "tb": "rtl/tb_{top}.v"}),
+    (tmp_path / "fr4lane.json").write_text(json.dumps({"src": ["rtl/hier8.v"], "tb": "rtl/tb_{top}.v"}),
                                           encoding="utf-8")
-    p = project.load(tmp_path / "pcbflow.json")
+    p = project.load(tmp_path / "fr4lane.json")
     monkeypatch.setattr(fpedit, "PROJ", p)
     ed = fpedit.Editor()
     ed.set(tmp_path / "rtl" / "hier8.floorplan.json", None, tmp_path / "rtl" / "hier8.v")
@@ -333,7 +333,7 @@ def test_menu_roda_o_fluxo(hier_project):
     j = wait_job(ed)
     log = "\n".join(j["lines"])
     assert j["status"] == "ok" and j["rc"] == 0, log[-2000:]
-    assert j["lines"][0].startswith("$ pcbflow --top hier8 --lib rtl")
+    assert j["lines"][0].startswith("$ fr4lane --top hier8 --lib rtl")
     assert "Testbench do projeto" in log and "gate-level:       OK" in log
     assert (ed.path.parent.parent / "build" / "pcb" / "hier8_rtl" / "placement.json").is_file()
     assert [r["name"] for r in ed.state()["runs"]] == ["hier8_rtl"]

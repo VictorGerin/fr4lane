@@ -1,6 +1,6 @@
 * DFFR — flip-flop D, borda de subida, clear assíncrono ativo baixo
 * família discrete_rtl, canto típico (VDD 5 V, 27 °C; modelos NPN: spice/BC548B.lib)
-* gerado por pcbflow-cellsim --export; rodar: ngspice -b DFFR.cir (imprime as medidas e grava DFFR.dat)
+* gerado por fr4lane-cellsim --export; rodar: ngspice -b DFFR.cir (imprime as medidas e grava DFFR.dat)
 *
 * entradas no nível de pior caso: alto = 1.5 V, baixo = 0.4 V; Q leva 14 carga(s) INV.A
 * saída: 1 se >= 1.5 V, 0 se <= 0.5 V
@@ -27,7 +27,7 @@
 *     286 µs, depois da borda 14  ->  rst_b: Q=0 (o clear vence o clock e o dado)
 *     borda 15, depois de soltar  ->  q_14: Q=1 (volta a obedecer o dado)
 *
-* pcbflow-cellsim: canto típico
+* fr4lane-cellsim: canto típico
 .temp 27
 .param kup=1 kb=1
 .model NPN NPN(Is=7.049f Xti=3 Eg=1.11 Vaf=54.76 Bf=250 Ise=78.17f Ne=1.479 Ikf=24.96m Nkf=.5381 Xtb=1.5 Br=1.2 Isc=27.51f Nc=1.775 Ikr=3.321 Rc=.9706 Cjc=4.25p Mjc=.3147 Vjc=.5697 Fc=.5 Cje=11.5p Mje=.6715 Vje=.5 Tr=10n Tf=410.7p Itf=1.12 Xtf=26.19 Vtf=10)

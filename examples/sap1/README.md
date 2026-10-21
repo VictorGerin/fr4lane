@@ -1,6 +1,6 @@
 # SAP-1 em componentes discretos
 
-O computador de 8 bits do Ben Eater, o SAP-1 ("Simple As Possible") do livro *Digital Computer Electronics* (Malvino), escrito em SystemVerilog e gerado pelo pcbflow na família RTL (BC548 + resistores). É uma pilha de 6 placas ligadas por um barramento, como os módulos em protoboard do original.
+O computador de 8 bits do Ben Eater, o SAP-1 ("Simple As Possible") do livro *Digital Computer Electronics* (Malvino), escrito em SystemVerilog e gerado pelo fr4lane na família RTL (BC548 + resistores). É uma pilha de 6 placas ligadas por um barramento, como os módulos em protoboard do original.
 
 <p align="center">
   <img src="../../docs/img/sap1_pilha.jpg" alt="As 6 placas do SAP-1 empilhadas: controle e ALU em cima, as 4 placas de RAM embaixo" width="760">
@@ -51,13 +51,13 @@ floorplan/               tamanho das placas, conectores, terminação e buffers 
 
 ```sh
 cd examples/sap1
-pcbflow --top sap1_ctrl_board --lib rtl
-pcbflow --top sap1_alu_board  --lib rtl
-pcbflow --top sap1_ram_board  --lib rtl
-pcbflow-system --top sap1 --boards sap1_ctrl_board sap1_alu_board sap1_ram_board --lib rtl
+fr4lane --top sap1_ctrl_board --lib rtl
+fr4lane --top sap1_alu_board  --lib rtl
+fr4lane --top sap1_ram_board  --lib rtl
+fr4lane-system --top sap1 --boards sap1_ctrl_board sap1_alu_board sap1_ram_board --lib rtl
 ```
 
-As placas saem em `build/pcb/<placa>_rtl/`. O `pcbflow-system` confere a pilha montada: o drive elétrico de cada ligação entre placas (somando as cargas de todas), a corrente estimada (cerca de 7 A na pilha) e o `tb_sap1` contra os netlists de portas e de componentes das 6 placas juntas.
+As placas saem em `build/pcb/<placa>_rtl/`. O `fr4lane-system` confere a pilha montada: o drive elétrico de cada ligação entre placas (somando as cargas de todas), a corrente estimada (cerca de 7 A na pilha) e o `tb_sap1` contra os netlists de portas e de componentes das 6 placas juntas.
 
 Para programar, `prog = 1` para a CPU e cada borda de clock com `prog_we = 1` grava `prog_data` em `prog_addr`, pelo painel `J_PANEL` da placa de controle. Depois, `prog = 0` e um pulso em `rst_n` começam o programa do endereço 0.
 

@@ -1,5 +1,5 @@
 {
-  "_comment": "Floorplan do exemplo demo_top (família RTL). Abra com: pcbflow-fpedit demo_top.floorplan.json --lib rtl",
+  "_comment": "Floorplan do exemplo demo_top (família RTL). Abra com: fr4lane-fpedit demo_top.floorplan.json --lib rtl",
   "board": { "width": 256, "height": 258 },
   "modules": {
     "u_add": { "type": "region", "rect": [20, 5, 215, 110] },

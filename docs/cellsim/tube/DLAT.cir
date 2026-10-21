@@ -1,6 +1,6 @@
 * DLAT — latch D transparente a válvulas termiônicas (4 NOR2 + 1 INV; 9 válvulas JAN-6418)
 * família discrete_tube, canto típico (VDD 5 V, 27 °C; modelos TUBE: spice/JAN6418.lib)
-* gerado por pcbflow-cellsim --export; rodar: ngspice -b DLAT.cir (imprime as medidas e grava DLAT.dat)
+* gerado por fr4lane-cellsim --export; rodar: ngspice -b DLAT.cir (imprime as medidas e grava DLAT.dat)
 *
 * entradas no nível de pior caso: alto = 3.5 V, baixo = 0.4 V; Q leva 4 carga(s) INV.A
 * saída: 1 se >= 3 V, 0 se <= 0.6 V
@@ -14,11 +14,11 @@
 *   118 µs (travado)  ->  s_4: Q=1
 *   138 µs (travado)  ->  s_5: Q=1
 *
-* pcbflow-cellsim: canto típico
+* fr4lane-cellsim: canto típico
 .temp 27
 .param kup=1 kb=1
 .param kgm=1.0 kmu=1.0
-* Válvula termiônica subminiatura JAN-6418 — modelo Koren / Child-Langmuir para pcbflow-cellsim
+* Válvula termiônica subminiatura JAN-6418 — modelo Koren / Child-Langmuir para fr4lane-cellsim
 *
 * Física modelada (ficha técnica Raytheon JAN-6418 em modo de chaveamento / carga espacial):
 *   - Lei de Child-Langmuir (potência 3/2) de corrente eletrônica no vácuo entre catodo (k) e
@@ -33,7 +33,7 @@
 *       Cpk = 2,0 pF (placa-catodo)
 *       Cgp = 2,2 pF (capacitância Miller placa-grade)
 *
-* Pinos na convenção do pcbflow: p (placa/anodo), g (grade de controle), k (catodo/filamento).
+* Pinos na convenção do fr4lane: p (placa/anodo), g (grade de controle), k (catodo/filamento).
 .param kgm=1.0 kmu=1.0
 .subckt JAN6418 p g k
 Cgk g k 2.8p

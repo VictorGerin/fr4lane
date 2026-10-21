@@ -1,6 +1,6 @@
 # Controle de bomba d'água (`tanque`)
 
-Máquina de estados finitos (FSM) de 4 estados em ciclo para controle de uma bomba d'água de um reservatório com dois sensores de nível (`nivel_baixo` e `nivel_alto`), sintetizada para componentes discretos pelo `pcbflow`.
+Máquina de estados finitos (FSM) de 4 estados em ciclo para controle de uma bomba d'água de um reservatório com dois sensores de nível (`nivel_baixo` e `nivel_alto`), sintetizada para componentes discretos pelo `fr4lane`.
 
 <p align="center">
   <img src="../../docs/img/tanque_3d.jpg" alt="Placa da máquina de estados tanque na família RTL (70 BC548 e 107 resistores)" width="780">
@@ -134,18 +134,18 @@ Na família **relay** eletromecânica (geração Zuse Z3 / Harvard Mark II), cad
 
 ```sh
 cd examples/tanque
-pcbflow --top tanque --lib rtl                                    # gera a PCB na família RTL
-pcbflow --top tanque --lib dtl                                    # gera a PCB na família DTL (diodos + NPN)
-pcbflow --top tanque --lib ctl                                    # gera a PCB na família CTL (ferrite + NPN)
-pcbflow --top tanque --lib cdl                                    # gera a PCB na família CDL (ferrite + diodos)
-pcbflow --top tanque --lib tube                                   # gera a PCB na família de válvulas a vácuo (JAN-6418)
-pcbflow --top tanque --lib cmos                                   # gera a PCB na família CMOS discreta (2N7002 + BSS84)
-pcbflow --top tanque --lib relay                                  # gera a PCB na família de relés SPDT (Omron G5V-1)
-pcbflow-cellsim --lib rtl --design tanque --src tanque.v          # simulação analógica SPICE nos 4 cantos (RTL)
-pcbflow-cellsim --lib dtl --design tanque --src tanque.v          # simulação analógica SPICE nos 4 cantos (DTL)
-pcbflow-cellsim --lib ctl --design tanque --src tanque.v          # simulação analógica SPICE nos 4 cantos (CTL)
-pcbflow-cellsim --lib cdl --design tanque --src tanque.v          # simulação analógica SPICE nos 4 cantos (CDL)
-pcbflow-cellsim --lib tube --design tanque --src tanque.v         # simulação analógica SPICE nos 4 cantos (válvulas)
-pcbflow-cellsim --lib cmos --design tanque --src tanque.v         # simulação analógica SPICE nos 4 cantos (CMOS)
-pcbflow-cellsim --lib relay --design tanque --src tanque.v        # simulação analógica SPICE nos 4 cantos (relés)
+fr4lane --top tanque --lib rtl                                    # gera a PCB na família RTL
+fr4lane --top tanque --lib dtl                                    # gera a PCB na família DTL (diodos + NPN)
+fr4lane --top tanque --lib ctl                                    # gera a PCB na família CTL (ferrite + NPN)
+fr4lane --top tanque --lib cdl                                    # gera a PCB na família CDL (ferrite + diodos)
+fr4lane --top tanque --lib tube                                   # gera a PCB na família de válvulas a vácuo (JAN-6418)
+fr4lane --top tanque --lib cmos                                   # gera a PCB na família CMOS discreta (2N7002 + BSS84)
+fr4lane --top tanque --lib relay                                  # gera a PCB na família de relés SPDT (Omron G5V-1)
+fr4lane-cellsim --lib rtl --design tanque --src tanque.v          # simulação analógica SPICE nos 4 cantos (RTL)
+fr4lane-cellsim --lib dtl --design tanque --src tanque.v          # simulação analógica SPICE nos 4 cantos (DTL)
+fr4lane-cellsim --lib ctl --design tanque --src tanque.v          # simulação analógica SPICE nos 4 cantos (CTL)
+fr4lane-cellsim --lib cdl --design tanque --src tanque.v          # simulação analógica SPICE nos 4 cantos (CDL)
+fr4lane-cellsim --lib tube --design tanque --src tanque.v         # simulação analógica SPICE nos 4 cantos (válvulas)
+fr4lane-cellsim --lib cmos --design tanque --src tanque.v         # simulação analógica SPICE nos 4 cantos (CMOS)
+fr4lane-cellsim --lib relay --design tanque --src tanque.v        # simulação analógica SPICE nos 4 cantos (relés)
 ```

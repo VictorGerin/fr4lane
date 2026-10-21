@@ -1,6 +1,6 @@
 * NOR3 — NOR de 3 entradas DTL em um único transistor (1 NPN + 3 diodos + 5 resistores)
 * família discrete_dtl, canto típico (VDD 5 V, 27 °C; modelos NPN: spice/BC548B.lib, DIODE: spice/1N4148.lib)
-* gerado por pcbflow-cellsim --export; rodar: ngspice -b NOR3.cir (imprime as medidas e grava NOR3.dat)
+* gerado por fr4lane-cellsim --export; rodar: ngspice -b NOR3.cir (imprime as medidas e grava NOR3.dat)
 *
 * entradas no nível de pior caso: alto = 2.75 V, baixo = 0.4 V; Y leva 4 carga(s) INV.A
 * saída: 1 se >= 2.5 V, 0 se <= 0.4 V
@@ -16,7 +16,7 @@
 *   140-160 µs  A=1 B=1 C=1  ->  s_Y_7: Y=0
 *   160-180 µs  A=0 B=0 C=0  ->  s_Y_8: Y=1
 *
-* pcbflow-cellsim: canto típico
+* fr4lane-cellsim: canto típico
 .temp 27
 .param kup=1 kb=1
 .model NPN NPN(Is=7.049f Xti=3 Eg=1.11 Vaf=54.76 Bf=250 Ise=78.17f Ne=1.479 Ikf=24.96m Nkf=.5381 Xtb=1.5 Br=1.2 Isc=27.51f Nc=1.775 Ikr=3.321 Rc=.9706 Cjc=4.25p Mjc=.3147 Vjc=.5697 Fc=.5 Cje=11.5p Mje=.6715 Vje=.5 Tr=10n Tf=410.7p Itf=1.12 Xtf=26.19 Vtf=10)

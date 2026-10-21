@@ -1,0 +1,90 @@
+{
+  "name": "discrete_tube",
+  "family": "tube",
+  "description": "Lógica a válvulas termiônicas a vácuo (1ª geração de computadores, estilo ENIAC / IBM 604) usando válvulas subminiatura Raytheon JAN-6418 em encapsulamento de vidro de 5 terminais THT e resistores de 1/4 W.",
+  "supply": {
+    "vdd": "VDD",
+    "gnd": "GND",
+    "voltage": "5V"
+  },
+  "footprints": "footprints.json",
+  "liberty_header": [
+    "delay_model : table_lookup;",
+    "time_unit : \"1ns\";",
+    "voltage_unit : \"1V\";",
+    "current_unit : \"1mA\";",
+    "capacitive_load_unit (1, pf);",
+    "pulling_resistance_unit : \"1kohm\";"
+  ],
+  "decoupling": {
+    "row": "CDEC",
+    "bulk": "CBULK"
+  },
+  "placement": {
+    "part_gap": 1.0,
+    "row_gap": 6.0
+  },
+  "spice": {
+    "_comment": "Simulação analógica das células a válvulas termiônicas (fr4lane-cellsim): lei de Child-Langmuir (potência 3/2), condução de grade positiva e capacitâncias intereletródicas Cgk/Cpk/Cgp da válvula subminiatura JAN-6418 (spice/JAN6418.lib). Nos cantos, kgm escala a perveância/emissão catódica (envelhecimento do filamento no canto lento) e kmu o fator de amplificação da grade.",
+    "models": {
+      "TUBE": "spice/JAN6418.lib"
+    },
+    "corners": {
+      "típico": {
+        "vdd": 5.0,
+        "temp": 27,
+        "pull_up": 1.0,
+        "base": 1.0,
+        "params": {
+          "TUBE": {
+            "kgm": 1.0,
+            "kmu": 1.0
+          }
+        }
+      },
+      "lento": {
+        "vdd": 4.75,
+        "temp": 0,
+        "pull_up": 1.05,
+        "base": 1.05,
+        "params": {
+          "TUBE": {
+            "kgm": 0.8,
+            "kmu": 0.95
+          }
+        }
+      },
+      "rápido": {
+        "vdd": 5.25,
+        "temp": 70,
+        "pull_up": 0.95,
+        "base": 0.95,
+        "params": {
+          "TUBE": {
+            "kgm": 1.25,
+            "kmu": 1.05
+          }
+        }
+      },
+      "quente": {
+        "vdd": 4.75,
+        "temp": 70,
+        "pull_up": 1.05,
+        "base": 1.05,
+        "params": {
+          "TUBE": {
+            "kgm": 0.85,
+            "kmu": 1.0
+          }
+        }
+      }
+    },
+    "levels": {
+      "vih": 0.7,
+      "vil": 0.08,
+      "voh_min": 0.6,
+      "vol_max": 0.12,
+      "vth": 0.35
+    }
+  }
+}

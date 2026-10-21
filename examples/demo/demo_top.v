@@ -1,4 +1,4 @@
-// Exemplo com vários módulos para o pcbflow: um somador de 8 bits feito de
+// Exemplo com vários módulos para o fr4lane: um somador de 8 bits feito de
 // dois add4 (cada um com 4 somadores completos), um contador e um registrador.
 // Os blocos não compartilham fios: cada um ganha a sua área na placa, o que
 // deixa o floorplan e os macros fáceis de ver.

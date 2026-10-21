@@ -1,6 +1,6 @@
 * DFFR — flip-flop D, borda de subida, clear assíncrono ativo baixo (lógica CTL)
 * família discrete_ctl, canto típico (VDD 5 V, 27 °C; modelos CORE: spice/FERRITE.lib, NPN: spice/BC548B.lib)
-* gerado por pcbflow-cellsim --export; rodar: ngspice -b DFFR.cir (imprime as medidas e grava DFFR.dat)
+* gerado por fr4lane-cellsim --export; rodar: ngspice -b DFFR.cir (imprime as medidas e grava DFFR.dat)
 *
 * entradas no nível de pior caso: alto = 3.6 V, baixo = 0.4 V; Q leva 4 carga(s) INV.A
 * saída: 1 se >= 2.75 V, 0 se <= 0.5 V
@@ -27,11 +27,11 @@
 *     286 µs, depois da borda 14  ->  rst_b: Q=0 (o clear vence o clock e o dado)
 *     borda 15, depois de soltar  ->  q_14: Q=1 (volta a obedecer o dado)
 *
-* pcbflow-cellsim: canto típico
+* fr4lane-cellsim: canto típico
 .temp 27
 .param kup=1 kb=1
 .param kcore=1.0 kic=1.0
-* Núcleo toroidal de ferrite CTL — modelo comportamental para simulação analógica (pcbflow-cellsim)
+* Núcleo toroidal de ferrite CTL — modelo comportamental para simulação analógica (fr4lane-cellsim)
 *
 * Um núcleo de ferrite de laço retangular (square-loop) para lógica CTL possui
 * três enrolamentos de comando (W1 e W2 no sentido positivo, +N espiras; WB no
@@ -55,7 +55,7 @@
 *   - Acoplamento de saída S para a base do transistor regenerador através da
 *     impedância equivalente do enrolamento secundário (Rs = 10 kΩ).
 *
-* Pinos na convenção do pcbflow: w1, w2, wb, s, gnd.
+* Pinos na convenção do fr4lane: w1, w2, wb, s, gnd.
 .param kcore=1.0 kic=1.0
 .subckt FCORE w1 w2 wb s gnd
 Vw1  w1  w1m 0

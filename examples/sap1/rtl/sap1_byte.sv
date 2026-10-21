@@ -1,5 +1,5 @@
 // Um byte da RAM: flip-flops com escrita, sem reset. É o bloco repetido da
-// RAM, candidato natural a macro no pcbflow (--macro sap1_byte).
+// RAM, candidato natural a macro no fr4lane (--macro sap1_byte).
 module sap1_byte (
     input  logic                    clk,
     input  logic                    we,

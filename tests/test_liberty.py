@@ -4,8 +4,8 @@ import itertools
 
 import pytest
 
-from pcbflow import liberty
-from pcbflow.liberty import LibertyError, eval_expr, expr_vars, parse_expr, same_function, to_verilog
+from fr4lane import liberty
+from fr4lane.liberty import LibertyError, eval_expr, expr_vars, parse_expr, same_function, to_verilog
 
 
 def truth(expr, names):

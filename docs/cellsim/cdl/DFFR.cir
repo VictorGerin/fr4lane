@@ -1,6 +1,6 @@
 * DFFR — flip-flop D com clear ativo baixo CDL (3 NOR2 + 3 NOR3 + 2 INV; 8 núcleos toroidais)
 * família discrete_cdl, canto típico (VDD 5 V, 27 °C; modelos CORE: spice/MAGAMP.lib, DIODE: spice/1N4148.lib)
-* gerado por pcbflow-cellsim --export; rodar: ngspice -b DFFR.cir (imprime as medidas e grava DFFR.dat)
+* gerado por fr4lane-cellsim --export; rodar: ngspice -b DFFR.cir (imprime as medidas e grava DFFR.dat)
 *
 * entradas no nível de pior caso: alto = 4 V, baixo = 0.25 V; Q leva 4 carga(s) INV.A
 * saída: 1 se >= 3.25 V, 0 se <= 0.4 V
@@ -27,11 +27,11 @@
 *     286 µs, depois da borda 14  ->  rst_b: Q=0 (o clear vence o clock e o dado)
 *     borda 15, depois de soltar  ->  q_14: Q=1 (volta a obedecer o dado)
 *
-* pcbflow-cellsim: canto típico
+* fr4lane-cellsim: canto típico
 .temp 27
 .param kup=1 kb=1
 .param kcore=1.0 kic=1.0
-* Núcleo toroidal de ferrite CDL (Core-Diode Logic) — modelo para simulação analógica (pcbflow-cellsim)
+* Núcleo toroidal de ferrite CDL (Core-Diode Logic) — modelo para simulação analógica (fr4lane-cellsim)
 *
 * Na lógica CDL pura (sem transistores), o núcleo toroidal de ferrite atua como
 * estágio magnético de limiar e amplificação: os sinais de entrada passam por
@@ -58,7 +58,7 @@
 *     representando a tensão secundária retificada) e retorno a 0 V pelo resistor de carga
 *     externo RL (2,2 kΩ ao GND) quando o núcleo é inibido/resetado.
 *
-* Pinos na convenção do pcbflow: w1, w2, wb, s, gnd.
+* Pinos na convenção do fr4lane: w1, w2, wb, s, gnd.
 .param kcore=1.0 kic=1.0
 .subckt MCORE w1 w2 wb s gnd
 Vw1  w1  w1m 0

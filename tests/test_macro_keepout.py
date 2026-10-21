@@ -7,9 +7,9 @@ import re
 import pytest
 
 from conftest import data, lib_path, run_flow
-from pcbflow import check, floorplan
-from pcbflow.layout import Board, Footprint, Pad, Track, Via
-from pcbflow.route import BLOCK, FREE, Router
+from fr4lane import check, floorplan
+from fr4lane.layout import Board, Footprint, Pad, Track, Via
+from fr4lane.route import BLOCK, FREE, Router
 
 MACRO = (5.0, 5.0, 15.0, 15.0)
 
@@ -94,7 +94,7 @@ def test_fluxo_sem_rotas_por_cima_dos_macros(tmp_path):
 def test_canal_dos_macros_afasta_e_editor_preve(tmp_path):
     """"macro_channel" alarga o canal em volta de cada macro, e o editor (mesma
     função do hier.py) prevê a posição com o canal do floorplan."""
-    from pcbflow import fpedit
+    from fr4lane import fpedit
     fpf = tmp_path / "hier8.floorplan.json"
     fpd = {"macros": ["add4"], "macro_channel": 4}
     fpf.write_text(json.dumps(fpd), encoding="utf-8")

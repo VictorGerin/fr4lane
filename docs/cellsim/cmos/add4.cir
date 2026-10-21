@@ -1,6 +1,6 @@
-* add4 — circuito sintetizado pelo pcbflow (36 células: AOI21, INV, NAND2, NOR2, NOR3, OAI21; 144 componentes)
+* add4 — circuito sintetizado pelo fr4lane (36 células: AOI21, INV, NAND2, NOR2, NOR3, OAI21; 144 componentes)
 * família discrete_cmos, canto típico (VDD 5 V, 27 °C)
-* gerado por pcbflow-cellsim --design add4 --export; rodar: ngspice -b add4.cir
+* gerado por fr4lane-cellsim --design add4 --export; rodar: ngspice -b add4.cir
 *
 * entradas no nível de pior caso: alto = 4.5 V, baixo = 0.5 V; cada saída leva uma carga de referência
 * saída: 1 se >= 3.5 V, 0 se <= 1.5 V
@@ -71,7 +71,7 @@
 *   vetor 62 (124-126 µs): a[0]=0 a[1]=0 a[2]=1 a[3]=0 b[0]=1 b[1]=0 b[2]=1 b[3]=1 ci=0  ->  s_s_0__62: s[0]=1, s_s_1__62: s[1]=0, s_s_2__62: s[2]=0, s_s_3__62: s[3]=0, s_co_62: co=1
 *   vetor 63 (126-128 µs): a[0]=0 a[1]=0 a[2]=1 a[3]=1 b[0]=1 b[1]=1 b[2]=0 b[3]=1 ci=0  ->  s_s_0__63: s[0]=1, s_s_1__63: s[1]=1, s_s_2__63: s[2]=1, s_s_3__63: s[3]=0, s_co_63: co=1
 *
-* pcbflow-cellsim: canto típico
+* fr4lane-cellsim: canto típico
 .temp 27
 .param kup=1 kb=1
 .model NMOS NMOS(LEVEL=1 VTO=2.50 KP=32.0m GAMMA=3.10 PHI=.75 LAMBDA=39.9u RD=1.05 RS=1.05 IS=57.5f PB=0.800 MJ=0.460 CBD=98.8p CBS=119p CGSO=60.0n CGDO=50.0n CGBO=390n)

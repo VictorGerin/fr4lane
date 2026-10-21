@@ -1,4 +1,4 @@
-"""Simulação analógica das células (pcbflow-cellsim): modelos e cantos do
+"""Simulação analógica das células (fr4lane-cellsim): modelos e cantos do
 library.json, netlist do ngspice gerado a partir dos .sp, e, com o ngspice, as
 células da família RTL e montagens sabotadas de propósito (têm de falhar)."""
 
@@ -7,8 +7,8 @@ import shutil
 import pytest
 
 from conftest import LIB, lib_path
-from pcbflow import cellsim
-from pcbflow.library import Library, LibraryError
+from fr4lane import cellsim
+from fr4lane.library import Library, LibraryError
 
 
 @pytest.fixture(scope="module")
@@ -71,9 +71,9 @@ def test_modelos_das_outras_familias(family, keys):
 
 @pytest.mark.spice
 def test_somador_no_ngspice(tmp_path):
-    from conftest import PCBFLOW
+    from conftest import FR4LANE
     lib = Library(lib_path("cmos"))
-    res, design = cellsim.check_design(lib, [PCBFLOW / "examples/demo/demo_top.v"], "add4", tmp_path,
+    res, design = cellsim.check_design(lib, [FR4LANE / "examples/demo/demo_top.v"], "add4", tmp_path,
                                        vectors=40, log=lambda m: None)
     assert all(r["ok"] for r in res.values()), {k: r["fails"][:3] for k, r in res.items()}
     assert res["típico"]["tpd"] and res["típico"]["vectors"] == 40

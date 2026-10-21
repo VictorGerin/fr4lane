@@ -10,7 +10,7 @@ Cada `<CÉLULA>.cir` é um netlist do ngspice completo: o modelo do transistor, 
 ngspice -b AND2.cir      # imprime as medidas e grava AND2.dat com as formas de onda
 ```
 
-Para rodar todos os cantos e refazer estes arquivos: `pcbflow-cellsim --lib dtl --export docs/cellsim/dtl`.
+Para rodar todos os cantos e refazer estes arquivos: `fr4lane-cellsim --lib dtl --export docs/cellsim/dtl`.
 
 ## Células
 
@@ -120,5 +120,5 @@ XOR de 2 entradas DTL (4 NAND2; 4 transistores NPN)
 
 ## Circuito tanque
 
-Um circuito inteiro, sintetizado pelo pcbflow: 18 células, 292 componentes e 17 vetores. Resultados e gráfico em [tanque.md](tanque.md); dados em [tanque.csv](tanque.csv); netlist em [tanque.cir](tanque.cir).
+Um circuito inteiro, sintetizado pelo fr4lane: 18 células, 292 componentes e 17 vetores. Resultados e gráfico em [tanque.md](tanque.md); dados em [tanque.csv](tanque.csv); netlist em [tanque.cir](tanque.cir).
 

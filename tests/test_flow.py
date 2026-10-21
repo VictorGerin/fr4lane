@@ -1,4 +1,4 @@
-"""Fluxo completo (python -m pcbflow) em projetos pequenos: síntese, simulação
+"""Fluxo completo (python -m fr4lane) em projetos pequenos: síntese, simulação
 gate-level e de componentes, placement, roteamento, verificação e arquivos do
 KiCad; latches; macros; reaproveitamento do placement; erros de entrada."""
 
@@ -8,13 +8,13 @@ import shutil
 
 import pytest
 
-from conftest import FAMILIES, PCBFLOW, data, lib_path, run_flow
-from pcbflow import fpedit
+from conftest import FAMILIES, FR4LANE, data, lib_path, run_flow
+from fr4lane import fpedit
 
 pytestmark = pytest.mark.slow
 
-COUNTER = ["--top", "counter4", "--src", PCBFLOW / "examples/counter4.v",
-           "--tb", PCBFLOW / "examples/tb_counter4.v", "--no-drc"]
+COUNTER = ["--top", "counter4", "--src", FR4LANE / "examples/counter4.v",
+           "--tb", FR4LANE / "examples/tb_counter4.v", "--no-drc"]
 HIER = ["--top", "hier8", "--src", data("hier8.v"), "--lib", lib_path("rtl"), "--no-drc"]
 
 
@@ -175,7 +175,7 @@ def test_erros_de_entrada(tmp_path):
 
 @pytest.mark.kicad
 def test_drc_do_kicad(flow):
-    from pcbflow import drc
+    from fr4lane import drc
     r = flow("c4_cmos", *COUNTER, "--lib", lib_path("cmos"), "--fresh")
     board = next(r.out.glob("*.kicad_pcb"))
     copy = r.out / "drc_copia.kicad_pcb"
@@ -187,7 +187,7 @@ def test_drc_do_kicad(flow):
 @pytest.mark.kicad
 def test_drc_preenche_planos_pelo_pcbnew(flow, monkeypatch):
     """KiCad sem --refill-zones (8 e 9): a API pcbnew preenche os planos e salva a placa."""
-    from pcbflow import drc
+    from fr4lane import drc
     cli = drc.find_cli()
     if not drc.kicad_python(cli):
         pytest.skip("Python do KiCad (pcbnew) não encontrado")
@@ -204,7 +204,7 @@ def test_drc_preenche_planos_pelo_pcbnew(flow, monkeypatch):
 def test_drc_sem_como_preencher_planos(flow, monkeypatch):
     """Sem --refill-zones nem pcbnew: os planos ficam vazios e as desconexões
     das nets deles viram aviso, não erro."""
-    from pcbflow import drc
+    from fr4lane import drc
     r = flow("c4_cmos", *COUNTER, "--lib", lib_path("cmos"), "--fresh")
     copy = r.out / "drc_vazio.kicad_pcb"
     shutil.copy(next(r.out.glob("counter4_*.kicad_pcb")), copy)
@@ -254,7 +254,7 @@ def test_conectores_nas_quatro_bordas(flow, tmp_path_factory, lib, layers):
 
 @pytest.mark.kicad
 def test_conectores_drc(flow, tmp_path_factory):
-    from pcbflow import drc
+    from fr4lane import drc
     r = _conn_run(flow, tmp_path_factory, "conn_cmos_4", "--lib", lib_path("cmos"), "--layers", "4", "--no-drc")
     copy = r.out / "drc_conn.kicad_pcb"
     shutil.copy(next(r.out.glob("hier8_*.kicad_pcb")), copy)

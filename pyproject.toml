@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pcbflow"
+name = "fr4lane"
 version = "0.1.0"
 description = "Verilog -> Yosys -> células de componentes discretos (CMOS, RTL, relé) -> placement -> roteamento -> projeto KiCad"
 readme = "README.md"
@@ -19,7 +19,7 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/VictorGerin/pcbflow"
+Homepage = "https://github.com/VictorGerin/fr4lane"
 
 [project.optional-dependencies]
 # compila a busca do roteador e o anelamento do placement (sem ele, o mesmo resultado, mais devagar)
@@ -27,15 +27,15 @@ fast = ["numba"]
 test = ["pytest", "selenium"]
 
 [project.scripts]
-pcbflow = "pcbflow.__main__:main"
-pcbflow-fpedit = "pcbflow.fpedit:main"
-pcbflow-drc = "pcbflow.drc:main"
-pcbflow-system = "pcbflow.system:main"
-pcbflow-cellsim = "pcbflow.cellsim:main"
+fr4lane = "fr4lane.__main__:main"
+fr4lane-fpedit = "fr4lane.fpedit:main"
+fr4lane-drc = "fr4lane.drc:main"
+fr4lane-system = "fr4lane.system:main"
+fr4lane-cellsim = "fr4lane.cellsim:main"
 
 [tool.setuptools]
-packages = ["pcbflow"]
+packages = ["fr4lane"]
 
 [tool.setuptools.package-data]
 # a página do editor e as famílias de células (cmos, rtl, relay) vão junto com o pacote
-pcbflow = ["fpedit.html", "lib/footprints.json", "lib/*/*.json", "lib/*/cells/*/*", "lib/*/spice/*"]
+fr4lane = ["fpedit.html", "lib/footprints.json", "lib/*/*.json", "lib/*/cells/*/*", "lib/*/spice/*"]

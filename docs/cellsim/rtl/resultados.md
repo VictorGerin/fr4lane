@@ -1,6 +1,6 @@
 # Simulação analógica das células — `discrete_rtl`
 
-Gerado por `pcbflow-cellsim` (ngspice). Cantos: típico, lento, rápido, quente.
+Gerado por `fr4lane-cellsim` (ngspice). Cantos: típico, lento, rápido, quente.
 
 ## Combinacionais e latches
 

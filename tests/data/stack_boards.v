@@ -1,4 +1,4 @@
-// Pilha de teste do pcbflow-system: três placas no mesmo barramento de 4 bits
+// Pilha de teste do fr4lane-system: três placas no mesmo barramento de 4 bits
 // (stack.v as liga). A de controle decodifica sel, também fala no barramento e
 // leva a terminação; as duas de cartão são a mesma placa, sem terminação.
 // cartão: põe d no barramento com en e guarda o que leu

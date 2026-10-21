@@ -1,4 +1,4 @@
-// Exemplo sequencial para o pcbflow: contador de 4 bits com enable e reset
+// Exemplo sequencial para o fr4lane: contador de 4 bits com enable e reset
 // assíncrono (mapeia para DFFR) + registrador de atraso sem reset (DFF).
 module counter4 (
     input            clk,

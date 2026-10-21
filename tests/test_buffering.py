@@ -6,8 +6,8 @@ import re
 import pytest
 
 from conftest import FAMILIES, data, lib_path, run_flow
-from pcbflow import buffering
-from pcbflow.netlist import common_module
+from fr4lane import buffering
+from fr4lane.netlist import common_module
 
 FAN = ["--top", "fan40", "--src", data("fan40.v"), "--tb", data("tb_fan40.v"), "--synth-only"]
 
@@ -49,8 +49,8 @@ def test_arvore_balanceada_no_relatorio(tmp_path):
 def test_copias_de_macro_ganham_os_mesmos_buffers(tmp_path):
     """Com buffers dentro de cada instância, as duas continuam com a mesma
     estrutura (o mesmo molde de macro)."""
-    from pcbflow import drive, hier, netlist, synth
-    from pcbflow.library import Library
+    from fr4lane import drive, hier, netlist, synth
+    from fr4lane.library import Library
     lib = Library("cmos")
     lib.write_liberty(tmp_path / "cells.lib")
     j, _, _, hj = synth.run_yosys([data("fan2.v"), data("fan40.v")], "fan2", tmp_path / "cells.lib", tmp_path,

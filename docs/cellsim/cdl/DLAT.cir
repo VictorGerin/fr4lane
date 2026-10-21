@@ -1,6 +1,6 @@
 * DLAT — latch D transparente CDL (4 NOR2 + 1 INV; 5 núcleos toroidais)
 * família discrete_cdl, canto típico (VDD 5 V, 27 °C; modelos CORE: spice/MAGAMP.lib, DIODE: spice/1N4148.lib)
-* gerado por pcbflow-cellsim --export; rodar: ngspice -b DLAT.cir (imprime as medidas e grava DLAT.dat)
+* gerado por fr4lane-cellsim --export; rodar: ngspice -b DLAT.cir (imprime as medidas e grava DLAT.dat)
 *
 * entradas no nível de pior caso: alto = 4 V, baixo = 0.25 V; Q leva 4 carga(s) INV.A
 * saída: 1 se >= 3.25 V, 0 se <= 0.4 V
@@ -14,11 +14,11 @@
 *   118 µs (travado)  ->  s_4: Q=1
 *   138 µs (travado)  ->  s_5: Q=1
 *
-* pcbflow-cellsim: canto típico
+* fr4lane-cellsim: canto típico
 .temp 27
 .param kup=1 kb=1
 .param kcore=1.0 kic=1.0
-* Núcleo toroidal de ferrite CDL (Core-Diode Logic) — modelo para simulação analógica (pcbflow-cellsim)
+* Núcleo toroidal de ferrite CDL (Core-Diode Logic) — modelo para simulação analógica (fr4lane-cellsim)
 *
 * Na lógica CDL pura (sem transistores), o núcleo toroidal de ferrite atua como
 * estágio magnético de limiar e amplificação: os sinais de entrada passam por
@@ -45,7 +45,7 @@
 *     representando a tensão secundária retificada) e retorno a 0 V pelo resistor de carga
 *     externo RL (2,2 kΩ ao GND) quando o núcleo é inibido/resetado.
 *
-* Pinos na convenção do pcbflow: w1, w2, wb, s, gnd.
+* Pinos na convenção do fr4lane: w1, w2, wb, s, gnd.
 .param kcore=1.0 kic=1.0
 .subckt MCORE w1 w2 wb s gnd
 Vw1  w1  w1m 0

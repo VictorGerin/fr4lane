@@ -4,9 +4,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from pcbflow import connectors, floorplan
-from pcbflow.connectors import PITCH
-from pcbflow.floorplan import FloorplanError
+from fr4lane import connectors, floorplan
+from fr4lane.connectors import PITCH
+from fr4lane.floorplan import FloorplanError
 
 M = 4.0                                       # margem padrão da placa
 GEO = SimpleNamespace(margin=M, x0=12.5, y_top0=6.0, io_gap=6.0, two=False)

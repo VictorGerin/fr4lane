@@ -1,6 +1,6 @@
 # Simulação analógica das células — `discrete_cmos`
 
-Gerado por `pcbflow-cellsim` (ngspice). Cantos: típico, lento, rápido.
+Gerado por `fr4lane-cellsim` (ngspice). Cantos: típico, lento, rápido.
 
 ## Combinacionais e latches
 

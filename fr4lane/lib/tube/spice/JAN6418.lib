@@ -1,0 +1,26 @@
+* Válvula termiônica subminiatura JAN-6418 — modelo Koren / Child-Langmuir para fr4lane-cellsim
+*
+* Física modelada (ficha técnica Raytheon JAN-6418 em modo de chaveamento / carga espacial):
+*   - Lei de Child-Langmuir (potência 3/2) de corrente eletrônica no vácuo entre catodo (k) e
+*     placa/anodo (p), controlada pelo potencial da grade (g) com fator de amplificação (mu = 25)
+*     e corte em Vgk <= 1,0 V;
+*   - Emissão catódica escalada por kgm (simulando variação/envelhecimento de emissão do filamento
+*     entre 0,8x no canto lento e 1,25x no canto rápido) e sensibilidade de grade escalada por kmu;
+*   - Resistência de escoamento de grade (grid-leak Rgk = 220 kΩ) e condução de grade positiva no vácuo
+*     (Dgk com resistência de carga espacial de grade RS = 150 kΩ);
+*   - Capacitâncias intereletródicas reais da ficha da JAN-6418:
+*       Cgk = 2,8 pF (grade-catodo)
+*       Cpk = 2,0 pF (placa-catodo)
+*       Cgp = 2,2 pF (capacitância Miller placa-grade)
+*
+* Pinos na convenção do fr4lane: p (placa/anodo), g (grade de controle), k (catodo/filamento).
+.param kgm=1.0 kmu=1.0
+.subckt JAN6418 p g k
+Cgk g k 2.8p
+Cpk p k 2.0p
+Cgp p g 2.2p
+Rgk g k 220k
+Dgk g k DGRID
+Bip p k I = kgm * 8.0e-3 * uramp(v(g,k)*kmu - 1.0 + v(p,k)/25.0)^1.5 * tanh(uramp(v(p,k))/0.15)
+.model DGRID D(IS=1e-12 N=2.0 RS=150k CJO=0.5p)
+.ends JAN6418

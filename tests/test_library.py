@@ -6,8 +6,8 @@ import shutil
 import pytest
 
 from conftest import FAMILIES, LIB, lib_path
-from pcbflow import cellcheck, drive, liberty, spice
-from pcbflow.library import Library, LibraryError
+from fr4lane import cellcheck, drive, liberty, spice
+from fr4lane.library import Library, LibraryError
 
 
 def test_ha_familias():

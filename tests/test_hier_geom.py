@@ -5,8 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from pcbflow import floorplan, hier
-from pcbflow.floorplan import FloorplanError
+from fr4lane import floorplan, hier
+from fr4lane.floorplan import FloorplanError
 
 G = 0.5
 GEO = SimpleNamespace(x0=12.5, y_top=6.0)

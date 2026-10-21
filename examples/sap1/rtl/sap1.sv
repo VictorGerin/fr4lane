@@ -24,7 +24,7 @@
 // programa do endereço 0.
 //
 // Este arquivo só pode ter o módulo sap1: na simulação do sistema
-// (pcbflow-system), as placas vêm dos netlists delas.
+// (fr4lane-system), as placas vêm dos netlists delas.
 module sap1 (
     input  logic       clk,
     input  logic       rst_n,      // reset assíncrono, ativo baixo
