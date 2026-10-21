@@ -1,0 +1,61 @@
+* DLAT — latch D transparente com E = 1 (latch SR de NANDs com entrada controlada; 4 NANDs)
+* família discrete_cmos, canto típico (VDD 5 V, 27 °C; modelos NMOS: {'file': 'spice/2N7002.lib', 'instance': 'L=100u W=100u'}, PMOS: {'file': 'spice/BSS84.lib', 'instance': 'L=100u W=100u'})
+* gerado por pcbflow-cellsim --export; rodar: ngspice -b DLAT.cir (imprime as medidas e grava DLAT.dat)
+*
+* entradas no nível de pior caso: alto = 4.5 V, baixo = 0.5 V; Q leva 1 carga(s) INV.A
+* saída: 1 se >= 3.5 V, 0 se <= 1.5 V
+*
+* vetores de teste (medida: valor esperado):
+*   E ligado até 8 µs; D muda em 20, 40, 60, 100 e 120 µs
+*   1.8 µs (transparente)  ->  s_0: Q=0
+*   3.8 µs (transparente)  ->  s_1: Q=1
+*   5.8 µs (transparente)  ->  s_2: Q=0
+*   7.8 µs (transparente)  ->  s_3: Q=1
+*   11.8 µs (travado)  ->  s_4: Q=1
+*   13.8 µs (travado)  ->  s_5: Q=1
+*
+* pcbflow-cellsim: canto típico
+.temp 27
+.param kup=1 kb=1
+.model NMOS NMOS(LEVEL=1 VTO=2.50 KP=32.0m GAMMA=3.10 PHI=.75 LAMBDA=39.9u RD=1.05 RS=1.05 IS=57.5f PB=0.800 MJ=0.460 CBD=98.8p CBS=119p CGSO=60.0n CGDO=50.0n CGBO=390n)
+.model PMOS PMOS(LEVEL=1 VTO=-1.60 KP=4.87m GAMMA=1.98 PHI=.75 LAMBDA=1.25m RD=0.840 RS=0.840 IS=65.0f PB=0.800 MJ=0.460 CBD=46.6p CBS=55.9p CGSO=50.7n CGDO=42.2n CGBO=69.5n)
+.subckt NAND2 A B Y VDD GND
+MP1 Y A VDD VDD PMOS L=100u W=100u
+MP2 Y B VDD VDD PMOS L=100u W=100u
+MN1 Y A n1 n1 NMOS L=100u W=100u
+MN2 n1 B GND GND NMOS L=100u W=100u
+.ends NAND2
+.subckt DLAT D E Q VDD GND
+X1 D E sb VDD GND NAND2
+X2 sb E rb VDD GND NAND2
+X3 sb QN Q VDD GND NAND2
+X4 rb Q QN VDD GND NAND2
+.ends DLAT
+.subckt INV A Y VDD GND
+MP1 Y A VDD VDD PMOS L=100u W=100u
+MN1 Y A GND GND NMOS L=100u W=100u
+.ends INV
+VDD vdd 0 5
+V_E in_E 0 PWL(0 4.5 8e-06 4.5 8.002e-06 0.5)
+V_D in_D 0 PWL(0 0.5 2e-06 0.5 2.002e-06 4.5 4e-06 4.5 4.002e-06 0.5 6e-06 0.5 6.002e-06 4.5 1e-05 4.5 1.0002e-05 0.5 1.2e-05 0.5 1.2002e-05 4.5)
+Xdut in_D in_E out_Q vdd 0 DLAT
+Xld_out_Q_0 out_Q ld_out_Q_0_Y vdd 0 INV
+.tran 4e-09 1.4e-05
+.control
+run
+linearize
+set wr_singlescale
+set wr_vecnames
+wrdata DLAT.dat v(in_E) v(in_D) v(out_Q)
+meas tran s_0 FIND v(out_Q) AT=1.8e-06
+meas tran s_1 FIND v(out_Q) AT=3.8e-06
+meas tran s_2 FIND v(out_Q) AT=5.8e-06
+meas tran s_3 FIND v(out_Q) AT=7.8e-06
+meas tran s_4 FIND v(out_Q) AT=1.18e-05
+meas tran s_5 FIND v(out_Q) AT=1.38e-05
+meas tran dq_0 TRIG AT=2e-06 TARG v(out_Q) VAL=2.5 TD=2e-06 CROSS=1
+meas tran dq_1 TRIG AT=4e-06 TARG v(out_Q) VAL=2.5 TD=4e-06 CROSS=1
+meas tran dq_2 TRIG AT=6e-06 TARG v(out_Q) VAL=2.5 TD=6e-06 CROSS=1
+quit
+.endc
+.end

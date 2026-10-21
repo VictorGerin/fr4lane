@@ -1,0 +1,54 @@
+* BUF — buffer (dois inversores)
+* família discrete_cmos, canto típico (VDD 5 V, 27 °C; modelos NMOS: {'file': 'spice/2N7002.lib', 'instance': 'L=100u W=100u'}, PMOS: {'file': 'spice/BSS84.lib', 'instance': 'L=100u W=100u'})
+* gerado por pcbflow-cellsim --export; rodar: ngspice -b BUF.cir (imprime as medidas e grava BUF.dat)
+*
+* entradas no nível de pior caso: alto = 4.5 V, baixo = 0.5 V; Y leva 8 carga(s) INV.A
+* saída: 1 se >= 3.5 V, 0 se <= 1.5 V
+*
+* vetores de teste (medida: valor esperado):
+*   0-2 µs  A=0  ->  s_Y_0: Y=0
+*   2-4 µs  A=1  ->  s_Y_1: Y=1
+*   4-6 µs  A=0  ->  s_Y_2: Y=0
+*
+* pcbflow-cellsim: canto típico
+.temp 27
+.param kup=1 kb=1
+.model NMOS NMOS(LEVEL=1 VTO=2.50 KP=32.0m GAMMA=3.10 PHI=.75 LAMBDA=39.9u RD=1.05 RS=1.05 IS=57.5f PB=0.800 MJ=0.460 CBD=98.8p CBS=119p CGSO=60.0n CGDO=50.0n CGBO=390n)
+.model PMOS PMOS(LEVEL=1 VTO=-1.60 KP=4.87m GAMMA=1.98 PHI=.75 LAMBDA=1.25m RD=0.840 RS=0.840 IS=65.0f PB=0.800 MJ=0.460 CBD=46.6p CBS=55.9p CGSO=50.7n CGDO=42.2n CGBO=69.5n)
+.subckt INV A Y VDD GND
+MP1 Y A VDD VDD PMOS L=100u W=100u
+MN1 Y A GND GND NMOS L=100u W=100u
+.ends INV
+.subckt BUF A Y VDD GND
+X1 A an VDD GND INV
+X2 an Y VDD GND INV
+.ends BUF
+VDD vdd 0 5
+V_A in_A 0 PWL(0 0.5 2e-06 0.5 2.002e-06 4.5 4e-06 4.5 4.002e-06 0.5)
+Xdut in_A out_Y vdd 0 BUF
+Xld_out_Y_0 out_Y ld_out_Y_0_Y vdd 0 INV
+Xld_out_Y_1 out_Y ld_out_Y_1_Y vdd 0 INV
+Xld_out_Y_2 out_Y ld_out_Y_2_Y vdd 0 INV
+Xld_out_Y_3 out_Y ld_out_Y_3_Y vdd 0 INV
+Xld_out_Y_4 out_Y ld_out_Y_4_Y vdd 0 INV
+Xld_out_Y_5 out_Y ld_out_Y_5_Y vdd 0 INV
+Xld_out_Y_6 out_Y ld_out_Y_6_Y vdd 0 INV
+Xld_out_Y_7 out_Y ld_out_Y_7_Y vdd 0 INV
+.tran 4e-09 6e-06
+.control
+run
+linearize
+set wr_singlescale
+set wr_vecnames
+wrdata BUF.dat v(in_A) v(out_Y)
+meas tran s_Y_0 FIND v(out_Y) AT=1.9e-06
+meas tran l_Y_0 FIND v(ld_out_Y_0_Y) AT=1.9e-06
+meas tran s_Y_1 FIND v(out_Y) AT=3.9e-06
+meas tran l_Y_1 FIND v(ld_out_Y_0_Y) AT=3.9e-06
+meas tran d_Y_1 TRIG AT=2e-06 TARG v(out_Y) VAL=2.5 TD=2e-06 CROSS=1
+meas tran s_Y_2 FIND v(out_Y) AT=5.9e-06
+meas tran l_Y_2 FIND v(ld_out_Y_0_Y) AT=5.9e-06
+meas tran d_Y_2 TRIG AT=4e-06 TARG v(out_Y) VAL=2.5 TD=4e-06 CROSS=1
+quit
+.endc
+.end

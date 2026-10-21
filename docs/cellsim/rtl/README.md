@@ -110,3 +110,7 @@ driver de barramento de coletor aberto: inversor de A + dois NPNs em série (E e
 
 ![TBUF](TBUF.png)
 
+## Circuito add4
+
+Um circuito inteiro, sintetizado pelo pcbflow: 36 células, 204 componentes e 512 vetores. Resultados e gráfico em [add4.md](add4.md); netlist em [add4.cir](add4.cir).
+

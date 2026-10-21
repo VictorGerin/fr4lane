@@ -1,0 +1,603 @@
+* add4 — circuito sintetizado pelo pcbflow (36 células: AND2, NAND2, NOR2; 204 componentes)
+* família discrete_rtl, canto típico (VDD 5 V, 27 °C)
+* gerado por pcbflow-cellsim --design add4 --export; rodar: ngspice -b add4.cir
+*
+* entradas no nível de pior caso: alto = 1.5 V, baixo = 0.4 V; cada saída leva uma carga de referência
+* saída: 1 se >= 1.5 V, 0 se <= 0.5 V
+*
+* vetores de teste (medida: valor esperado):
+*   vetor 0 (0-20 µs): a[0]=0 a[1]=0 a[2]=0 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__0: s[0]=0, s_s_1__0: s[1]=0, s_s_2__0: s[2]=0, s_s_3__0: s[3]=0, s_co_0: co=0
+*   vetor 1 (20-40 µs): a[0]=1 a[1]=0 a[2]=0 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__1: s[0]=1, s_s_1__1: s[1]=0, s_s_2__1: s[2]=0, s_s_3__1: s[3]=0, s_co_1: co=0
+*   vetor 2 (40-60 µs): a[0]=0 a[1]=1 a[2]=0 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__2: s[0]=0, s_s_1__2: s[1]=1, s_s_2__2: s[2]=0, s_s_3__2: s[3]=0, s_co_2: co=0
+*   vetor 3 (60-80 µs): a[0]=1 a[1]=1 a[2]=0 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__3: s[0]=1, s_s_1__3: s[1]=1, s_s_2__3: s[2]=0, s_s_3__3: s[3]=0, s_co_3: co=0
+*   vetor 4 (80-100 µs): a[0]=0 a[1]=0 a[2]=1 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__4: s[0]=0, s_s_1__4: s[1]=0, s_s_2__4: s[2]=1, s_s_3__4: s[3]=0, s_co_4: co=0
+*   vetor 5 (100-120 µs): a[0]=1 a[1]=0 a[2]=1 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__5: s[0]=1, s_s_1__5: s[1]=0, s_s_2__5: s[2]=1, s_s_3__5: s[3]=0, s_co_5: co=0
+*   vetor 6 (120-140 µs): a[0]=0 a[1]=1 a[2]=1 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__6: s[0]=0, s_s_1__6: s[1]=1, s_s_2__6: s[2]=1, s_s_3__6: s[3]=0, s_co_6: co=0
+*   vetor 7 (140-160 µs): a[0]=1 a[1]=1 a[2]=1 a[3]=0 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__7: s[0]=1, s_s_1__7: s[1]=1, s_s_2__7: s[2]=1, s_s_3__7: s[3]=0, s_co_7: co=0
+*   vetor 8 (160-180 µs): a[0]=0 a[1]=0 a[2]=0 a[3]=1 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__8: s[0]=0, s_s_1__8: s[1]=0, s_s_2__8: s[2]=0, s_s_3__8: s[3]=1, s_co_8: co=0
+*   vetor 9 (180-200 µs): a[0]=1 a[1]=0 a[2]=0 a[3]=1 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__9: s[0]=1, s_s_1__9: s[1]=0, s_s_2__9: s[2]=0, s_s_3__9: s[3]=1, s_co_9: co=0
+*   vetor 10 (200-220 µs): a[0]=0 a[1]=1 a[2]=0 a[3]=1 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__10: s[0]=0, s_s_1__10: s[1]=1, s_s_2__10: s[2]=0, s_s_3__10: s[3]=1, s_co_10: co=0
+*   vetor 11 (220-240 µs): a[0]=1 a[1]=1 a[2]=0 a[3]=1 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__11: s[0]=1, s_s_1__11: s[1]=1, s_s_2__11: s[2]=0, s_s_3__11: s[3]=1, s_co_11: co=0
+*   vetor 12 (240-260 µs): a[0]=0 a[1]=0 a[2]=1 a[3]=1 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__12: s[0]=0, s_s_1__12: s[1]=0, s_s_2__12: s[2]=1, s_s_3__12: s[3]=1, s_co_12: co=0
+*   vetor 13 (260-280 µs): a[0]=1 a[1]=0 a[2]=1 a[3]=1 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__13: s[0]=1, s_s_1__13: s[1]=0, s_s_2__13: s[2]=1, s_s_3__13: s[3]=1, s_co_13: co=0
+*   vetor 14 (280-300 µs): a[0]=0 a[1]=1 a[2]=1 a[3]=1 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__14: s[0]=0, s_s_1__14: s[1]=1, s_s_2__14: s[2]=1, s_s_3__14: s[3]=1, s_co_14: co=0
+*   vetor 15 (300-320 µs): a[0]=1 a[1]=1 a[2]=1 a[3]=1 b[0]=0 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__15: s[0]=1, s_s_1__15: s[1]=1, s_s_2__15: s[2]=1, s_s_3__15: s[3]=1, s_co_15: co=0
+*   vetor 16 (320-340 µs): a[0]=0 a[1]=0 a[2]=0 a[3]=0 b[0]=1 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__16: s[0]=1, s_s_1__16: s[1]=0, s_s_2__16: s[2]=0, s_s_3__16: s[3]=0, s_co_16: co=0
+*   vetor 17 (340-360 µs): a[0]=1 a[1]=0 a[2]=0 a[3]=0 b[0]=1 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__17: s[0]=0, s_s_1__17: s[1]=1, s_s_2__17: s[2]=0, s_s_3__17: s[3]=0, s_co_17: co=0
+*   vetor 18 (360-380 µs): a[0]=0 a[1]=1 a[2]=0 a[3]=0 b[0]=1 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__18: s[0]=1, s_s_1__18: s[1]=1, s_s_2__18: s[2]=0, s_s_3__18: s[3]=0, s_co_18: co=0
+*   vetor 19 (380-400 µs): a[0]=1 a[1]=1 a[2]=0 a[3]=0 b[0]=1 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__19: s[0]=0, s_s_1__19: s[1]=0, s_s_2__19: s[2]=1, s_s_3__19: s[3]=0, s_co_19: co=0
+*   vetor 20 (400-420 µs): a[0]=0 a[1]=0 a[2]=1 a[3]=0 b[0]=1 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__20: s[0]=1, s_s_1__20: s[1]=0, s_s_2__20: s[2]=1, s_s_3__20: s[3]=0, s_co_20: co=0
+*   vetor 21 (420-440 µs): a[0]=1 a[1]=0 a[2]=1 a[3]=0 b[0]=1 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__21: s[0]=0, s_s_1__21: s[1]=1, s_s_2__21: s[2]=1, s_s_3__21: s[3]=0, s_co_21: co=0
+*   vetor 22 (440-460 µs): a[0]=0 a[1]=1 a[2]=1 a[3]=0 b[0]=1 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__22: s[0]=1, s_s_1__22: s[1]=1, s_s_2__22: s[2]=1, s_s_3__22: s[3]=0, s_co_22: co=0
+*   vetor 23 (460-480 µs): a[0]=1 a[1]=1 a[2]=1 a[3]=0 b[0]=1 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__23: s[0]=0, s_s_1__23: s[1]=0, s_s_2__23: s[2]=0, s_s_3__23: s[3]=1, s_co_23: co=0
+*   vetor 24 (480-500 µs): a[0]=0 a[1]=0 a[2]=0 a[3]=1 b[0]=1 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__24: s[0]=1, s_s_1__24: s[1]=0, s_s_2__24: s[2]=0, s_s_3__24: s[3]=1, s_co_24: co=0
+*   vetor 25 (500-520 µs): a[0]=1 a[1]=0 a[2]=0 a[3]=1 b[0]=1 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__25: s[0]=0, s_s_1__25: s[1]=1, s_s_2__25: s[2]=0, s_s_3__25: s[3]=1, s_co_25: co=0
+*   vetor 26 (520-540 µs): a[0]=0 a[1]=1 a[2]=0 a[3]=1 b[0]=1 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__26: s[0]=1, s_s_1__26: s[1]=1, s_s_2__26: s[2]=0, s_s_3__26: s[3]=1, s_co_26: co=0
+*   vetor 27 (540-560 µs): a[0]=1 a[1]=1 a[2]=0 a[3]=1 b[0]=1 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__27: s[0]=0, s_s_1__27: s[1]=0, s_s_2__27: s[2]=1, s_s_3__27: s[3]=1, s_co_27: co=0
+*   vetor 28 (560-580 µs): a[0]=0 a[1]=0 a[2]=1 a[3]=1 b[0]=1 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__28: s[0]=1, s_s_1__28: s[1]=0, s_s_2__28: s[2]=1, s_s_3__28: s[3]=1, s_co_28: co=0
+*   vetor 29 (580-600 µs): a[0]=1 a[1]=0 a[2]=1 a[3]=1 b[0]=1 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__29: s[0]=0, s_s_1__29: s[1]=1, s_s_2__29: s[2]=1, s_s_3__29: s[3]=1, s_co_29: co=0
+*   vetor 30 (600-620 µs): a[0]=0 a[1]=1 a[2]=1 a[3]=1 b[0]=1 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__30: s[0]=1, s_s_1__30: s[1]=1, s_s_2__30: s[2]=1, s_s_3__30: s[3]=1, s_co_30: co=0
+*   vetor 31 (620-640 µs): a[0]=1 a[1]=1 a[2]=1 a[3]=1 b[0]=1 b[1]=0 b[2]=0 b[3]=0 ci=0  ->  s_s_0__31: s[0]=0, s_s_1__31: s[1]=0, s_s_2__31: s[2]=0, s_s_3__31: s[3]=0, s_co_31: co=1
+*   vetor 32 (640-660 µs): a[0]=0 a[1]=0 a[2]=0 a[3]=0 b[0]=0 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__32: s[0]=0, s_s_1__32: s[1]=1, s_s_2__32: s[2]=0, s_s_3__32: s[3]=0, s_co_32: co=0
+*   vetor 33 (660-680 µs): a[0]=1 a[1]=0 a[2]=0 a[3]=0 b[0]=0 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__33: s[0]=1, s_s_1__33: s[1]=1, s_s_2__33: s[2]=0, s_s_3__33: s[3]=0, s_co_33: co=0
+*   vetor 34 (680-700 µs): a[0]=0 a[1]=1 a[2]=0 a[3]=0 b[0]=0 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__34: s[0]=0, s_s_1__34: s[1]=0, s_s_2__34: s[2]=1, s_s_3__34: s[3]=0, s_co_34: co=0
+*   vetor 35 (700-720 µs): a[0]=1 a[1]=1 a[2]=0 a[3]=0 b[0]=0 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__35: s[0]=1, s_s_1__35: s[1]=0, s_s_2__35: s[2]=1, s_s_3__35: s[3]=0, s_co_35: co=0
+*   vetor 36 (720-740 µs): a[0]=0 a[1]=0 a[2]=1 a[3]=0 b[0]=0 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__36: s[0]=0, s_s_1__36: s[1]=1, s_s_2__36: s[2]=1, s_s_3__36: s[3]=0, s_co_36: co=0
+*   vetor 37 (740-760 µs): a[0]=1 a[1]=0 a[2]=1 a[3]=0 b[0]=0 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__37: s[0]=1, s_s_1__37: s[1]=1, s_s_2__37: s[2]=1, s_s_3__37: s[3]=0, s_co_37: co=0
+*   vetor 38 (760-780 µs): a[0]=0 a[1]=1 a[2]=1 a[3]=0 b[0]=0 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__38: s[0]=0, s_s_1__38: s[1]=0, s_s_2__38: s[2]=0, s_s_3__38: s[3]=1, s_co_38: co=0
+*   vetor 39 (780-800 µs): a[0]=1 a[1]=1 a[2]=1 a[3]=0 b[0]=0 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__39: s[0]=1, s_s_1__39: s[1]=0, s_s_2__39: s[2]=0, s_s_3__39: s[3]=1, s_co_39: co=0
+*   vetor 40 (800-820 µs): a[0]=0 a[1]=0 a[2]=0 a[3]=1 b[0]=0 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__40: s[0]=0, s_s_1__40: s[1]=1, s_s_2__40: s[2]=0, s_s_3__40: s[3]=1, s_co_40: co=0
+*   vetor 41 (820-840 µs): a[0]=1 a[1]=0 a[2]=0 a[3]=1 b[0]=0 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__41: s[0]=1, s_s_1__41: s[1]=1, s_s_2__41: s[2]=0, s_s_3__41: s[3]=1, s_co_41: co=0
+*   vetor 42 (840-860 µs): a[0]=0 a[1]=1 a[2]=0 a[3]=1 b[0]=0 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__42: s[0]=0, s_s_1__42: s[1]=0, s_s_2__42: s[2]=1, s_s_3__42: s[3]=1, s_co_42: co=0
+*   vetor 43 (860-880 µs): a[0]=1 a[1]=1 a[2]=0 a[3]=1 b[0]=0 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__43: s[0]=1, s_s_1__43: s[1]=0, s_s_2__43: s[2]=1, s_s_3__43: s[3]=1, s_co_43: co=0
+*   vetor 44 (880-900 µs): a[0]=0 a[1]=0 a[2]=1 a[3]=1 b[0]=0 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__44: s[0]=0, s_s_1__44: s[1]=1, s_s_2__44: s[2]=1, s_s_3__44: s[3]=1, s_co_44: co=0
+*   vetor 45 (900-920 µs): a[0]=1 a[1]=0 a[2]=1 a[3]=1 b[0]=0 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__45: s[0]=1, s_s_1__45: s[1]=1, s_s_2__45: s[2]=1, s_s_3__45: s[3]=1, s_co_45: co=0
+*   vetor 46 (920-940 µs): a[0]=0 a[1]=1 a[2]=1 a[3]=1 b[0]=0 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__46: s[0]=0, s_s_1__46: s[1]=0, s_s_2__46: s[2]=0, s_s_3__46: s[3]=0, s_co_46: co=1
+*   vetor 47 (940-960 µs): a[0]=1 a[1]=1 a[2]=1 a[3]=1 b[0]=0 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__47: s[0]=1, s_s_1__47: s[1]=0, s_s_2__47: s[2]=0, s_s_3__47: s[3]=0, s_co_47: co=1
+*   vetor 48 (960-980 µs): a[0]=0 a[1]=0 a[2]=0 a[3]=0 b[0]=1 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__48: s[0]=1, s_s_1__48: s[1]=1, s_s_2__48: s[2]=0, s_s_3__48: s[3]=0, s_co_48: co=0
+*   vetor 49 (980-1000 µs): a[0]=1 a[1]=0 a[2]=0 a[3]=0 b[0]=1 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__49: s[0]=0, s_s_1__49: s[1]=0, s_s_2__49: s[2]=1, s_s_3__49: s[3]=0, s_co_49: co=0
+*   vetor 50 (1000-1020 µs): a[0]=0 a[1]=1 a[2]=0 a[3]=0 b[0]=1 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__50: s[0]=1, s_s_1__50: s[1]=0, s_s_2__50: s[2]=1, s_s_3__50: s[3]=0, s_co_50: co=0
+*   vetor 51 (1020-1040 µs): a[0]=1 a[1]=1 a[2]=0 a[3]=0 b[0]=1 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__51: s[0]=0, s_s_1__51: s[1]=1, s_s_2__51: s[2]=1, s_s_3__51: s[3]=0, s_co_51: co=0
+*   vetor 52 (1040-1060 µs): a[0]=0 a[1]=0 a[2]=1 a[3]=0 b[0]=1 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__52: s[0]=1, s_s_1__52: s[1]=1, s_s_2__52: s[2]=1, s_s_3__52: s[3]=0, s_co_52: co=0
+*   vetor 53 (1060-1080 µs): a[0]=1 a[1]=0 a[2]=1 a[3]=0 b[0]=1 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__53: s[0]=0, s_s_1__53: s[1]=0, s_s_2__53: s[2]=0, s_s_3__53: s[3]=1, s_co_53: co=0
+*   vetor 54 (1080-1100 µs): a[0]=0 a[1]=1 a[2]=1 a[3]=0 b[0]=1 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__54: s[0]=1, s_s_1__54: s[1]=0, s_s_2__54: s[2]=0, s_s_3__54: s[3]=1, s_co_54: co=0
+*   vetor 55 (1100-1120 µs): a[0]=1 a[1]=1 a[2]=1 a[3]=0 b[0]=1 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__55: s[0]=0, s_s_1__55: s[1]=1, s_s_2__55: s[2]=0, s_s_3__55: s[3]=1, s_co_55: co=0
+*   vetor 56 (1120-1140 µs): a[0]=0 a[1]=0 a[2]=0 a[3]=1 b[0]=1 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__56: s[0]=1, s_s_1__56: s[1]=1, s_s_2__56: s[2]=0, s_s_3__56: s[3]=1, s_co_56: co=0
+*   vetor 57 (1140-1160 µs): a[0]=1 a[1]=0 a[2]=0 a[3]=1 b[0]=1 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__57: s[0]=0, s_s_1__57: s[1]=0, s_s_2__57: s[2]=1, s_s_3__57: s[3]=1, s_co_57: co=0
+*   vetor 58 (1160-1180 µs): a[0]=0 a[1]=1 a[2]=0 a[3]=1 b[0]=1 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__58: s[0]=1, s_s_1__58: s[1]=0, s_s_2__58: s[2]=1, s_s_3__58: s[3]=1, s_co_58: co=0
+*   vetor 59 (1180-1200 µs): a[0]=1 a[1]=1 a[2]=0 a[3]=1 b[0]=1 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__59: s[0]=0, s_s_1__59: s[1]=1, s_s_2__59: s[2]=1, s_s_3__59: s[3]=1, s_co_59: co=0
+*   vetor 60 (1200-1220 µs): a[0]=0 a[1]=0 a[2]=1 a[3]=1 b[0]=1 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__60: s[0]=1, s_s_1__60: s[1]=1, s_s_2__60: s[2]=1, s_s_3__60: s[3]=1, s_co_60: co=0
+*   vetor 61 (1220-1240 µs): a[0]=1 a[1]=0 a[2]=1 a[3]=1 b[0]=1 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__61: s[0]=0, s_s_1__61: s[1]=0, s_s_2__61: s[2]=0, s_s_3__61: s[3]=0, s_co_61: co=1
+*   vetor 62 (1240-1260 µs): a[0]=0 a[1]=1 a[2]=1 a[3]=1 b[0]=1 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__62: s[0]=1, s_s_1__62: s[1]=0, s_s_2__62: s[2]=0, s_s_3__62: s[3]=0, s_co_62: co=1
+*   vetor 63 (1260-1280 µs): a[0]=1 a[1]=1 a[2]=1 a[3]=1 b[0]=1 b[1]=1 b[2]=0 b[3]=0 ci=0  ->  s_s_0__63: s[0]=0, s_s_1__63: s[1]=1, s_s_2__63: s[2]=0, s_s_3__63: s[3]=0, s_co_63: co=1
+*
+* pcbflow-cellsim: canto típico
+.temp 27
+.param kup=1 kb=1
+.model NPN NPN(Is=7.049f Xti=3 Eg=1.11 Vaf=54.76 Bf=250 Ise=78.17f Ne=1.479 Ikf=24.96m Nkf=.5381 Xtb=1.5 Br=1.2 Isc=27.51f Nc=1.775 Ikr=3.321 Rc=.9706 Cjc=4.25p Mjc=.3147 Vjc=.5697 Fc=.5 Cje=11.5p Mje=.6715 Vje=.5 Tr=10n Tf=410.7p Itf=1.12 Xtf=26.19 Vtf=10)
+.subckt NAND2 A B Y VDD GND
+RL VDD Y {1000*kup}
+R1 A b1 {10000*kb}
+R2 B b2 {10000*kb}
+Q1 Y b1 n1 NPN
+Q2 n1 b2 GND NPN
+.ends NAND2
+.subckt INV A Y VDD GND
+RL VDD Y {1000*kup}
+R1 A b1 {10000*kb}
+Q1 Y b1 GND NPN
+.ends INV
+.subckt AND2 A B Y VDD GND
+X1 A B n VDD GND NAND2
+X2 n Y VDD GND INV
+.ends AND2
+.subckt NOR2 A B Y VDD GND
+RL VDD Y {1000*kup}
+R1 A b1 {10000*kb}
+R2 B b2 {10000*kb}
+Q1 Y b1 GND NPN
+Q2 Y b2 GND NPN
+.ends NOR2
+VDD vdd 0 5
+V_a_0_ n2 0 PWL(0 0.4 2e-05 0.4 2.0002e-05 1.5 4e-05 1.5 4.0002e-05 0.4 6e-05 0.4 6.0002e-05 1.5 8e-05 1.5 8.0002e-05 0.4 0.0001 0.4 0.000100002 1.5 0.00012 1.5 0.000120002 0.4 0.00014 0.4 0.000140002 1.5 0.00016 1.5 0.000160002 0.4 0.00018 0.4 0.000180002 1.5 0.0002 1.5 0.000200002 0.4 0.00022 0.4 0.000220002 1.5 0.00024 1.5 0.000240002 0.4 0.00026 0.4 0.000260002 1.5 0.00028 1.5 0.000280002 0.4 0.0003 0.4 0.000300002 1.5 0.00032 1.5 0.000320002 0.4 0.00034 0.4 0.000340002 1.5 0.00036 1.5 0.000360002 0.4 0.00038 0.4 0.000380002 1.5 0.0004 1.5 0.000400002 0.4 0.00042 0.4 0.000420002 1.5 0.00044 1.5 0.000440002 0.4 0.00046 0.4 0.000460002 1.5 0.00048 1.5 0.000480002 0.4 0.0005 0.4 0.000500002 1.5 0.00052 1.5 0.000520002 0.4 0.00054 0.4 0.000540002 1.5 0.00056 1.5 0.000560002 0.4 0.00058 0.4 0.000580002 1.5 0.0006 1.5 0.000600002 0.4 0.00062 0.4 0.000620002 1.5 0.00064 1.5 0.000640002 0.4 0.00066 0.4 0.000660002 1.5 0.00068 1.5 0.000680002 0.4 0.0007 0.4 0.000700002 1.5 0.00072 1.5 0.000720002 0.4 0.00074 0.4 0.000740002 1.5 0.00076 1.5 0.000760002 0.4 0.00078 0.4 0.000780002 1.5 0.0008 1.5 0.000800002 0.4 0.00082 0.4 0.000820002 1.5 0.00084 1.5 0.000840002 0.4 0.00086 0.4 0.000860002 1.5 0.00088 1.5 0.000880002 0.4 0.0009 0.4 0.000900002 1.5 0.00092 1.5 0.000920002 0.4 0.00094 0.4 0.000940002 1.5 0.00096 1.5 0.000960002 0.4 0.00098 0.4 0.000980002 1.5 0.001 1.5 0.001000002 0.4 0.00102 0.4 0.001020002 1.5 0.00104 1.5 0.001040002 0.4 0.00106 0.4 0.001060002 1.5 0.00108 1.5 0.001080002 0.4 0.0011 0.4 0.001100002 1.5 0.00112 1.5 0.001120002 0.4 0.00114 0.4 0.001140002 1.5 0.00116 1.5 0.001160002 0.4 0.00118 0.4 0.001180002 1.5 0.0012 1.5 0.001200002 0.4 0.00122 0.4 0.001220002 1.5 0.00124 1.5 0.001240002 0.4 0.00126 0.4 0.001260002 1.5)
+V_a_1_ n3 0 PWL(0 0.4 4e-05 0.4 4.0002e-05 1.5 8e-05 1.5 8.0002e-05 0.4 0.00012 0.4 0.000120002 1.5 0.00016 1.5 0.000160002 0.4 0.0002 0.4 0.000200002 1.5 0.00024 1.5 0.000240002 0.4 0.00028 0.4 0.000280002 1.5 0.00032 1.5 0.000320002 0.4 0.00036 0.4 0.000360002 1.5 0.0004 1.5 0.000400002 0.4 0.00044 0.4 0.000440002 1.5 0.00048 1.5 0.000480002 0.4 0.00052 0.4 0.000520002 1.5 0.00056 1.5 0.000560002 0.4 0.0006 0.4 0.000600002 1.5 0.00064 1.5 0.000640002 0.4 0.00068 0.4 0.000680002 1.5 0.00072 1.5 0.000720002 0.4 0.00076 0.4 0.000760002 1.5 0.0008 1.5 0.000800002 0.4 0.00084 0.4 0.000840002 1.5 0.00088 1.5 0.000880002 0.4 0.00092 0.4 0.000920002 1.5 0.00096 1.5 0.000960002 0.4 0.001 0.4 0.001000002 1.5 0.00104 1.5 0.001040002 0.4 0.00108 0.4 0.001080002 1.5 0.00112 1.5 0.001120002 0.4 0.00116 0.4 0.001160002 1.5 0.0012 1.5 0.001200002 0.4 0.00124 0.4 0.001240002 1.5)
+V_a_2_ n4 0 PWL(0 0.4 8e-05 0.4 8.0002e-05 1.5 0.00016 1.5 0.000160002 0.4 0.00024 0.4 0.000240002 1.5 0.00032 1.5 0.000320002 0.4 0.0004 0.4 0.000400002 1.5 0.00048 1.5 0.000480002 0.4 0.00056 0.4 0.000560002 1.5 0.00064 1.5 0.000640002 0.4 0.00072 0.4 0.000720002 1.5 0.0008 1.5 0.000800002 0.4 0.00088 0.4 0.000880002 1.5 0.00096 1.5 0.000960002 0.4 0.00104 0.4 0.001040002 1.5 0.00112 1.5 0.001120002 0.4 0.0012 0.4 0.001200002 1.5)
+V_a_3_ n5 0 PWL(0 0.4 0.00016 0.4 0.000160002 1.5 0.00032 1.5 0.000320002 0.4 0.00048 0.4 0.000480002 1.5 0.00064 1.5 0.000640002 0.4 0.0008 0.4 0.000800002 1.5 0.00096 1.5 0.000960002 0.4 0.00112 0.4 0.001120002 1.5)
+V_b_0_ n6 0 PWL(0 0.4 0.00032 0.4 0.000320002 1.5 0.00064 1.5 0.000640002 0.4 0.00096 0.4 0.000960002 1.5)
+V_b_1_ n7 0 PWL(0 0.4 0.00064 0.4 0.000640002 1.5)
+V_b_2_ n8 0 PWL(0 0.4)
+V_b_3_ n9 0 PWL(0 0.4)
+V_ci n10 0 PWL(0 0.4)
+XU1 n10 n11 n12 vdd 0 AND2
+XU2 n10 n11 n13 vdd 0 NAND2
+XU3 n10 n11 n14 vdd 0 NOR2
+XU4 n12 n14 n15 vdd 0 NOR2
+XU5 n16 n13 n17 vdd 0 NAND2
+XU6 n2 n6 n18 vdd 0 AND2
+XU7 n2 n6 n16 vdd 0 NAND2
+XU8 n2 n6 n19 vdd 0 NOR2
+XU9 n18 n19 n11 vdd 0 NOR2
+XU10 n17 n20 n21 vdd 0 AND2
+XU11 n17 n20 n22 vdd 0 NAND2
+XU12 n17 n20 n23 vdd 0 NOR2
+XU13 n21 n23 n24 vdd 0 NOR2
+XU14 n25 n22 n26 vdd 0 NAND2
+XU15 n3 n7 n27 vdd 0 AND2
+XU16 n3 n7 n25 vdd 0 NAND2
+XU17 n3 n7 n28 vdd 0 NOR2
+XU18 n27 n28 n20 vdd 0 NOR2
+XU19 n26 n29 n30 vdd 0 AND2
+XU20 n26 n29 n31 vdd 0 NAND2
+XU21 n26 n29 n32 vdd 0 NOR2
+XU22 n30 n32 n33 vdd 0 NOR2
+XU23 n34 n31 n35 vdd 0 NAND2
+XU24 n4 n8 n36 vdd 0 AND2
+XU25 n4 n8 n34 vdd 0 NAND2
+XU26 n4 n8 n37 vdd 0 NOR2
+XU27 n36 n37 n29 vdd 0 NOR2
+XU28 n35 n38 n39 vdd 0 AND2
+XU29 n35 n38 n40 vdd 0 NAND2
+XU30 n35 n38 n41 vdd 0 NOR2
+XU31 n39 n41 n42 vdd 0 NOR2
+XU32 n43 n40 n44 vdd 0 NAND2
+XU33 n5 n9 n45 vdd 0 AND2
+XU34 n5 n9 n43 vdd 0 NAND2
+XU35 n5 n9 n46 vdd 0 NOR2
+XU36 n45 n46 n38 vdd 0 NOR2
+Xld_s_0_ n15 ldo_s_0__Y vdd 0 INV
+Xld_s_1_ n24 ldo_s_1__Y vdd 0 INV
+Xld_s_2_ n33 ldo_s_2__Y vdd 0 INV
+Xld_s_3_ n42 ldo_s_3__Y vdd 0 INV
+Xld_co n44 ldo_co_Y vdd 0 INV
+.tran 4e-08 0.00128
+.control
+run
+linearize
+set wr_singlescale
+set wr_vecnames
+wrdata add4.dat v(n2) v(n3) v(n4) v(n5) v(n6) v(n7) v(n8) v(n9) v(n10) v(n15) v(n24) v(n33) v(n42) v(n44)
+meas tran s_s_0__0 FIND v(n15) AT=1.9e-05
+meas tran s_s_1__0 FIND v(n24) AT=1.9e-05
+meas tran s_s_2__0 FIND v(n33) AT=1.9e-05
+meas tran s_s_3__0 FIND v(n42) AT=1.9e-05
+meas tran s_co_0 FIND v(n44) AT=1.9e-05
+meas tran s_s_0__1 FIND v(n15) AT=3.9e-05
+meas tran t_s_0__1 WHEN v(n15)=1 CROSS=LAST FROM=2e-05 TO=4e-05
+meas tran s_s_1__1 FIND v(n24) AT=3.9e-05
+meas tran s_s_2__1 FIND v(n33) AT=3.9e-05
+meas tran s_s_3__1 FIND v(n42) AT=3.9e-05
+meas tran s_co_1 FIND v(n44) AT=3.9e-05
+meas tran s_s_0__2 FIND v(n15) AT=5.9e-05
+meas tran t_s_0__2 WHEN v(n15)=1 CROSS=LAST FROM=4e-05 TO=6e-05
+meas tran s_s_1__2 FIND v(n24) AT=5.9e-05
+meas tran t_s_1__2 WHEN v(n24)=1 CROSS=LAST FROM=4e-05 TO=6e-05
+meas tran s_s_2__2 FIND v(n33) AT=5.9e-05
+meas tran s_s_3__2 FIND v(n42) AT=5.9e-05
+meas tran s_co_2 FIND v(n44) AT=5.9e-05
+meas tran s_s_0__3 FIND v(n15) AT=7.9e-05
+meas tran t_s_0__3 WHEN v(n15)=1 CROSS=LAST FROM=6e-05 TO=8e-05
+meas tran s_s_1__3 FIND v(n24) AT=7.9e-05
+meas tran s_s_2__3 FIND v(n33) AT=7.9e-05
+meas tran s_s_3__3 FIND v(n42) AT=7.9e-05
+meas tran s_co_3 FIND v(n44) AT=7.9e-05
+meas tran s_s_0__4 FIND v(n15) AT=9.9e-05
+meas tran t_s_0__4 WHEN v(n15)=1 CROSS=LAST FROM=8e-05 TO=0.0001
+meas tran s_s_1__4 FIND v(n24) AT=9.9e-05
+meas tran t_s_1__4 WHEN v(n24)=1 CROSS=LAST FROM=8e-05 TO=0.0001
+meas tran s_s_2__4 FIND v(n33) AT=9.9e-05
+meas tran t_s_2__4 WHEN v(n33)=1 CROSS=LAST FROM=8e-05 TO=0.0001
+meas tran s_s_3__4 FIND v(n42) AT=9.9e-05
+meas tran s_co_4 FIND v(n44) AT=9.9e-05
+meas tran s_s_0__5 FIND v(n15) AT=0.000119
+meas tran t_s_0__5 WHEN v(n15)=1 CROSS=LAST FROM=0.0001 TO=0.00012
+meas tran s_s_1__5 FIND v(n24) AT=0.000119
+meas tran s_s_2__5 FIND v(n33) AT=0.000119
+meas tran s_s_3__5 FIND v(n42) AT=0.000119
+meas tran s_co_5 FIND v(n44) AT=0.000119
+meas tran s_s_0__6 FIND v(n15) AT=0.000139
+meas tran t_s_0__6 WHEN v(n15)=1 CROSS=LAST FROM=0.00012 TO=0.00014
+meas tran s_s_1__6 FIND v(n24) AT=0.000139
+meas tran t_s_1__6 WHEN v(n24)=1 CROSS=LAST FROM=0.00012 TO=0.00014
+meas tran s_s_2__6 FIND v(n33) AT=0.000139
+meas tran s_s_3__6 FIND v(n42) AT=0.000139
+meas tran s_co_6 FIND v(n44) AT=0.000139
+meas tran s_s_0__7 FIND v(n15) AT=0.000159
+meas tran t_s_0__7 WHEN v(n15)=1 CROSS=LAST FROM=0.00014 TO=0.00016
+meas tran s_s_1__7 FIND v(n24) AT=0.000159
+meas tran s_s_2__7 FIND v(n33) AT=0.000159
+meas tran s_s_3__7 FIND v(n42) AT=0.000159
+meas tran s_co_7 FIND v(n44) AT=0.000159
+meas tran s_s_0__8 FIND v(n15) AT=0.000179
+meas tran t_s_0__8 WHEN v(n15)=1 CROSS=LAST FROM=0.00016 TO=0.00018
+meas tran s_s_1__8 FIND v(n24) AT=0.000179
+meas tran t_s_1__8 WHEN v(n24)=1 CROSS=LAST FROM=0.00016 TO=0.00018
+meas tran s_s_2__8 FIND v(n33) AT=0.000179
+meas tran t_s_2__8 WHEN v(n33)=1 CROSS=LAST FROM=0.00016 TO=0.00018
+meas tran s_s_3__8 FIND v(n42) AT=0.000179
+meas tran t_s_3__8 WHEN v(n42)=1 CROSS=LAST FROM=0.00016 TO=0.00018
+meas tran s_co_8 FIND v(n44) AT=0.000179
+meas tran s_s_0__9 FIND v(n15) AT=0.000199
+meas tran t_s_0__9 WHEN v(n15)=1 CROSS=LAST FROM=0.00018 TO=0.0002
+meas tran s_s_1__9 FIND v(n24) AT=0.000199
+meas tran s_s_2__9 FIND v(n33) AT=0.000199
+meas tran s_s_3__9 FIND v(n42) AT=0.000199
+meas tran s_co_9 FIND v(n44) AT=0.000199
+meas tran s_s_0__10 FIND v(n15) AT=0.000219
+meas tran t_s_0__10 WHEN v(n15)=1 CROSS=LAST FROM=0.0002 TO=0.00022
+meas tran s_s_1__10 FIND v(n24) AT=0.000219
+meas tran t_s_1__10 WHEN v(n24)=1 CROSS=LAST FROM=0.0002 TO=0.00022
+meas tran s_s_2__10 FIND v(n33) AT=0.000219
+meas tran s_s_3__10 FIND v(n42) AT=0.000219
+meas tran s_co_10 FIND v(n44) AT=0.000219
+meas tran s_s_0__11 FIND v(n15) AT=0.000239
+meas tran t_s_0__11 WHEN v(n15)=1 CROSS=LAST FROM=0.00022 TO=0.00024
+meas tran s_s_1__11 FIND v(n24) AT=0.000239
+meas tran s_s_2__11 FIND v(n33) AT=0.000239
+meas tran s_s_3__11 FIND v(n42) AT=0.000239
+meas tran s_co_11 FIND v(n44) AT=0.000239
+meas tran s_s_0__12 FIND v(n15) AT=0.000259
+meas tran t_s_0__12 WHEN v(n15)=1 CROSS=LAST FROM=0.00024 TO=0.00026
+meas tran s_s_1__12 FIND v(n24) AT=0.000259
+meas tran t_s_1__12 WHEN v(n24)=1 CROSS=LAST FROM=0.00024 TO=0.00026
+meas tran s_s_2__12 FIND v(n33) AT=0.000259
+meas tran t_s_2__12 WHEN v(n33)=1 CROSS=LAST FROM=0.00024 TO=0.00026
+meas tran s_s_3__12 FIND v(n42) AT=0.000259
+meas tran s_co_12 FIND v(n44) AT=0.000259
+meas tran s_s_0__13 FIND v(n15) AT=0.000279
+meas tran t_s_0__13 WHEN v(n15)=1 CROSS=LAST FROM=0.00026 TO=0.00028
+meas tran s_s_1__13 FIND v(n24) AT=0.000279
+meas tran s_s_2__13 FIND v(n33) AT=0.000279
+meas tran s_s_3__13 FIND v(n42) AT=0.000279
+meas tran s_co_13 FIND v(n44) AT=0.000279
+meas tran s_s_0__14 FIND v(n15) AT=0.000299
+meas tran t_s_0__14 WHEN v(n15)=1 CROSS=LAST FROM=0.00028 TO=0.0003
+meas tran s_s_1__14 FIND v(n24) AT=0.000299
+meas tran t_s_1__14 WHEN v(n24)=1 CROSS=LAST FROM=0.00028 TO=0.0003
+meas tran s_s_2__14 FIND v(n33) AT=0.000299
+meas tran s_s_3__14 FIND v(n42) AT=0.000299
+meas tran s_co_14 FIND v(n44) AT=0.000299
+meas tran s_s_0__15 FIND v(n15) AT=0.000319
+meas tran t_s_0__15 WHEN v(n15)=1 CROSS=LAST FROM=0.0003 TO=0.00032
+meas tran s_s_1__15 FIND v(n24) AT=0.000319
+meas tran s_s_2__15 FIND v(n33) AT=0.000319
+meas tran s_s_3__15 FIND v(n42) AT=0.000319
+meas tran s_co_15 FIND v(n44) AT=0.000319
+meas tran s_s_0__16 FIND v(n15) AT=0.000339
+meas tran s_s_1__16 FIND v(n24) AT=0.000339
+meas tran t_s_1__16 WHEN v(n24)=1 CROSS=LAST FROM=0.00032 TO=0.00034
+meas tran s_s_2__16 FIND v(n33) AT=0.000339
+meas tran t_s_2__16 WHEN v(n33)=1 CROSS=LAST FROM=0.00032 TO=0.00034
+meas tran s_s_3__16 FIND v(n42) AT=0.000339
+meas tran t_s_3__16 WHEN v(n42)=1 CROSS=LAST FROM=0.00032 TO=0.00034
+meas tran s_co_16 FIND v(n44) AT=0.000339
+meas tran s_s_0__17 FIND v(n15) AT=0.000359
+meas tran t_s_0__17 WHEN v(n15)=1 CROSS=LAST FROM=0.00034 TO=0.00036
+meas tran s_s_1__17 FIND v(n24) AT=0.000359
+meas tran t_s_1__17 WHEN v(n24)=1 CROSS=LAST FROM=0.00034 TO=0.00036
+meas tran s_s_2__17 FIND v(n33) AT=0.000359
+meas tran s_s_3__17 FIND v(n42) AT=0.000359
+meas tran s_co_17 FIND v(n44) AT=0.000359
+meas tran s_s_0__18 FIND v(n15) AT=0.000379
+meas tran t_s_0__18 WHEN v(n15)=1 CROSS=LAST FROM=0.00036 TO=0.00038
+meas tran s_s_1__18 FIND v(n24) AT=0.000379
+meas tran s_s_2__18 FIND v(n33) AT=0.000379
+meas tran s_s_3__18 FIND v(n42) AT=0.000379
+meas tran s_co_18 FIND v(n44) AT=0.000379
+meas tran s_s_0__19 FIND v(n15) AT=0.000399
+meas tran t_s_0__19 WHEN v(n15)=1 CROSS=LAST FROM=0.00038 TO=0.0004
+meas tran s_s_1__19 FIND v(n24) AT=0.000399
+meas tran t_s_1__19 WHEN v(n24)=1 CROSS=LAST FROM=0.00038 TO=0.0004
+meas tran s_s_2__19 FIND v(n33) AT=0.000399
+meas tran t_s_2__19 WHEN v(n33)=1 CROSS=LAST FROM=0.00038 TO=0.0004
+meas tran s_s_3__19 FIND v(n42) AT=0.000399
+meas tran s_co_19 FIND v(n44) AT=0.000399
+meas tran s_s_0__20 FIND v(n15) AT=0.000419
+meas tran t_s_0__20 WHEN v(n15)=1 CROSS=LAST FROM=0.0004 TO=0.00042
+meas tran s_s_1__20 FIND v(n24) AT=0.000419
+meas tran s_s_2__20 FIND v(n33) AT=0.000419
+meas tran s_s_3__20 FIND v(n42) AT=0.000419
+meas tran s_co_20 FIND v(n44) AT=0.000419
+meas tran s_s_0__21 FIND v(n15) AT=0.000439
+meas tran t_s_0__21 WHEN v(n15)=1 CROSS=LAST FROM=0.00042 TO=0.00044
+meas tran s_s_1__21 FIND v(n24) AT=0.000439
+meas tran t_s_1__21 WHEN v(n24)=1 CROSS=LAST FROM=0.00042 TO=0.00044
+meas tran s_s_2__21 FIND v(n33) AT=0.000439
+meas tran s_s_3__21 FIND v(n42) AT=0.000439
+meas tran s_co_21 FIND v(n44) AT=0.000439
+meas tran s_s_0__22 FIND v(n15) AT=0.000459
+meas tran t_s_0__22 WHEN v(n15)=1 CROSS=LAST FROM=0.00044 TO=0.00046
+meas tran s_s_1__22 FIND v(n24) AT=0.000459
+meas tran s_s_2__22 FIND v(n33) AT=0.000459
+meas tran s_s_3__22 FIND v(n42) AT=0.000459
+meas tran s_co_22 FIND v(n44) AT=0.000459
+meas tran s_s_0__23 FIND v(n15) AT=0.000479
+meas tran t_s_0__23 WHEN v(n15)=1 CROSS=LAST FROM=0.00046 TO=0.00048
+meas tran s_s_1__23 FIND v(n24) AT=0.000479
+meas tran t_s_1__23 WHEN v(n24)=1 CROSS=LAST FROM=0.00046 TO=0.00048
+meas tran s_s_2__23 FIND v(n33) AT=0.000479
+meas tran t_s_2__23 WHEN v(n33)=1 CROSS=LAST FROM=0.00046 TO=0.00048
+meas tran s_s_3__23 FIND v(n42) AT=0.000479
+meas tran t_s_3__23 WHEN v(n42)=1 CROSS=LAST FROM=0.00046 TO=0.00048
+meas tran s_co_23 FIND v(n44) AT=0.000479
+meas tran s_s_0__24 FIND v(n15) AT=0.000499
+meas tran t_s_0__24 WHEN v(n15)=1 CROSS=LAST FROM=0.00048 TO=0.0005
+meas tran s_s_1__24 FIND v(n24) AT=0.000499
+meas tran s_s_2__24 FIND v(n33) AT=0.000499
+meas tran s_s_3__24 FIND v(n42) AT=0.000499
+meas tran s_co_24 FIND v(n44) AT=0.000499
+meas tran s_s_0__25 FIND v(n15) AT=0.000519
+meas tran t_s_0__25 WHEN v(n15)=1 CROSS=LAST FROM=0.0005 TO=0.00052
+meas tran s_s_1__25 FIND v(n24) AT=0.000519
+meas tran t_s_1__25 WHEN v(n24)=1 CROSS=LAST FROM=0.0005 TO=0.00052
+meas tran s_s_2__25 FIND v(n33) AT=0.000519
+meas tran s_s_3__25 FIND v(n42) AT=0.000519
+meas tran s_co_25 FIND v(n44) AT=0.000519
+meas tran s_s_0__26 FIND v(n15) AT=0.000539
+meas tran t_s_0__26 WHEN v(n15)=1 CROSS=LAST FROM=0.00052 TO=0.00054
+meas tran s_s_1__26 FIND v(n24) AT=0.000539
+meas tran s_s_2__26 FIND v(n33) AT=0.000539
+meas tran s_s_3__26 FIND v(n42) AT=0.000539
+meas tran s_co_26 FIND v(n44) AT=0.000539
+meas tran s_s_0__27 FIND v(n15) AT=0.000559
+meas tran t_s_0__27 WHEN v(n15)=1 CROSS=LAST FROM=0.00054 TO=0.00056
+meas tran s_s_1__27 FIND v(n24) AT=0.000559
+meas tran t_s_1__27 WHEN v(n24)=1 CROSS=LAST FROM=0.00054 TO=0.00056
+meas tran s_s_2__27 FIND v(n33) AT=0.000559
+meas tran t_s_2__27 WHEN v(n33)=1 CROSS=LAST FROM=0.00054 TO=0.00056
+meas tran s_s_3__27 FIND v(n42) AT=0.000559
+meas tran s_co_27 FIND v(n44) AT=0.000559
+meas tran s_s_0__28 FIND v(n15) AT=0.000579
+meas tran t_s_0__28 WHEN v(n15)=1 CROSS=LAST FROM=0.00056 TO=0.00058
+meas tran s_s_1__28 FIND v(n24) AT=0.000579
+meas tran s_s_2__28 FIND v(n33) AT=0.000579
+meas tran s_s_3__28 FIND v(n42) AT=0.000579
+meas tran s_co_28 FIND v(n44) AT=0.000579
+meas tran s_s_0__29 FIND v(n15) AT=0.000599
+meas tran t_s_0__29 WHEN v(n15)=1 CROSS=LAST FROM=0.00058 TO=0.0006
+meas tran s_s_1__29 FIND v(n24) AT=0.000599
+meas tran t_s_1__29 WHEN v(n24)=1 CROSS=LAST FROM=0.00058 TO=0.0006
+meas tran s_s_2__29 FIND v(n33) AT=0.000599
+meas tran s_s_3__29 FIND v(n42) AT=0.000599
+meas tran s_co_29 FIND v(n44) AT=0.000599
+meas tran s_s_0__30 FIND v(n15) AT=0.000619
+meas tran t_s_0__30 WHEN v(n15)=1 CROSS=LAST FROM=0.0006 TO=0.00062
+meas tran s_s_1__30 FIND v(n24) AT=0.000619
+meas tran s_s_2__30 FIND v(n33) AT=0.000619
+meas tran s_s_3__30 FIND v(n42) AT=0.000619
+meas tran s_co_30 FIND v(n44) AT=0.000619
+meas tran s_s_0__31 FIND v(n15) AT=0.000639
+meas tran t_s_0__31 WHEN v(n15)=1 CROSS=LAST FROM=0.00062 TO=0.00064
+meas tran s_s_1__31 FIND v(n24) AT=0.000639
+meas tran t_s_1__31 WHEN v(n24)=1 CROSS=LAST FROM=0.00062 TO=0.00064
+meas tran s_s_2__31 FIND v(n33) AT=0.000639
+meas tran t_s_2__31 WHEN v(n33)=1 CROSS=LAST FROM=0.00062 TO=0.00064
+meas tran s_s_3__31 FIND v(n42) AT=0.000639
+meas tran t_s_3__31 WHEN v(n42)=1 CROSS=LAST FROM=0.00062 TO=0.00064
+meas tran s_co_31 FIND v(n44) AT=0.000639
+meas tran t_co_31 WHEN v(n44)=1 CROSS=LAST FROM=0.00062 TO=0.00064
+meas tran s_s_0__32 FIND v(n15) AT=0.000659
+meas tran s_s_1__32 FIND v(n24) AT=0.000659
+meas tran t_s_1__32 WHEN v(n24)=1 CROSS=LAST FROM=0.00064 TO=0.00066
+meas tran s_s_2__32 FIND v(n33) AT=0.000659
+meas tran s_s_3__32 FIND v(n42) AT=0.000659
+meas tran s_co_32 FIND v(n44) AT=0.000659
+meas tran t_co_32 WHEN v(n44)=1 CROSS=LAST FROM=0.00064 TO=0.00066
+meas tran s_s_0__33 FIND v(n15) AT=0.000679
+meas tran t_s_0__33 WHEN v(n15)=1 CROSS=LAST FROM=0.00066 TO=0.00068
+meas tran s_s_1__33 FIND v(n24) AT=0.000679
+meas tran s_s_2__33 FIND v(n33) AT=0.000679
+meas tran s_s_3__33 FIND v(n42) AT=0.000679
+meas tran s_co_33 FIND v(n44) AT=0.000679
+meas tran s_s_0__34 FIND v(n15) AT=0.000699
+meas tran t_s_0__34 WHEN v(n15)=1 CROSS=LAST FROM=0.00068 TO=0.0007
+meas tran s_s_1__34 FIND v(n24) AT=0.000699
+meas tran t_s_1__34 WHEN v(n24)=1 CROSS=LAST FROM=0.00068 TO=0.0007
+meas tran s_s_2__34 FIND v(n33) AT=0.000699
+meas tran t_s_2__34 WHEN v(n33)=1 CROSS=LAST FROM=0.00068 TO=0.0007
+meas tran s_s_3__34 FIND v(n42) AT=0.000699
+meas tran s_co_34 FIND v(n44) AT=0.000699
+meas tran s_s_0__35 FIND v(n15) AT=0.000719
+meas tran t_s_0__35 WHEN v(n15)=1 CROSS=LAST FROM=0.0007 TO=0.00072
+meas tran s_s_1__35 FIND v(n24) AT=0.000719
+meas tran s_s_2__35 FIND v(n33) AT=0.000719
+meas tran s_s_3__35 FIND v(n42) AT=0.000719
+meas tran s_co_35 FIND v(n44) AT=0.000719
+meas tran s_s_0__36 FIND v(n15) AT=0.000739
+meas tran t_s_0__36 WHEN v(n15)=1 CROSS=LAST FROM=0.00072 TO=0.00074
+meas tran s_s_1__36 FIND v(n24) AT=0.000739
+meas tran t_s_1__36 WHEN v(n24)=1 CROSS=LAST FROM=0.00072 TO=0.00074
+meas tran s_s_2__36 FIND v(n33) AT=0.000739
+meas tran s_s_3__36 FIND v(n42) AT=0.000739
+meas tran s_co_36 FIND v(n44) AT=0.000739
+meas tran s_s_0__37 FIND v(n15) AT=0.000759
+meas tran t_s_0__37 WHEN v(n15)=1 CROSS=LAST FROM=0.00074 TO=0.00076
+meas tran s_s_1__37 FIND v(n24) AT=0.000759
+meas tran s_s_2__37 FIND v(n33) AT=0.000759
+meas tran s_s_3__37 FIND v(n42) AT=0.000759
+meas tran s_co_37 FIND v(n44) AT=0.000759
+meas tran s_s_0__38 FIND v(n15) AT=0.000779
+meas tran t_s_0__38 WHEN v(n15)=1 CROSS=LAST FROM=0.00076 TO=0.00078
+meas tran s_s_1__38 FIND v(n24) AT=0.000779
+meas tran t_s_1__38 WHEN v(n24)=1 CROSS=LAST FROM=0.00076 TO=0.00078
+meas tran s_s_2__38 FIND v(n33) AT=0.000779
+meas tran t_s_2__38 WHEN v(n33)=1 CROSS=LAST FROM=0.00076 TO=0.00078
+meas tran s_s_3__38 FIND v(n42) AT=0.000779
+meas tran t_s_3__38 WHEN v(n42)=1 CROSS=LAST FROM=0.00076 TO=0.00078
+meas tran s_co_38 FIND v(n44) AT=0.000779
+meas tran s_s_0__39 FIND v(n15) AT=0.000799
+meas tran t_s_0__39 WHEN v(n15)=1 CROSS=LAST FROM=0.00078 TO=0.0008
+meas tran s_s_1__39 FIND v(n24) AT=0.000799
+meas tran s_s_2__39 FIND v(n33) AT=0.000799
+meas tran s_s_3__39 FIND v(n42) AT=0.000799
+meas tran s_co_39 FIND v(n44) AT=0.000799
+meas tran s_s_0__40 FIND v(n15) AT=0.000819
+meas tran t_s_0__40 WHEN v(n15)=1 CROSS=LAST FROM=0.0008 TO=0.00082
+meas tran s_s_1__40 FIND v(n24) AT=0.000819
+meas tran t_s_1__40 WHEN v(n24)=1 CROSS=LAST FROM=0.0008 TO=0.00082
+meas tran s_s_2__40 FIND v(n33) AT=0.000819
+meas tran s_s_3__40 FIND v(n42) AT=0.000819
+meas tran s_co_40 FIND v(n44) AT=0.000819
+meas tran s_s_0__41 FIND v(n15) AT=0.000839
+meas tran t_s_0__41 WHEN v(n15)=1 CROSS=LAST FROM=0.00082 TO=0.00084
+meas tran s_s_1__41 FIND v(n24) AT=0.000839
+meas tran s_s_2__41 FIND v(n33) AT=0.000839
+meas tran s_s_3__41 FIND v(n42) AT=0.000839
+meas tran s_co_41 FIND v(n44) AT=0.000839
+meas tran s_s_0__42 FIND v(n15) AT=0.000859
+meas tran t_s_0__42 WHEN v(n15)=1 CROSS=LAST FROM=0.00084 TO=0.00086
+meas tran s_s_1__42 FIND v(n24) AT=0.000859
+meas tran t_s_1__42 WHEN v(n24)=1 CROSS=LAST FROM=0.00084 TO=0.00086
+meas tran s_s_2__42 FIND v(n33) AT=0.000859
+meas tran t_s_2__42 WHEN v(n33)=1 CROSS=LAST FROM=0.00084 TO=0.00086
+meas tran s_s_3__42 FIND v(n42) AT=0.000859
+meas tran s_co_42 FIND v(n44) AT=0.000859
+meas tran s_s_0__43 FIND v(n15) AT=0.000879
+meas tran t_s_0__43 WHEN v(n15)=1 CROSS=LAST FROM=0.00086 TO=0.00088
+meas tran s_s_1__43 FIND v(n24) AT=0.000879
+meas tran s_s_2__43 FIND v(n33) AT=0.000879
+meas tran s_s_3__43 FIND v(n42) AT=0.000879
+meas tran s_co_43 FIND v(n44) AT=0.000879
+meas tran s_s_0__44 FIND v(n15) AT=0.000899
+meas tran t_s_0__44 WHEN v(n15)=1 CROSS=LAST FROM=0.00088 TO=0.0009
+meas tran s_s_1__44 FIND v(n24) AT=0.000899
+meas tran t_s_1__44 WHEN v(n24)=1 CROSS=LAST FROM=0.00088 TO=0.0009
+meas tran s_s_2__44 FIND v(n33) AT=0.000899
+meas tran s_s_3__44 FIND v(n42) AT=0.000899
+meas tran s_co_44 FIND v(n44) AT=0.000899
+meas tran s_s_0__45 FIND v(n15) AT=0.000919
+meas tran t_s_0__45 WHEN v(n15)=1 CROSS=LAST FROM=0.0009 TO=0.00092
+meas tran s_s_1__45 FIND v(n24) AT=0.000919
+meas tran s_s_2__45 FIND v(n33) AT=0.000919
+meas tran s_s_3__45 FIND v(n42) AT=0.000919
+meas tran s_co_45 FIND v(n44) AT=0.000919
+meas tran s_s_0__46 FIND v(n15) AT=0.000939
+meas tran t_s_0__46 WHEN v(n15)=1 CROSS=LAST FROM=0.00092 TO=0.00094
+meas tran s_s_1__46 FIND v(n24) AT=0.000939
+meas tran t_s_1__46 WHEN v(n24)=1 CROSS=LAST FROM=0.00092 TO=0.00094
+meas tran s_s_2__46 FIND v(n33) AT=0.000939
+meas tran t_s_2__46 WHEN v(n33)=1 CROSS=LAST FROM=0.00092 TO=0.00094
+meas tran s_s_3__46 FIND v(n42) AT=0.000939
+meas tran t_s_3__46 WHEN v(n42)=1 CROSS=LAST FROM=0.00092 TO=0.00094
+meas tran s_co_46 FIND v(n44) AT=0.000939
+meas tran t_co_46 WHEN v(n44)=1 CROSS=LAST FROM=0.00092 TO=0.00094
+meas tran s_s_0__47 FIND v(n15) AT=0.000959
+meas tran t_s_0__47 WHEN v(n15)=1 CROSS=LAST FROM=0.00094 TO=0.00096
+meas tran s_s_1__47 FIND v(n24) AT=0.000959
+meas tran s_s_2__47 FIND v(n33) AT=0.000959
+meas tran s_s_3__47 FIND v(n42) AT=0.000959
+meas tran s_co_47 FIND v(n44) AT=0.000959
+meas tran s_s_0__48 FIND v(n15) AT=0.000979
+meas tran s_s_1__48 FIND v(n24) AT=0.000979
+meas tran t_s_1__48 WHEN v(n24)=1 CROSS=LAST FROM=0.00096 TO=0.00098
+meas tran s_s_2__48 FIND v(n33) AT=0.000979
+meas tran s_s_3__48 FIND v(n42) AT=0.000979
+meas tran s_co_48 FIND v(n44) AT=0.000979
+meas tran t_co_48 WHEN v(n44)=1 CROSS=LAST FROM=0.00096 TO=0.00098
+meas tran s_s_0__49 FIND v(n15) AT=0.000999
+meas tran t_s_0__49 WHEN v(n15)=1 CROSS=LAST FROM=0.00098 TO=0.001
+meas tran s_s_1__49 FIND v(n24) AT=0.000999
+meas tran t_s_1__49 WHEN v(n24)=1 CROSS=LAST FROM=0.00098 TO=0.001
+meas tran s_s_2__49 FIND v(n33) AT=0.000999
+meas tran t_s_2__49 WHEN v(n33)=1 CROSS=LAST FROM=0.00098 TO=0.001
+meas tran s_s_3__49 FIND v(n42) AT=0.000999
+meas tran s_co_49 FIND v(n44) AT=0.000999
+meas tran s_s_0__50 FIND v(n15) AT=0.001019
+meas tran t_s_0__50 WHEN v(n15)=1 CROSS=LAST FROM=0.001 TO=0.00102
+meas tran s_s_1__50 FIND v(n24) AT=0.001019
+meas tran s_s_2__50 FIND v(n33) AT=0.001019
+meas tran s_s_3__50 FIND v(n42) AT=0.001019
+meas tran s_co_50 FIND v(n44) AT=0.001019
+meas tran s_s_0__51 FIND v(n15) AT=0.001039
+meas tran t_s_0__51 WHEN v(n15)=1 CROSS=LAST FROM=0.00102 TO=0.00104
+meas tran s_s_1__51 FIND v(n24) AT=0.001039
+meas tran t_s_1__51 WHEN v(n24)=1 CROSS=LAST FROM=0.00102 TO=0.00104
+meas tran s_s_2__51 FIND v(n33) AT=0.001039
+meas tran s_s_3__51 FIND v(n42) AT=0.001039
+meas tran s_co_51 FIND v(n44) AT=0.001039
+meas tran s_s_0__52 FIND v(n15) AT=0.001059
+meas tran t_s_0__52 WHEN v(n15)=1 CROSS=LAST FROM=0.00104 TO=0.00106
+meas tran s_s_1__52 FIND v(n24) AT=0.001059
+meas tran s_s_2__52 FIND v(n33) AT=0.001059
+meas tran s_s_3__52 FIND v(n42) AT=0.001059
+meas tran s_co_52 FIND v(n44) AT=0.001059
+meas tran s_s_0__53 FIND v(n15) AT=0.001079
+meas tran t_s_0__53 WHEN v(n15)=1 CROSS=LAST FROM=0.00106 TO=0.00108
+meas tran s_s_1__53 FIND v(n24) AT=0.001079
+meas tran t_s_1__53 WHEN v(n24)=1 CROSS=LAST FROM=0.00106 TO=0.00108
+meas tran s_s_2__53 FIND v(n33) AT=0.001079
+meas tran t_s_2__53 WHEN v(n33)=1 CROSS=LAST FROM=0.00106 TO=0.00108
+meas tran s_s_3__53 FIND v(n42) AT=0.001079
+meas tran t_s_3__53 WHEN v(n42)=1 CROSS=LAST FROM=0.00106 TO=0.00108
+meas tran s_co_53 FIND v(n44) AT=0.001079
+meas tran s_s_0__54 FIND v(n15) AT=0.001099
+meas tran t_s_0__54 WHEN v(n15)=1 CROSS=LAST FROM=0.00108 TO=0.0011
+meas tran s_s_1__54 FIND v(n24) AT=0.001099
+meas tran s_s_2__54 FIND v(n33) AT=0.001099
+meas tran s_s_3__54 FIND v(n42) AT=0.001099
+meas tran s_co_54 FIND v(n44) AT=0.001099
+meas tran s_s_0__55 FIND v(n15) AT=0.001119
+meas tran t_s_0__55 WHEN v(n15)=1 CROSS=LAST FROM=0.0011 TO=0.00112
+meas tran s_s_1__55 FIND v(n24) AT=0.001119
+meas tran t_s_1__55 WHEN v(n24)=1 CROSS=LAST FROM=0.0011 TO=0.00112
+meas tran s_s_2__55 FIND v(n33) AT=0.001119
+meas tran s_s_3__55 FIND v(n42) AT=0.001119
+meas tran s_co_55 FIND v(n44) AT=0.001119
+meas tran s_s_0__56 FIND v(n15) AT=0.001139
+meas tran t_s_0__56 WHEN v(n15)=1 CROSS=LAST FROM=0.00112 TO=0.00114
+meas tran s_s_1__56 FIND v(n24) AT=0.001139
+meas tran s_s_2__56 FIND v(n33) AT=0.001139
+meas tran s_s_3__56 FIND v(n42) AT=0.001139
+meas tran s_co_56 FIND v(n44) AT=0.001139
+meas tran s_s_0__57 FIND v(n15) AT=0.001159
+meas tran t_s_0__57 WHEN v(n15)=1 CROSS=LAST FROM=0.00114 TO=0.00116
+meas tran s_s_1__57 FIND v(n24) AT=0.001159
+meas tran t_s_1__57 WHEN v(n24)=1 CROSS=LAST FROM=0.00114 TO=0.00116
+meas tran s_s_2__57 FIND v(n33) AT=0.001159
+meas tran t_s_2__57 WHEN v(n33)=1 CROSS=LAST FROM=0.00114 TO=0.00116
+meas tran s_s_3__57 FIND v(n42) AT=0.001159
+meas tran s_co_57 FIND v(n44) AT=0.001159
+meas tran s_s_0__58 FIND v(n15) AT=0.001179
+meas tran t_s_0__58 WHEN v(n15)=1 CROSS=LAST FROM=0.00116 TO=0.00118
+meas tran s_s_1__58 FIND v(n24) AT=0.001179
+meas tran s_s_2__58 FIND v(n33) AT=0.001179
+meas tran s_s_3__58 FIND v(n42) AT=0.001179
+meas tran s_co_58 FIND v(n44) AT=0.001179
+meas tran s_s_0__59 FIND v(n15) AT=0.001199
+meas tran t_s_0__59 WHEN v(n15)=1 CROSS=LAST FROM=0.00118 TO=0.0012
+meas tran s_s_1__59 FIND v(n24) AT=0.001199
+meas tran t_s_1__59 WHEN v(n24)=1 CROSS=LAST FROM=0.00118 TO=0.0012
+meas tran s_s_2__59 FIND v(n33) AT=0.001199
+meas tran s_s_3__59 FIND v(n42) AT=0.001199
+meas tran s_co_59 FIND v(n44) AT=0.001199
+meas tran s_s_0__60 FIND v(n15) AT=0.001219
+meas tran t_s_0__60 WHEN v(n15)=1 CROSS=LAST FROM=0.0012 TO=0.00122
+meas tran s_s_1__60 FIND v(n24) AT=0.001219
+meas tran s_s_2__60 FIND v(n33) AT=0.001219
+meas tran s_s_3__60 FIND v(n42) AT=0.001219
+meas tran s_co_60 FIND v(n44) AT=0.001219
+meas tran s_s_0__61 FIND v(n15) AT=0.001239
+meas tran t_s_0__61 WHEN v(n15)=1 CROSS=LAST FROM=0.00122 TO=0.00124
+meas tran s_s_1__61 FIND v(n24) AT=0.001239
+meas tran t_s_1__61 WHEN v(n24)=1 CROSS=LAST FROM=0.00122 TO=0.00124
+meas tran s_s_2__61 FIND v(n33) AT=0.001239
+meas tran t_s_2__61 WHEN v(n33)=1 CROSS=LAST FROM=0.00122 TO=0.00124
+meas tran s_s_3__61 FIND v(n42) AT=0.001239
+meas tran t_s_3__61 WHEN v(n42)=1 CROSS=LAST FROM=0.00122 TO=0.00124
+meas tran s_co_61 FIND v(n44) AT=0.001239
+meas tran t_co_61 WHEN v(n44)=1 CROSS=LAST FROM=0.00122 TO=0.00124
+meas tran s_s_0__62 FIND v(n15) AT=0.001259
+meas tran t_s_0__62 WHEN v(n15)=1 CROSS=LAST FROM=0.00124 TO=0.00126
+meas tran s_s_1__62 FIND v(n24) AT=0.001259
+meas tran s_s_2__62 FIND v(n33) AT=0.001259
+meas tran s_s_3__62 FIND v(n42) AT=0.001259
+meas tran s_co_62 FIND v(n44) AT=0.001259
+meas tran s_s_0__63 FIND v(n15) AT=0.001279
+meas tran t_s_0__63 WHEN v(n15)=1 CROSS=LAST FROM=0.00126 TO=0.00128
+meas tran s_s_1__63 FIND v(n24) AT=0.001279
+meas tran t_s_1__63 WHEN v(n24)=1 CROSS=LAST FROM=0.00126 TO=0.00128
+meas tran s_s_2__63 FIND v(n33) AT=0.001279
+meas tran s_s_3__63 FIND v(n42) AT=0.001279
+meas tran s_co_63 FIND v(n44) AT=0.001279
+quit
+.endc
+.end

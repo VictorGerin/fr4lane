@@ -1006,7 +1006,11 @@ def export(lib, cells, outdir, res, corners, warns, log=print):
 
 
 def _ns(v):
-    return "—" if v is None else f"{v * 1e9:.0f} ns" if v < 1e-6 else f"{v * 1e6:.2g} µs"
+    if v is None:
+        return "—"
+    if v >= 1e-3:
+        return f"{v * 1e3:.3g} ms"
+    return f"{v * 1e6:.2g} µs" if v >= 1e-6 else f"{v * 1e9:.3g} ns"
 
 
 def _status(r):

@@ -1,0 +1,82 @@
+* DFFR — flip-flop D, borda de subida, clear assíncrono ativo baixo (estilo 7474)
+* família discrete_cmos, canto típico (VDD 5 V, 27 °C; modelos NMOS: {'file': 'spice/2N7002.lib', 'instance': 'L=100u W=100u'}, PMOS: {'file': 'spice/BSS84.lib', 'instance': 'L=100u W=100u'})
+* gerado por pcbflow-cellsim --export; rodar: ngspice -b DFFR.cir (imprime as medidas e grava DFFR.dat)
+*
+* entradas no nível de pior caso: alto = 4.5 V, baixo = 0.5 V; Q leva 1 carga(s) INV.A
+* saída: 1 se >= 3.5 V, 0 se <= 1.5 V
+*
+* vetores de teste (medida: valor esperado):
+*   borda de subida 1 em 2 µs: D=1 (muda 0.5 µs antes)  ->  q_0: Q=1
+*   borda de subida 2 em 4 µs: D=0 (muda 0.5 µs antes)  ->  q_1: Q=0
+*   borda de subida 3 em 6 µs: D=1 (muda 0.5 µs antes)  ->  q_2: Q=1
+*   borda de subida 4 em 8 µs: D=1 (muda 0.5 µs antes)  ->  q_3: Q=1
+*   borda de subida 5 em 10 µs: D=0 (muda 0.5 µs antes)  ->  q_4: Q=0
+*   borda de subida 6 em 12 µs: D=0 (muda 0.5 µs antes)  ->  q_5: Q=0
+*   borda de subida 7 em 14 µs: D=1 (muda 0.5 µs antes)  ->  q_6: Q=1
+*   borda de subida 8 em 16 µs: D=0 (muda 0.5 µs antes)  ->  q_7: Q=0
+*   borda de subida 9 em 18 µs: D=1 (muda 0.5 µs antes)  ->  q_8: Q=1
+*   borda de subida 10 em 20 µs: D=1 (muda 0.5 µs antes)  ->  q_9: Q=1
+*   borda de subida 11 em 22 µs: D=1 (muda 0.5 µs antes)  ->  q_10: Q=1
+*   borda de subida 12 em 24 µs: D=0 (muda 0.5 µs antes)  ->  q_11: Q=0
+*   R = 0 de 25 a 25.8 µs (clear assíncrono)  ->  rst: Q=0
+*
+* pcbflow-cellsim: canto típico
+.temp 27
+.param kup=1 kb=1
+.model NMOS NMOS(LEVEL=1 VTO=2.50 KP=32.0m GAMMA=3.10 PHI=.75 LAMBDA=39.9u RD=1.05 RS=1.05 IS=57.5f PB=0.800 MJ=0.460 CBD=98.8p CBS=119p CGSO=60.0n CGDO=50.0n CGBO=390n)
+.model PMOS PMOS(LEVEL=1 VTO=-1.60 KP=4.87m GAMMA=1.98 PHI=.75 LAMBDA=1.25m RD=0.840 RS=0.840 IS=65.0f PB=0.800 MJ=0.460 CBD=46.6p CBS=55.9p CGSO=50.7n CGDO=42.2n CGBO=69.5n)
+.subckt NAND2 A B Y VDD GND
+MP1 Y A VDD VDD PMOS L=100u W=100u
+MP2 Y B VDD VDD PMOS L=100u W=100u
+MN1 Y A n1 n1 NMOS L=100u W=100u
+MN2 n1 B GND GND NMOS L=100u W=100u
+.ends NAND2
+.subckt NAND3 A B C Y VDD GND
+MP1 Y A VDD VDD PMOS L=100u W=100u
+MP2 Y B VDD VDD PMOS L=100u W=100u
+MP3 Y C VDD VDD PMOS L=100u W=100u
+MN1 Y A n1 n1 NMOS L=100u W=100u
+MN2 n1 B n2 n2 NMOS L=100u W=100u
+MN3 n2 C GND GND NMOS L=100u W=100u
+.ends NAND3
+.subckt DFFR D C R Q VDD GND
+X1 n4 n2 n1 VDD GND NAND2
+X2 n1 R C n2 VDD GND NAND3
+X3 n2 C n4 n3 VDD GND NAND3
+X4 n3 R D n4 VDD GND NAND3
+X5 n2 QN Q VDD GND NAND2
+X6 Q R n3 QN VDD GND NAND3
+.ends DFFR
+.subckt INV A Y VDD GND
+MP1 Y A VDD VDD PMOS L=100u W=100u
+MN1 Y A GND GND NMOS L=100u W=100u
+.ends INV
+VDD vdd 0 5
+V_C in_C 0 PULSE(0.5 4.5 2e-06 2e-09 2e-09 9.98e-07 2e-06)
+V_D in_D 0 PWL(0 0.5 1.5e-06 0.5 1.502e-06 4.5 3.5e-06 4.5 3.502e-06 0.5 5.5e-06 0.5 5.502e-06 4.5 9.5e-06 4.5 9.502e-06 0.5 1.35e-05 0.5 1.3502e-05 4.5 1.55e-05 4.5 1.5502e-05 0.5 1.75e-05 0.5 1.7502e-05 4.5 2.35e-05 4.5 2.3502e-05 0.5)
+V_R in_R 0 PWL(0 4.5 2.5e-05 4.5 2.5002e-05 0.5 2.58e-05 0.5 2.5802e-05 4.5)
+Xdut in_D in_C in_R out_Q vdd 0 DFFR
+Xld_out_Q_0 out_Q ld_out_Q_0_Y vdd 0 INV
+.tran 5e-09 2.88e-05
+.control
+run
+linearize
+set wr_singlescale
+set wr_vecnames
+wrdata DFFR.dat v(in_C) v(in_D) v(in_R) v(out_Q)
+meas tran q_0 FIND v(out_Q) AT=2.9e-06
+meas tran q_1 FIND v(out_Q) AT=4.9e-06
+meas tran q_2 FIND v(out_Q) AT=6.9e-06
+meas tran q_3 FIND v(out_Q) AT=8.9e-06
+meas tran q_4 FIND v(out_Q) AT=1.09e-05
+meas tran q_5 FIND v(out_Q) AT=1.29e-05
+meas tran q_6 FIND v(out_Q) AT=1.49e-05
+meas tran q_7 FIND v(out_Q) AT=1.69e-05
+meas tran q_8 FIND v(out_Q) AT=1.89e-05
+meas tran q_9 FIND v(out_Q) AT=2.09e-05
+meas tran q_10 FIND v(out_Q) AT=2.29e-05
+meas tran q_11 FIND v(out_Q) AT=2.49e-05
+meas tran rst FIND v(out_Q) AT=2.56e-05
+quit
+.endc
+.end
