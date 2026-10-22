@@ -101,6 +101,11 @@ def connectivity(sources, top, boards, outdir):
     insts, conns = [], {}
     for name, c in mod["cells"].items():
         typ = c["type"].lstrip("\\")
+        if typ.startswith("$paramod"):
+            for p in typ.split("\\"):
+                if p in boards:
+                    typ = p
+                    break
         if typ not in boards:
             raise SystemCheckError(f"o módulo {top} deve só ligar placas, mas tem '{name}' ({typ}); "
                                f"placas: {', '.join(boards)}")
