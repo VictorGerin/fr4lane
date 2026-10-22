@@ -6,7 +6,10 @@
 //   - u_alu    (serv_alu_board)    : ALU serial de 1 bit e registradores bufreg (~4.600 comp.)
 //   - u_rf_mem (serv_rf_mem_board) : Banco de registradores e alinhamento de memória (~1.400 comp.)
 module serv_system #(
-   parameter bit [31:0] RESET_PC = 32'd0
+   parameter int        PC_WIDTH = 32,
+   parameter bit [31:0] RESET_PC = 32'd0,
+   parameter            RESET_STRATEGY = "MINI",
+   parameter bit        WITH_CSR = 1'b0
 ) (
    input  logic        clk,
    input  logic        i_rst,
@@ -155,7 +158,10 @@ module serv_system #(
       .i_mem_misalign     (1'b0)
    );
 
-   serv_pc_board u_pc (
+   serv_pc_board #(
+      .PC_WIDTH (PC_WIDTH),
+      .RESET_PC (RESET_PC)
+   ) u_pc (
       .clk           (clk),
       .i_rst         (i_rst),
       .i_pc_en       (ctrl_pc_en),

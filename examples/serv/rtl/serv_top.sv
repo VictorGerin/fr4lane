@@ -1,5 +1,6 @@
 // serv_top.sv : Conexão dos submódulos do SERV em SystemVerilog
 module serv_top #(
+   parameter int        PC_WIDTH = 32,
    parameter bit [31:0] RESET_PC = 32'd0
 ) (
    input  logic        clk,
@@ -240,6 +241,7 @@ module serv_top #(
    );
 
    serv_ctrl #(
+      .PC_WIDTH (PC_WIDTH),
       .RESET_PC (RESET_PC)
    ) ctrl (
       .clk           (clk),

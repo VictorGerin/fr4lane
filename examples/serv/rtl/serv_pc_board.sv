@@ -1,8 +1,11 @@
 // serv_pc_board.sv : Placa do Program Counter (PC) do SERV em SystemVerilog
 //
 // Agrupa a gestão e avanço serial do PC e cálculo de saltos/branches:
-//   - serv_ctrl : Somador e registrador de deslocamento do PC (32 bits)
-module serv_pc_board (
+//   - serv_ctrl : Somador e registrador de deslocamento do PC (largura parametrizável PC_WIDTH)
+module serv_pc_board #(
+   parameter int        PC_WIDTH = 32,
+   parameter bit [31:0] RESET_PC = 32'd0
+) (
    input  logic        clk,
    input  logic        i_rst,
    // Temporização e controle vindos da serv_ctrl_board
@@ -25,9 +28,8 @@ module serv_pc_board (
    output logic [31:0] o_ibus_adr
 );
 
-   localparam bit [31:0] RESET_PC = 32'd0;
-
    serv_ctrl #(
+      .PC_WIDTH (PC_WIDTH),
       .RESET_PC (RESET_PC)
    ) ctrl (
       .clk           (clk),

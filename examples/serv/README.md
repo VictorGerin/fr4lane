@@ -105,22 +105,51 @@ kicad-cli pcb render \
 
 ---
 
-## 5. Compilação de Programas C com Clang / LLVM
+## 5. Compilação e Testes Automáticos em C com Clang / LLVM
+
+Foi configurado um framework completo de verificação em C bare-metal para o SERV usando **Clang RV32I** e **Icarus Verilog**:
+
+### Estrutura de Arquivos
+- **[`sw_test/crt0.s`](file:///c:/Users/victo/Documents/pcbflow/examples/serv/sw_test/crt0.s)**: Startup bare-metal (inicializa `sp`, zera `.bss`, chama `main`, grava o retorno de `main()` em `0x00002000` e sinaliza fim em `0x00002004`).
+- **[`sw_test/link.ld`](file:///c:/Users/victo/Documents/pcbflow/examples/serv/sw_test/link.ld)**: Linker script bare-metal (RAM de 8 KB).
+- **[`tb/tb_serv_c.sv`](file:///c:/Users/victo/Documents/pcbflow/examples/serv/tb/tb_serv_c.sv)**: Testbench SystemVerilog parametrizável com Wishbone e registradores MMIO de validação.
+- **[`run_c_test.py`](file:///c:/Users/victo/Documents/pcbflow/examples/serv/run_c_test.py)**: Runner automatizado que compila, gera o firmware, simula e valida o resultado.
+
+### Como Executar os Testes em C
 
 ```bash
-# 1. Compilar para objeto RV32I bare-metal
-clang --target=riscv32 -march=rv32i -mabi=ilp32 -O2 -c \
-      -nostdlib -ffreestanding -fno-builtin \
-      main.c -o main.o
+# Executa todos os testes da pasta sw_test/
+python run_c_test.py --all
 
-# 2. Ligar com endereço base 0x00000000
-ld.lld -Ttext 0x00000000 -melf32lriscv main.o -o main.elf
+# Executa um teste específico (ex.: Fibonacci iterativo com validação de retorno)
+python run_c_test.py sw_test/test_fibonacci.c
 
-# 3. Gerar arquivo hexadecimal para o testbench
-llvm-objcopy -O verilog main.elf prog.hex
+# Executa teste sobrescrevendo o valor esperado via linha de comando
+python run_c_test.py sw_test/test_simple.c --expected 42
 ```
 
-O testbench `tb/tb_serv_system.sv` executa o programa e confere o resultado:
-```
-OK: serv_system: 40 + 2 = 42 em 146 ciclos de clock
+### Como Escrever Novos Testes em C
+
+Basta criar um arquivo `.c` na pasta `sw_test/` com a anotação `// EXPECTED: <valor>`:
+
+```c
+// EXPECTED: 55
+
+int fib(int n) {
+    if (n <= 1) return n;
+    int a = 0, b = 1;
+    for (int i = 2; i <= n; i++) {
+        int c = a + b;
+        a = b;
+        b = c;
+    }
+    return b;
+}
+
+volatile int n_terms = 10;
+
+int main(void) {
+    // O valor retornado por main() é capturado automaticamente pelo testbench!
+    return fib(n_terms);
+}
 ```
