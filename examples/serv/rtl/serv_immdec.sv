@@ -1,20 +1,23 @@
 // serv_immdec.sv : Decodificador de imediatos em SystemVerilog
-module serv_immdec (
-   input  logic       i_clk,
+module serv_immdec #(
+   parameter bit WITH_E = 1'b0,
+   parameter int WREG   = WITH_E ? 4 : 5
+) (
+   input  logic            i_clk,
    // Estado
-   input  logic       i_cnt_en,
-   input  logic       i_cnt_done,
+   input  logic            i_cnt_en,
+   input  logic            i_cnt_done,
    // Controle
-   input  logic [3:0] i_immdec_en,
-   input  logic [3:0] i_ctrl,
-   output logic [4:0] o_rd_addr,
-   output logic [4:0] o_rs1_addr,
-   output logic [4:0] o_rs2_addr,
+   input  logic [3:0]      i_immdec_en,
+   input  logic [3:0]      i_ctrl,
+   output logic [WREG-1:0] o_rd_addr,
+   output logic [WREG-1:0] o_rs1_addr,
+   output logic [WREG-1:0] o_rs2_addr,
    // Dado imediato serial
-   output logic       o_imm,
+   output logic            o_imm,
    // Barramento de instrução
-   input  logic       i_wb_en,
-   input  logic [31:7] i_wb_rdt
+   input  logic            i_wb_en,
+   input  logic [31:7]     i_wb_rdt
 );
 
    logic       imm31;
@@ -28,9 +31,9 @@ module serv_immdec (
 
    assign signbit = imm31;
 
-   assign o_rs1_addr = imm19_12_20[8:4];
-   assign o_rs2_addr = imm24_20;
-   assign o_rd_addr  = imm11_7;
+   assign o_rs1_addr = imm19_12_20[WREG+3:4];
+   assign o_rs2_addr = imm24_20[WREG-1:0];
+   assign o_rd_addr  = imm11_7[WREG-1:0];
 
    always_ff @(posedge i_clk) begin
       if (i_wb_en)

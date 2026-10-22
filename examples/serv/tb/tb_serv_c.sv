@@ -7,49 +7,41 @@
 //
 `timescale 1ns/1ps
 module tb_serv_c #(
-   parameter int PC_WIDTH = 32
+   parameter int PC_WIDTH = 13,
+   parameter bit WITH_E   = 1'b0
 );
+   localparam int WREG     = WITH_E ? 4 : 5;
+   localparam int AW_RF    = WITH_E ? 8 : 9;
+   localparam int RF_DEPTH = WITH_E ? 256 : 512;
+
    reg clk = 1'b0;
    reg rst = 1'b1;
    always #50 clk = ~clk;
 
-   wire [31:0] ibus_adr, dbus_adr, dbus_dat;
-   wire        ibus_cyc, dbus_cyc, dbus_we;
-   wire [3:0]  dbus_sel;
-   reg [31:0]  ibus_rdt, dbus_rdt;
-   reg         ibus_ack = 1'b0, dbus_ack = 1'b0;
-
-   wire [8:0]  rf_waddr, rf_raddr;
-   wire [1:0]  rf_wdata;
-   wire        rf_wen, rf_ren;
-   wire [1:0]  rf_rdata;
+   serv_pkg::ibus_req_t ibus_req;
+   serv_pkg::ibus_rsp_t ibus_rsp;
+   serv_pkg::dbus_req_t dbus_req;
+   serv_pkg::dbus_rsp_t dbus_rsp;
+   serv_pkg::rf_req_t   rf_req;
+   serv_pkg::rf_rsp_t   rf_rsp;
 
    // Registradores MMIO para comunicacao C <-> Testbench
    reg [31:0]  test_result = 32'd0;
    reg         test_finish = 1'b0;
 
    serv_system #(
-      .PC_WIDTH (PC_WIDTH)
-   ) dut
-     (.clk        (clk),
-      .i_rst      (rst),
-      .o_ibus_adr (ibus_adr),
-      .o_ibus_cyc (ibus_cyc),
-      .i_ibus_rdt (ibus_rdt),
-      .i_ibus_ack (ibus_ack),
-      .o_dbus_adr (dbus_adr),
-      .o_dbus_dat (dbus_dat),
-      .o_dbus_sel (dbus_sel),
-      .o_dbus_we  (dbus_we),
-      .o_dbus_cyc (dbus_cyc),
-      .i_dbus_rdt (dbus_rdt),
-      .i_dbus_ack (dbus_ack),
-      .o_rf_waddr (rf_waddr),
-      .o_rf_wdata (rf_wdata),
-      .o_rf_wen   (rf_wen),
-      .o_rf_raddr (rf_raddr),
-      .o_rf_ren   (rf_ren),
-      .i_rf_rdata (rf_rdata));
+      .PC_WIDTH (PC_WIDTH),
+      .WITH_E   (WITH_E)
+   ) dut (
+      .clk    (clk),
+      .i_rst  (rst),
+      .o_ibus (ibus_req),
+      .i_ibus (ibus_rsp),
+      .o_dbus (dbus_req),
+      .i_dbus (dbus_rsp),
+      .o_rf   (rf_req),
+      .i_rf   (rf_rsp)
+   );
 
    // Memoria de programa e dados: 2048 palavras de 32 bits = 8 KB
    reg [31:0] mem [0:2047];
@@ -82,46 +74,51 @@ module tb_serv_c #(
    end
 
    // Logica de leitura e escrita do Wishbone
-   always @(posedge clk) begin
-      ibus_ack <= #5 (ibus_cyc & !ibus_ack);
-      ibus_rdt <= #5 mem[ibus_adr[12:2]];
+   initial begin
+      ibus_rsp = '0;
+      dbus_rsp = '0;
+   end
 
-      dbus_ack <= #5 (dbus_cyc & !dbus_ack);
+   always @(posedge clk) begin
+      ibus_rsp.ack <= #5 (ibus_req.cyc & !ibus_rsp.ack);
+      ibus_rsp.rdt <= #5 mem[ibus_req.adr[12:2]];
+
+      dbus_rsp.ack <= #5 (dbus_req.cyc & !dbus_rsp.ack);
       
       // Leitura de dados
-      if (dbus_adr == 32'h0000_2000)
-         dbus_rdt <= #5 test_result;
-      else if (dbus_adr == 32'h0000_2004)
-         dbus_rdt <= #5 {31'b0, test_finish};
+      if (dbus_req.adr == 32'h0000_2000)
+         dbus_rsp.rdt <= #5 test_result;
+      else if (dbus_req.adr == 32'h0000_2004)
+         dbus_rsp.rdt <= #5 {31'b0, test_finish};
       else
-         dbus_rdt <= #5 mem[dbus_adr[12:2]];
+         dbus_rsp.rdt <= #5 mem[dbus_req.adr[12:2]];
 
       // Escrita de dados
-      if (dbus_cyc & !dbus_ack & dbus_we) begin
-         if (dbus_adr == 32'h0000_2000) begin
-            test_result <= dbus_dat;
-         end else if (dbus_adr == 32'h0000_2004) begin
-            test_finish <= dbus_dat[0];
-         end else if (dbus_adr < 32'h0000_2000) begin
-            if (dbus_sel[0]) mem[dbus_adr[12:2]][7:0]   <= #5 dbus_dat[7:0];
-            if (dbus_sel[1]) mem[dbus_adr[12:2]][15:8]  <= #5 dbus_dat[15:8];
-            if (dbus_sel[2]) mem[dbus_adr[12:2]][23:16] <= #5 dbus_dat[23:16];
-            if (dbus_sel[3]) mem[dbus_adr[12:2]][31:24] <= #5 dbus_dat[31:24];
+      if (dbus_req.cyc & !dbus_rsp.ack & dbus_req.we) begin
+         if (dbus_req.adr == 32'h0000_2000) begin
+            test_result <= dbus_req.dat;
+         end else if (dbus_req.adr == 32'h0000_2004) begin
+            test_finish <= dbus_req.dat[0];
+         end else if (dbus_req.adr < 32'h0000_2000) begin
+            if (dbus_req.sel[0]) mem[dbus_req.adr[12:2]][7:0]   <= #5 dbus_req.dat[7:0];
+            if (dbus_req.sel[1]) mem[dbus_req.adr[12:2]][15:8]  <= #5 dbus_req.dat[15:8];
+            if (dbus_req.sel[2]) mem[dbus_req.adr[12:2]][23:16] <= #5 dbus_req.dat[23:16];
+            if (dbus_req.sel[3]) mem[dbus_req.adr[12:2]][31:24] <= #5 dbus_req.dat[31:24];
          end
       end
    end
 
-   // SRAM do banco de registradores (512 x 2 bits, x0 sempre le zero)
-   reg [1:0] rf [0:511];
+   // SRAM do banco de registradores (256x2 para RV32E, 512x2 para RV32I)
+   reg [1:0] rf [0:RF_DEPTH-1];
    reg [1:0] rf_q;
    reg       rf_zero;
-   initial for (i = 0; i < 512; i = i + 1) rf[i] = 2'b00;
+   initial for (i = 0; i < RF_DEPTH; i = i + 1) rf[i] = 2'b00;
    always @(posedge clk) begin
-      if (rf_wen) rf[rf_waddr] <= #5 rf_wdata;
-      rf_q    <= #5 rf[rf_raddr];
-      rf_zero <= #5 (rf_raddr[8:4] == 5'd0);
+      if (rf_req.wen) rf[rf_req.waddr[AW_RF-1:0]] <= #5 rf_req.wdata;
+      rf_q    <= #5 rf[rf_req.raddr[AW_RF-1:0]];
+      rf_zero <= #5 (rf_req.raddr[AW_RF-1:4] == 4'd0);
    end
-   assign rf_rdata = rf_q & ~{2{rf_zero}};
+   assign rf_rsp.rdata = rf_q & ~{2{rf_zero}};
 
    // Controle do teste e validacao
    integer cyc = 0;

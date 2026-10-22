@@ -1,22 +1,24 @@
 // serv_top.sv : Conexão dos submódulos do SERV em SystemVerilog
 module serv_top #(
-   parameter int        PC_WIDTH = 32,
-   parameter bit [31:0] RESET_PC = 32'd0
+   parameter int        PC_WIDTH = 13,
+   parameter bit [31:0] RESET_PC = 32'd0,
+   parameter bit        WITH_E = 1'b0,
+   parameter int        WREG = WITH_E ? 4 : 5
 ) (
-   input  logic        clk,
-   input  logic        i_rst,
+   input  logic            clk,
+   input  logic            i_rst,
    // Interface do banco de registradores (RF)
-   output logic        o_rf_rreq,
-   output logic        o_rf_wreq,
-   input  logic        i_rf_ready,
-   output logic [4:0]  o_wreg0,
-   output logic [4:0]  o_wreg1,
-   output logic        o_wen0,
-   output logic        o_wen1,
-   output logic        o_wdata0,
-   output logic        o_wdata1,
-   output logic [4:0]  o_rreg0,
-   output logic [4:0]  o_rreg1,
+   output logic            o_rf_rreq,
+   output logic            o_rf_wreq,
+   input  logic            i_rf_ready,
+   output logic [WREG-1:0] o_wreg0,
+   output logic [WREG-1:0] o_wreg1,
+   output logic            o_wen0,
+   output logic            o_wen1,
+   output logic            o_wdata0,
+   output logic            o_wdata1,
+   output logic [WREG-1:0] o_rreg0,
+   output logic [WREG-1:0] o_rreg1,
    input  logic        i_rdata0,
    input  logic        i_rdata1,
    // Barramento de instrução (Wishbone)
@@ -184,7 +186,9 @@ module serv_top #(
       .o_rd_alu_en        (rd_alu_en)
    );
 
-   serv_immdec immdec (
+   serv_immdec #(
+      .WITH_E (WITH_E)
+   ) immdec (
       .i_clk       (clk),
       .i_cnt_en    (cnt_en),
       .i_cnt_done  (cnt_done),
@@ -278,7 +282,9 @@ module serv_top #(
       .o_rd      (alu_rd)
    );
 
-   serv_rf_if rf_if (
+   serv_rf_if #(
+      .WREG (WREG)
+   ) rf_if (
       .i_cnt_en    (cnt_en),
       .o_wreg0     (o_wreg0),
       .o_wreg1     (o_wreg1),

@@ -3,7 +3,7 @@
 // Agrupa a gestão e avanço serial do PC e cálculo de saltos/branches:
 //   - serv_ctrl : Somador e registrador de deslocamento do PC (largura parametrizável PC_WIDTH)
 module serv_pc_board #(
-   parameter int        PC_WIDTH = 32,
+   parameter int        PC_WIDTH = 13,
    parameter bit [31:0] RESET_PC = 32'd0
 ) (
    input  logic        clk,

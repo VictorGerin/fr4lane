@@ -15,29 +15,29 @@ module tb_serv_system;
    reg rst = 1'b1;
    always #50 clk = ~clk;
 
-   wire [31:0] ibus_adr, dbus_adr, dbus_dat;
-   wire        ibus_cyc, dbus_cyc, dbus_we;
-   wire [3:0]  dbus_sel;
-   reg [31:0]  ibus_rdt, dbus_rdt;
-   reg         ibus_ack = 1'b0, dbus_ack = 1'b0;
-
-   wire [8:0]  rf_waddr, rf_raddr;
-   wire [1:0]  rf_wdata;
-   wire        rf_wen, rf_ren;
-   wire [1:0]  rf_rdata;
+   serv_pkg::ibus_req_t ibus_req;
+   serv_pkg::ibus_rsp_t ibus_rsp;
+   serv_pkg::dbus_req_t dbus_req;
+   serv_pkg::dbus_rsp_t dbus_rsp;
+   serv_pkg::rf_req_t   rf_req;
+   serv_pkg::rf_rsp_t   rf_rsp;
 
    serv_system dut
-     (.clk (clk), .i_rst (rst),
-      .o_ibus_adr (ibus_adr), .o_ibus_cyc (ibus_cyc), .i_ibus_rdt (ibus_rdt), .i_ibus_ack (ibus_ack),
-      .o_dbus_adr (dbus_adr), .o_dbus_dat (dbus_dat), .o_dbus_sel (dbus_sel), .o_dbus_we (dbus_we),
-      .o_dbus_cyc (dbus_cyc), .i_dbus_rdt (dbus_rdt), .i_dbus_ack (dbus_ack),
-      .o_rf_waddr (rf_waddr), .o_rf_wdata (rf_wdata), .o_rf_wen (rf_wen),
-      .o_rf_raddr (rf_raddr), .o_rf_ren (rf_ren), .i_rf_rdata (rf_rdata));
+     (.clk    (clk),
+      .i_rst  (rst),
+      .o_ibus (ibus_req),
+      .i_ibus (ibus_rsp),
+      .o_dbus (dbus_req),
+      .i_dbus (dbus_rsp),
+      .o_rf   (rf_req),
+      .i_rf   (rf_rsp));
 
    // memória de programa e dados: 256 palavras de 32 bits
    reg [31:0] mem [0:255];
    integer i;
    initial begin
+      ibus_rsp = '0;
+      dbus_rsp = '0;
       for (i = 0; i < 256; i = i + 1) mem[i] = 32'h0000_0013;   // nop
       mem[0] = 32'h0280_0093;                                   // addi x1, x0, 40
       mem[1] = 32'h0020_0113;                                   // addi x2, x0, 2
@@ -48,15 +48,15 @@ module tb_serv_system;
    end
 
    always @(posedge clk) begin
-      ibus_ack <= #5 (ibus_cyc & !ibus_ack);
-      ibus_rdt <= #5 mem[ibus_adr[9:2]];
-      dbus_ack <= #5 (dbus_cyc & !dbus_ack);
-      dbus_rdt <= #5 mem[dbus_adr[9:2]];
-      if (dbus_cyc & !dbus_ack & dbus_we) begin
-         if (dbus_sel[0]) mem[dbus_adr[9:2]][7:0]   <= #5 dbus_dat[7:0];
-         if (dbus_sel[1]) mem[dbus_adr[9:2]][15:8]  <= #5 dbus_dat[15:8];
-         if (dbus_sel[2]) mem[dbus_adr[9:2]][23:16] <= #5 dbus_dat[23:16];
-         if (dbus_sel[3]) mem[dbus_adr[9:2]][31:24] <= #5 dbus_dat[31:24];
+      ibus_rsp.ack <= #5 (ibus_req.cyc & !ibus_rsp.ack);
+      ibus_rsp.rdt <= #5 mem[ibus_req.adr[9:2]];
+      dbus_rsp.ack <= #5 (dbus_req.cyc & !dbus_rsp.ack);
+      dbus_rsp.rdt <= #5 mem[dbus_req.adr[9:2]];
+      if (dbus_req.cyc & !dbus_rsp.ack & dbus_req.we) begin
+         if (dbus_req.sel[0]) mem[dbus_req.adr[9:2]][7:0]   <= #5 dbus_req.dat[7:0];
+         if (dbus_req.sel[1]) mem[dbus_req.adr[9:2]][15:8]  <= #5 dbus_req.dat[15:8];
+         if (dbus_req.sel[2]) mem[dbus_req.adr[9:2]][23:16] <= #5 dbus_req.dat[23:16];
+         if (dbus_req.sel[3]) mem[dbus_req.adr[9:2]][31:24] <= #5 dbus_req.dat[31:24];
       end
    end
 
@@ -67,18 +67,18 @@ module tb_serv_system;
    reg       rf_zero;
    initial for (i = 0; i < 512; i = i + 1) rf[i] = 2'b00;
    always @(posedge clk) begin
-      if (rf_wen) rf[rf_waddr] <= #5 rf_wdata;
-      rf_q    <= #5 rf[rf_raddr];
-      rf_zero <= #5 (rf_raddr[8:4] == 5'd0);
+      if (rf_req.wen) rf[rf_req.waddr] <= #5 rf_req.wdata;
+      rf_q    <= #5 rf[rf_req.raddr];
+      rf_zero <= #5 (rf_req.raddr[8:4] == 5'd0);
    end
-   assign rf_rdata = rf_q & ~{2{rf_zero}};
+   assign rf_rsp.rdata = rf_q & ~{2{rf_zero}};
 
    integer cyc = 0;
    initial begin
       repeat (5) @(posedge clk);
       @(negedge clk);
       rst <= 1'b0;
-      while (!(dbus_cyc & dbus_we & dbus_ack) && cyc < 1000) begin
+      while (!(dbus_req.cyc & dbus_req.we & dbus_rsp.ack) && cyc < 1000) begin
          @(posedge clk);
          cyc = cyc + 1;
       end

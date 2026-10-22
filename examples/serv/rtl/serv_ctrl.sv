@@ -1,7 +1,7 @@
 // serv_ctrl.sv : Controle do Program Counter (PC) em SystemVerilog
 module serv_ctrl
   #(
-    parameter int        PC_WIDTH = 32,
+    parameter int        PC_WIDTH = 13,
     parameter bit [31:0] RESET_PC = 32'd0
   )
   (

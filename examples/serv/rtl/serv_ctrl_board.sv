@@ -4,25 +4,28 @@
 //   - serv_state  : Máquina de estados bit-serial e contador de 32 ciclos
 //   - serv_decode : Decodificador combinacional de opcodes RV32I
 //   - serv_immdec : Decodificador serial de imediatos e registradores
-module serv_ctrl_board (
-   input  logic        clk,
-   input  logic        i_rst,
+module serv_ctrl_board #(
+   parameter bit WITH_E = 1'b0,
+   parameter int WREG   = WITH_E ? 4 : 5
+) (
+   input  logic            clk,
+   input  logic            i_rst,
    // Barramento de instrução (Wishbone)
-   input  logic [31:2] i_ibus_rdt,
-   input  logic        i_ibus_ack,
-   output logic        o_ibus_cyc,
+   input  logic [31:2]     i_ibus_rdt,
+   input  logic            i_ibus_ack,
+   output logic            o_ibus_cyc,
    // Barramento de dados (controle Wishbone)
-   output logic        o_dbus_cyc,
-   output logic        o_dbus_we,
-   input  logic        i_dbus_ack,
+   output logic            o_dbus_cyc,
+   output logic            o_dbus_we,
+   input  logic            i_dbus_ack,
    // SRAM do banco de registradores (handshake)
-   output logic        o_rf_rreq,
-   output logic        o_rf_wreq,
-   input  logic        i_rf_ready,
+   output logic            o_rf_rreq,
+   output logic            o_rf_wreq,
+   input  logic            i_rf_ready,
    // Endereços de registradores para o RF
-   output logic [4:0]  o_rd_addr,
-   output logic [4:0]  o_rs1_addr,
-   output logic [4:0]  o_rs2_addr,
+   output logic [WREG-1:0] o_rd_addr,
+   output logic [WREG-1:0] o_rs1_addr,
+   output logic [WREG-1:0] o_rs2_addr,
    output logic        o_rd_en,
    // Sinais de temporização e ciclo serial para Datapath e PC
    output logic        o_init,
@@ -169,7 +172,9 @@ module serv_ctrl_board (
       .o_rd_alu_en        (o_rd_alu_en)
    );
 
-   serv_immdec immdec (
+   serv_immdec #(
+      .WITH_E (WITH_E)
+   ) immdec (
       .i_clk       (clk),
       .i_cnt_en    (o_cnt_en),
       .i_cnt_done  (o_cnt_done),

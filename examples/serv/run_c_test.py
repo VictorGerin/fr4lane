@@ -97,20 +97,28 @@ def bin_to_hex(bin_path, hex_path, word_count=2048):
         for w in words:
             f.write(w + "\n")
 
-def compile_testbench(pc_width=32):
+def compile_testbench(pc_width=13, with_e=0):
     """Compila o testbench tb_serv_c.sv com os fontes RTL se necessario."""
-    vvp_file = BUILD_DIR / f"tb_serv_c_{pc_width}.vvp"
+    vvp_file = BUILD_DIR / f"tb_serv_c_{pc_width}_e{with_e}.vvp"
     tb_file = TB_DIR / "tb_serv_c.sv"
-    rtl_files = list(RTL_DIR.glob("*.sv"))
+    pkg_file = RTL_DIR / "serv_pkg.sv"
+    other_rtl = [f for f in sorted(RTL_DIR.glob("*.sv")) if f.name != "serv_pkg.sv"]
 
-    sources = [tb_file] + rtl_files
+    sources = [pkg_file] + other_rtl + [tb_file]
     latest_source_mtime = max(f.stat().st_mtime for f in sources)
 
     if vvp_file.exists() and vvp_file.stat().st_mtime > latest_source_mtime:
         return vvp_file
 
-    print(f"[BUILD] Compilando testbench SystemVerilog (tb_serv_c com PC_WIDTH={pc_width})...")
-    cmd = [IVERILOG, "-g2012", f"-Ptb_serv_c.PC_WIDTH={pc_width}", "-s", "tb_serv_c", "-o", str(vvp_file), str(tb_file)] + [str(f) for f in rtl_files]
+    arch_str = "RV32E" if with_e else "RV32I"
+    print(f"[BUILD] Compilando testbench SystemVerilog (tb_serv_c com PC_WIDTH={pc_width}, ISA={arch_str})...")
+    cmd = [
+        IVERILOG, "-g2012",
+        f"-Ptb_serv_c.PC_WIDTH={pc_width}",
+        f"-Ptb_serv_c.WITH_E={with_e}",
+        "-s", "tb_serv_c",
+        "-o", str(vvp_file),
+    ] + [str(f) for f in sources]
     res = subprocess.run(cmd, capture_output=True, text=True)
     if res.returncode != 0:
         print("[ERRO] Falha ao compilar testbench com iverilog:")
@@ -118,7 +126,7 @@ def compile_testbench(pc_width=32):
         sys.exit(1)
     return vvp_file
 
-def run_test(c_file, expected_override=None, timeout=500000, pc_width=32):
+def run_test(c_file, expected_override=None, timeout=500000, pc_width=13, rv32e=False):
     c_path = Path(c_file).resolve()
     if not c_path.is_file():
         print(f"[ERRO] Arquivo C nao encontrado: {c_file}")
@@ -144,9 +152,13 @@ def run_test(c_file, expected_override=None, timeout=500000, pc_width=32):
     test_bin = BUILD_DIR / f"{test_name}.bin"
     test_hex = BUILD_DIR / f"{test_name}.hex"
 
+    march = "rv32e" if rv32e else "rv32i"
+    mabi = "ilp32e" if rv32e else "ilp32"
+    with_e = 1 if rv32e else 0
+
     # 1. Monta crt0.s
     res = subprocess.run([
-        CLANG, "--target=riscv32", "-march=rv32i", "-mabi=ilp32",
+        CLANG, f"--target=riscv32", f"-march={march}", f"-mabi={mabi}",
         "-c", str(crt0_s), "-o", str(crt0_o)
     ], capture_output=True, text=True)
     if res.returncode != 0:
@@ -155,7 +167,7 @@ def run_test(c_file, expected_override=None, timeout=500000, pc_width=32):
 
     # 2. Compila arquivo C
     res = subprocess.run([
-        CLANG, "--target=riscv32", "-march=rv32i", "-mabi=ilp32",
+        CLANG, f"--target=riscv32", f"-march={march}", f"-mabi={mabi}",
         "-O2", "-ffreestanding", "-nostdlib",
         "-c", str(c_path), "-o", str(test_o)
     ], capture_output=True, text=True)
@@ -165,7 +177,7 @@ def run_test(c_file, expected_override=None, timeout=500000, pc_width=32):
 
     # 3. Faz o link com ld.lld via Clang
     res = subprocess.run([
-        CLANG, "--target=riscv32", "-march=rv32i", "-mabi=ilp32",
+        CLANG, f"--target=riscv32", f"-march={march}", f"-mabi={mabi}",
         "-fuse-ld=lld", "-nostdlib", f"-Wl,-T,{link_ld}",
         str(crt0_o), str(test_o), "-o", str(test_elf)
     ], capture_output=True, text=True)
@@ -189,16 +201,16 @@ def run_test(c_file, expected_override=None, timeout=500000, pc_width=32):
         bin_to_hex(test_bin, test_hex)
 
     # 6. Compila o testbench SystemVerilog
-    vvp_file = compile_testbench(pc_width=pc_width)
+    vvp_file = compile_testbench(pc_width=pc_width, with_e=with_e)
 
     # 7. Executa simulacao no VVP
-    # Usamos barras normais no path do hex para compatibilidade do Verilog
     hex_arg = str(test_hex).replace("\\", "/")
     vvp_cmd = [VVP, str(vvp_file), f"+firmware={hex_arg}", f"+timeout={timeout}"]
     if expected is not None:
         vvp_cmd.append(f"+expected={expected}")
 
-    print(f"\n---> Executando teste: {c_path.name} (PC_WIDTH={pc_width})")
+    arch_label = "RV32E" if rv32e else "RV32I"
+    print(f"\n---> Executando teste: {c_path.name} ({arch_label}, PC_WIDTH={pc_width})")
     res = subprocess.run(vvp_cmd, capture_output=True, text=True)
     print(res.stdout)
     if res.stderr:
@@ -212,7 +224,9 @@ def main():
     check_tools()
     parser = argparse.ArgumentParser(description="Executa testes em C no processador SERV via Clang/Icarus.")
     parser.add_argument("c_file", nargs="?", help="Arquivo .c a ser executado")
-    parser.add_argument("--pc-width", type=int, default=32, help="Largura do PC em bits (ex: 32, 16, 13; padrao: 32)")
+    parser.add_argument("--pc-width", type=int, default=13, help="Largura do PC em bits (ex: 32, 16, 13; padrao: 13)")
+    parser.add_argument("--rv32e", action="store_true", default=True, help="Usa especificacao RV32E (16 registradores, padrao: True)")
+    parser.add_argument("--rv32i", dest="rv32e", action="store_false", help="Usa especificacao RV32I completa (32 registradores)")
     parser.add_argument("--expected", type=int, help="Valor esperado de retorno (substitui // EXPECTED: no .c)")
     parser.add_argument("--timeout", type=int, default=500000, help="Timeout maximo em ciclos (padrao: 500000)")
     parser.add_argument("--all", action="store_true", help="Executa todos os testes presentes em sw_test/*.c")
@@ -234,11 +248,12 @@ def main():
             print("[AVISO] Nenhum arquivo .c encontrado em sw_test/")
             return
         results = []
+        arch_name = "RV32E" if args.rv32e else "RV32I"
         for cf in c_files:
-            ok = run_test(cf, timeout=args.timeout, pc_width=args.pc_width)
+            ok = run_test(cf, timeout=args.timeout, pc_width=args.pc_width, rv32e=args.rv32e)
             results.append((cf.name, ok))
         print("\n" + "="*50)
-        print(f" RESUMO DA BATERIA DE TESTES C NO SERV (PC_WIDTH={args.pc_width}):")
+        print(f" RESUMO DA BATERIA DE TESTES C NO SERV ({arch_name}, PC_WIDTH={args.pc_width}):")
         print("="*50)
         all_ok = True
         for name, ok in results:
@@ -254,7 +269,7 @@ def main():
         print("  python run_c_test.py sw_test/test_simple.c --pc-width 13")
         sys.exit(1)
 
-    ok = run_test(args.c_file, expected_override=args.expected, timeout=args.timeout, pc_width=args.pc_width)
+    ok = run_test(args.c_file, expected_override=args.expected, timeout=args.timeout, pc_width=args.pc_width, rv32e=args.rv32e)
     sys.exit(0 if ok else 1)
 
 if __name__ == "__main__":

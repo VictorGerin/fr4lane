@@ -6,34 +6,58 @@
 //   - u_alu    (serv_alu_board)    : ALU serial de 1 bit e registradores bufreg (~4.600 comp.)
 //   - u_rf_mem (serv_rf_mem_board) : Banco de registradores e alinhamento de memória (~1.400 comp.)
 module serv_system #(
-   parameter int        PC_WIDTH = 32,
+   parameter int        PC_WIDTH = 13,
    parameter bit [31:0] RESET_PC = 32'd0,
    parameter            RESET_STRATEGY = "MINI",
-   parameter bit        WITH_CSR = 1'b0
+   parameter bit        WITH_CSR = 1'b0,
+   parameter bit        WITH_E = 1'b0,
+   parameter int        WREG = WITH_E ? 4 : 5,
+   parameter int        AW_RF = WITH_E ? 8 : 9
 ) (
-   input  logic        clk,
-   input  logic        i_rst,
-   // Barramento de instrução (Wishbone)
-   output logic [31:0] o_ibus_adr,
-   output logic        o_ibus_cyc,
-   input  logic [31:0] i_ibus_rdt,
-   input  logic        i_ibus_ack,
-   // Barramento de dados (Wishbone)
-   output logic [31:0] o_dbus_adr,
-   output logic [31:0] o_dbus_dat,
-   output logic [3:0]  o_dbus_sel,
-   output logic        o_dbus_we,
-   output logic        o_dbus_cyc,
-   input  logic [31:0] i_dbus_rdt,
-   input  logic        i_dbus_ack,
-   // SRAM externa do banco de registradores (512 x 2 bits)
-   output logic [8:0]  o_rf_waddr,
-   output logic [1:0]  o_rf_wdata,
-   output logic        o_rf_wen,
-   output logic [8:0]  o_rf_raddr,
-   output logic        o_rf_ren,
-   input  logic [1:0]  i_rf_rdata
+   input  logic                clk,
+   input  logic                i_rst,
+
+   // 1. Barramento de Instruções (Wishbone)
+   output serv_pkg::ibus_req_t o_ibus,
+   input  serv_pkg::ibus_rsp_t i_ibus,
+
+   // 2. Barramento de Dados (Wishbone)
+   output serv_pkg::dbus_req_t o_dbus,
+   input  serv_pkg::dbus_rsp_t i_dbus,
+
+   // 3. SRAM externa do banco de registradores (rf)
+   output serv_pkg::rf_req_t   o_rf,
+   input  serv_pkg::rf_rsp_t   i_rf
 );
+
+   // Sinais internos dos barramentos
+   logic [31:0]      o_ibus_adr;
+   logic             o_ibus_cyc;
+   logic [31:0]      o_dbus_adr;
+   logic [31:0]      o_dbus_dat;
+   logic [3:0]       o_dbus_sel;
+   logic             o_dbus_we;
+   logic             o_dbus_cyc;
+   logic [AW_RF-1:0] o_rf_waddr_raw;
+   logic [1:0]       o_rf_wdata_raw;
+   logic             o_rf_wen_raw;
+   logic [AW_RF-1:0] o_rf_raddr_raw;
+   logic             o_rf_ren_raw;
+
+   assign o_ibus.adr = o_ibus_adr;
+   assign o_ibus.cyc = o_ibus_cyc;
+
+   assign o_dbus.adr = o_dbus_adr;
+   assign o_dbus.dat = o_dbus_dat;
+   assign o_dbus.sel = o_dbus_sel;
+   assign o_dbus.we  = o_dbus_we;
+   assign o_dbus.cyc = o_dbus_cyc;
+
+   assign o_rf.waddr = { {(9-AW_RF){1'b0}}, o_rf_waddr_raw };
+   assign o_rf.wdata = o_rf_wdata_raw;
+   assign o_rf.wen   = o_rf_wen_raw;
+   assign o_rf.raddr = { {(9-AW_RF){1'b0}}, o_rf_raddr_raw };
+   assign o_rf.ren   = o_rf_ren_raw;
 
    // Sinais da pilha de conexões (Header comum J_STACK)
    logic       init;
@@ -88,9 +112,9 @@ module serv_system #(
    logic       rd_mem_en;
    logic       mem_misalign;
 
-   logic [4:0] rd_addr;
-   logic [4:0] rs1_addr;
-   logic [4:0] rs2_addr;
+   logic [WREG-1:0] rd_addr;
+   logic [WREG-1:0] rs1_addr;
+   logic [WREG-1:0] rs2_addr;
    logic       rd_en;
    logic       rs1;
    logic       rs2;
@@ -98,15 +122,17 @@ module serv_system #(
    logic       rf_wreq;
    logic       rf_ready;
 
-   serv_ctrl_board u_ctrl (
+   serv_ctrl_board #(
+      .WITH_E (WITH_E)
+   ) u_ctrl (
       .clk                (clk),
       .i_rst              (i_rst),
-      .i_ibus_rdt         (i_ibus_rdt[31:2]),
-      .i_ibus_ack         (i_ibus_ack),
+      .i_ibus_rdt         (i_ibus.rdt[31:2]),
+      .i_ibus_ack         (i_ibus.ack),
       .o_ibus_cyc         (o_ibus_cyc),
       .o_dbus_cyc         (o_dbus_cyc),
       .o_dbus_we          (o_dbus_we),
-      .i_dbus_ack         (i_dbus_ack),
+      .i_dbus_ack         (i_dbus.ack),
       .o_rf_rreq          (),
       .o_rf_wreq          (rf_wreq),
       .i_rf_ready         (rf_ready),
@@ -213,17 +239,19 @@ module serv_system #(
       .o_bufreg2_q        (bufreg2_q),
       .o_dbus_adr         (o_dbus_adr),
       .o_dbus_dat         (o_dbus_dat),
-      .i_dbus_rdt         (i_dbus_rdt),
-      .i_dbus_ack         (i_dbus_ack)
+      .i_dbus_rdt         (i_dbus.rdt),
+      .i_dbus_ack         (i_dbus.ack)
    );
 
-   serv_rf_mem_board u_rf_mem (
+   serv_rf_mem_board #(
+      .WITH_E (WITH_E)
+   ) u_rf_mem (
       .clk            (clk),
       .i_rst          (i_rst),
       .i_cnt_en       (cnt_en),
       .i_bytecnt      (mem_bytecnt),
       .i_lsb          (lsb),
-      .i_rf_rreq      (i_ibus_ack),
+      .i_rf_rreq      (i_ibus.ack),
       .i_rf_wreq      (rf_wreq),
       .o_rf_ready     (rf_ready),
       .i_rd_addr      (rd_addr),
@@ -242,12 +270,12 @@ module serv_system #(
       .o_rs2          (rs2),
       .o_mem_misalign (),
       .o_dbus_sel     (o_dbus_sel),
-      .o_rf_waddr     (o_rf_waddr),
-      .o_rf_wdata     (o_rf_wdata),
-      .o_rf_wen       (o_rf_wen),
-      .o_rf_raddr     (o_rf_raddr),
-      .o_rf_ren       (o_rf_ren),
-      .i_rf_rdata     (i_rf_rdata)
+      .o_rf_waddr     (o_rf_waddr_raw),
+      .o_rf_wdata     (o_rf_wdata_raw),
+      .o_rf_wen       (o_rf_wen_raw),
+      .o_rf_raddr     (o_rf_raddr_raw),
+      .o_rf_ren       (o_rf_ren_raw),
+      .i_rf_rdata     (i_rf.rdata)
    );
 
 endmodule
