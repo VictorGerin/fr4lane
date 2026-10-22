@@ -1,0 +1,11 @@
+{
+  "_comment": "Placa de Controle do SERV RV32I bit-serial com macro serv_immdec",
+  "board": {
+    "width": 520,
+    "height": 660
+  },
+  "buffer_ports": true,
+  "macros": [
+    "serv_immdec"
+  ]
+}

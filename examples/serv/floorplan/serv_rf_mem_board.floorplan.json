@@ -1,0 +1,11 @@
+{
+  "_comment": "Placa do Register File e Interface de Memória do SERV RV32I bit-serial com macro serv_mem_if",
+  "board": {
+    "width": 320,
+    "height": 400
+  },
+  "buffer_ports": true,
+  "macros": [
+    "serv_mem_if"
+  ]
+}

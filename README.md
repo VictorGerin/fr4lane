@@ -24,6 +24,12 @@ Verilog ──Yosys/ABC──▶ células (.lib) ──expansão (.sp)──▶ 
   <img src="docs/img/sap1_pilha.jpg" alt="As 6 placas do SAP-1 empilhadas" width="620">
 </p>
 
+**Processador RISC-V completo em relés:** o [SERV](examples/serv) (RV32I bit-serial de Olof Kindgren), em SystemVerilog moderno, vira uma pilha de 4 placas modulares (controle, PC, ALU e RF/Memória) montadas com 2 139 relés eletromecânicos SPDT de 5 V (Omron G5V-1) e 1 969 diodos 1N4148. Todas as placas saem 100 % roteadas em 4 camadas com macros (`serv_immdec`, `serv_ctrl`, `serv_alu`, `serv_mem_if`) e isolamento por buffers (`buffer_ports`), validadas pelo `fr4lane-system`. Veja mais na [Wiki](https://github.com/VictorGerin/fr4lane/wiki/SERV-RISC‐V-em-Relés).
+
+<p align="center">
+  <img src="docs/img/serv_alu_board_relay_3d.png" alt="Placa da ALU do SERV RISC-V em tecnologia Relay" width="620">
+</p>
+
 **O que tem:**
 
 - sete famílias de células incluídas: **CMOS** (2N7002 + BSS84), **RTL** (BC548 + resistores), **DTL** (diodos 1N4148 + BC548 + resistores), **CTL** (núcleos toroidais de ferrite + BC548 + resistores), **CDL** (núcleos toroidais de ferrite + diodos 1N4148 + resistores, sem transistores), **válvulas termiônicas** (válvulas subminiatura a vácuo JAN-6418 + resistores) e **relés** (SPDT de 5 V), com portas, flip-flops e latches; e um formato simples para criar outras;

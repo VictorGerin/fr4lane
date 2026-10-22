@@ -1,0 +1,12 @@
+{
+  "_comment": "SERV (RV32I bit-serial de Olof Kindgren, ISC) reescrito em SystemVerilog moderno",
+  "src": [
+    "rtl/serv_pkg.sv",
+    "rtl/serv_*.sv"
+  ],
+  "tb": "tb/tb_{top}.sv",
+  "out": "build/pcb",
+  "floorplan": [
+    "floorplan/{top}.floorplan.json"
+  ]
+}

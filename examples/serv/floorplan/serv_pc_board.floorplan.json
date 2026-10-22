@@ -1,0 +1,11 @@
+{
+  "_comment": "Placa do Program Counter (PC) do SERV RV32I bit-serial com macro serv_ctrl",
+  "board": {
+    "width": 400,
+    "height": 420
+  },
+  "buffer_ports": true,
+  "macros": [
+    "serv_ctrl"
+  ]
+}

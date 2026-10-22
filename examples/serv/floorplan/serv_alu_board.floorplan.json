@@ -1,0 +1,11 @@
+{
+  "_comment": "Placa da ALU do SERV RV32I bit-serial com macro serv_alu",
+  "board": {
+    "width": 520,
+    "height": 750
+  },
+  "buffer_ports": true,
+  "macros": [
+    "serv_alu"
+  ]
+}

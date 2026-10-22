@@ -7,8 +7,7 @@ name = "fr4lane"
 version = "0.1.0"
 description = "Verilog -> Yosys -> células de componentes discretos (CMOS, RTL, relé) -> placement -> roteamento -> projeto KiCad"
 readme = "README.md"
-license = "MIT"
-license-files = ["LICENSE"]
+license = { text = "MIT" }
 authors = [{ name = "Victor Lacerda" }]
 requires-python = ">=3.10"
 dependencies = ["numpy"]
