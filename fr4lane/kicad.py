@@ -269,7 +269,7 @@ def _footprint(w, fp, nid, board):
               f"(uuid {_q(new_uuid())}) (effects (font (size 0.7 0.7) (thickness 0.1)) (justify {just})))")
     if fp.model:
         m = fp.model
-        mpath = m["path"].replace("${KICAD_3DMODEL_DIR}", f"${{{board.model_var}}}")
+        mpath = m["path"].replace("${KICAD_3DMODEL_DIR}", f"${{{board.model_var}}}"); mpath = mpath if mpath.startswith("${") else f"${{{board.model_var}}}" + (mpath if mpath.startswith("/") else "/" + mpath)
         off = " ".join(_n(x) for x in m.get("offset", (0, 0, 0)))
         scl = " ".join(_n(x) for x in m.get("scale", (1, 1, 1)))
         rot_m = " ".join(_n(x) for x in m.get("rotate", (0, 0, 0)))

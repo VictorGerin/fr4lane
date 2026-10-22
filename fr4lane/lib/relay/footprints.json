@@ -3,7 +3,7 @@
   "fr4lane_Relay:Relay_SPDT_THT_generic": {
     "type": "tht",
     "model": {
-      "path": "/Relay_THT.3dshapes/Relay_SPDT_Omron_G5V-1.step",
+      "path": "${KICAD_3DMODEL_DIR}/Relay_THT.3dshapes/Relay_SPDT_Omron_G5V-1.step",
       "scale": [
         1.0,
         1.0,

@@ -176,7 +176,7 @@ def _copy(board, tpl, ox, oy, netmap, cellmap):
 
     for f in tpl.footprints:
         nf = Footprint(f.ref, f.value, f.lib_name, f.x + ox, f.y + oy, courtyard=f.courtyard, rot=f.rot,
-                       silk=list(f.silk), tht=f.tht, group=cellmap.get(f.group, f.group) if f.group else "")
+                       silk=list(f.silk), tht=f.tht, group=cellmap.get(f.group, f.group) if f.group else "", model=f.model)
         for p in f.pads:
             nf.pads.append(Pad(p.num, p.rx, p.ry, p.w, p.h, p.shape, tht=p.tht, drill=p.drill,
                                net=net(p.net) if p.net else "", function=p.function, fp=nf, macro=True))
