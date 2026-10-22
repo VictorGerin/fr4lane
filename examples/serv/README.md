@@ -1,155 +1,143 @@
-# SERV (RV32I Bit-Serial) no fr4lane
+# SERV (RV32I / RV32E Bit-Serial) no fr4lane
 
-Implementação em **SystemVerilog moderno** do núcleo [SERV](https://github.com/olofk/serv) (o menor processador RISC-V do mundo, criado por Olof Kindgren, vencedor do prêmio *World's Smallest RISC-V CPU*).
-
-Esta versão foi portada para SystemVerilog limpo com uso consistente de `logic`, `always_ff`, `always_comb` e pacotes tipados (`serv_pkg.sv`), sintetizável e roteável em placas de circuito impresso usando a ferramenta **fr4lane** em duas tecnologias:
-1. **Lógica de Transistores Discretos RTL** (BC548 + resistores);
-2. **Lógica a Relés Eletromecânicos** (relés SPDT Omron G5V-1 de 5 V + diodos 1N4148 de supressão).
+Implementação em **SystemVerilog moderno** do núcleo [SERV](https://github.com/olofk/serv) (o menor processador RISC-V do mundo, criado por Olof Kindgren, vencedor do prêmio *World's Smallest RISC-V CPU*), particionado em **10 placas modulares (1 módulo por PCB)** em **Tecnologia RTL de Transistores Discretos** (BC548 + resistores de 1/4 W).
 
 ---
 
-## 1. Arquitetura
+## 1. Arquitetura Modular em 10 PCBs (Tecnologia RTL)
 
-O SERV processa operações de 32 bits de forma **bit-serial** (1 bit por ciclo de clock):
-- **Ciclos por instrução**: Tipicamente 32 ciclos para operações aritméticas/lógicas (OP e OP-IMM), além de ciclos de busca e alinhamento de memória.
-- **Banco de Registradores (RF)**: Mapeado externamente em uma SRAM síncrona de 2 bits de largura ($512 \times 2 = 1024$ bits = 32 registradores $\times$ 32 bits), minimizando o número de flip-flops discretos na placa (`serv_rf_ram_if.sv`).
-- **Barramentos Wishbone clássicos**:
-  - `o_ibus_*`: Barramento de instruções (busca de 32 bits).
-  - `o_dbus_*`: Barramento de dados (`LOAD`/`STORE` com sinais de seleção de byte `dbus_sel[3:0]`).
-- **Sem CSRs**: Configurado como `WITH_CSR = 0` para simplificação máxima do hardware físico.
+Para viabilizar a fabricação, montagem prática e depuração individual, a CPU foi particionada em **10 placas modulares** conectadas por um backplane padronizado:
 
----
-
-## 2. Arquitetura Modular Multi-Placa (Pilha de 4 Placas)
-
-Para viabilizar a fabricação e montagem prática, o SERV foi particionado em **4 placas modulares empilháveis** interligadas por um barramento padronizado e verificadas em conjunto pelo `fr4lane-system` (`serv_system.sv`):
-
-| Placa | Função | Módulos Internos | Macro Hierárquico |
-|---|---|---|---|
-| **`serv_ctrl_board`** | Controle e Decodificação | `serv_state`, `serv_decode`, `serv_immdec` | `serv_immdec` |
-| **`serv_pc_board`** | Program Counter e Branch | `serv_ctrl` | `serv_ctrl` |
-| **`serv_alu_board`** | ALU e Registradores | `serv_alu`, `serv_bufreg`, `serv_bufreg2` | `serv_alu` |
-| **`serv_rf_mem_board`** | Banco de Regs e Memória | `serv_rf_if`, `serv_rf_ram_if`, `serv_mem_if` | `serv_mem_if` |
-
-Todas as placas contam com `"buffer_ports": true` em seus arquivos de floorplan, garantindo que as linhas do barramento da pilha vejam apenas uma carga de entrada por placa.
+| # | Módulo (PCB) | Arquivo RTL | Função Principal | Transistores (BC548) | Resistores | Total Componentes |
+|---|---|---|---|---:|---:|---:|
+| **1** | **`serv_rf_if`** | [`rtl/serv_rf_if.sv`](rtl/serv_rf_if.sv) | Multiplexador do Banco de Registradores | 21 | 32 | **53** |
+| **2** | **`serv_mem_if`** | [`rtl/serv_mem_if.sv`](rtl/serv_mem_if.sv) | Alinhamento de Memória (Byte/Half/Word) | 61 | 95 | **156** |
+| **3** | **`serv_alu`** | [`rtl/serv_alu.sv`](rtl/serv_alu.sv) | ALU Serial de 1 bit (ADD/SUB/XOR/OR/AND/SLT) | 115 | 176 | **291** |
+| **4** | **`serv_state`** | [`rtl/serv_state.sv`](rtl/serv_state.sv) | FSM Principal de Controle | 324 | 499 | **823** |
+| **5** | **`serv_decode`** | [`rtl/serv_decode.sv`](rtl/serv_decode.sv) | Decodificador de Instruções RISC-V | 365 | 559 | **924** |
+| **6** | **`serv_rf_ram_if`** | [`rtl/serv_rf_ram_if.sv`](rtl/serv_rf_ram_if.sv) | Adaptador Serial para SRAM Externa de 2 bits | 467 | 714 | **1.181** |
+| **7** | **`serv_ctrl`** | [`rtl/serv_ctrl.sv`](rtl/serv_ctrl.sv) | Program Counter (PC) e Somador de Saltos | 513 | 774 | **1.287** |
+| **8** | **`serv_bufreg`** | [`rtl/serv_bufreg.sv`](rtl/serv_bufreg.sv) | Registrador Shift de Endereço/Deslocamento | 736 | 1.122 | **1.858** |
+| **9** | **`serv_immdec`** | [`rtl/serv_immdec.sv`](rtl/serv_immdec.sv) | Gerador e Extensor Serial de Imediatos | 781 | 1.196 | **1.977** |
+| **10**| **`serv_bufreg2`** | [`rtl/serv_bufreg2.sv`](rtl/serv_bufreg2.sv) | Registrador Shift de Dados e Memória | 1.037 | 1.590 | **2.627** |
+| **TOTAL** | **CPU Completa** | **10 Placas Modulares** | **RV32E / RV32I Completo** | **4.420 NPN** | **6.757 Res** | **11.177** |
 
 ---
 
-## 3. Implementação em Tecnologia Relay (Relés SPDT)
+## 2. Galeria 3D e Simulações Analógicas SPICE
 
-Usando a biblioteca `relay` (`--lib relay`), cada contato de relé atua como uma chave bidirecional (MUX2 com 1 relé, XOR com 2 relés), com bobinas de 5 V (~30 mA) e diodos 1N4148:
+### Renderização 3D da Placa da ALU (`serv_alu`) em RTL
+Placa compacta de 158 × 131 mm com 115 transistores BC548B e 176 resistores, roteada a 100% com 0 conflitos:
 
-| Placa | Relés (Omron G5V-1) | Diodos (1N4148) | Dimensões da Placa | Conflitos de Roteamento |
-|---|---:|---:|---:|---:|
-| **`serv_ctrl_board`** | 741 | 692 | 520 × 660 mm | 0 (12 iterações) |
-| **`serv_pc_board`** | 403 | 369 | 400 × 420 mm | 0 (7 iterações) |
-| **`serv_alu_board`** | 738 | 671 | 520 × 750 mm | 0 (10 iterações) |
-| **`serv_rf_mem_board`** | 257 | 237 | 320 × 400 mm | 0 (8 iterações) |
-| **Total da CPU** | **2.139 relés** | **1.969 diodos** | **4 placas modulares** | **100% Roteado** |
-
-### Galeria 3D (Renderização KiCad Raytracing)
-
-#### Placa da ALU (`serv_alu_board`)
 <p align="center">
-  <img src="img/serv_alu_board_relay_3d.png" alt="Placa da ALU do SERV em Relés (3D)" width="780">
-</p>
-
-#### Placa de Controle (`serv_ctrl_board`)
-<p align="center">
-  <img src="img/serv_ctrl_board_relay_3d.png" alt="Placa de Controle do SERV em Relés (3D)" width="780">
-</p>
-
-#### Placa do Program Counter (`serv_pc_board`)
-<p align="center">
-  <img src="img/serv_pc_board_relay_3d.png" alt="Placa do Program Counter do SERV em Relés (3D)" width="780">
-</p>
-
-#### Placa do Register File e Memória (`serv_rf_mem_board`)
-<p align="center">
-  <img src="img/serv_rf_mem_board_relay_3d.png" alt="Placa de RF e Memória do SERV em Relés (3D)" width="780">
+  <img src="img/serv_alu_rtl_3d.png" alt="Placa da ALU do SERV em Transistores RTL (3D)" width="780">
 </p>
 
 ---
 
-## 4. Comandos de Geração e Validação
+### Simulações Elétricas Analógicas SPICE (ngspice)
 
-### Síntese e Validação do Sistema
-```bash
-# Síntese das 4 placas com relés
-python -m fr4lane --top serv_ctrl_board --lib relay --synth-only
-python -m fr4lane --top serv_pc_board --lib relay --synth-only
-python -m fr4lane --top serv_alu_board --lib relay --synth-only
-python -m fr4lane --top serv_rf_mem_board --lib relay --synth-only
+Cada célula e módulo foi simulado no **ngspice** com o modelo de transistor real do **BC548B** através do `fr4lane-cellsim`, sob 4 cantos PVT (típico, lento, rápido e quente):
 
-# Validação multi-board (262 ligações verificadas, 0 erros)
-python -m fr4lane.system --top serv_system \
-  --boards serv_ctrl_board serv_pc_board serv_alu_board serv_rf_mem_board \
-  --lib relay
+#### 1. Formas de Onda Transitórias da ALU (`serv_alu`)
+Simulação analógica completa dos 291 componentes discretos da ALU executando operações seriais com medição de atraso do caminho crítico (1,65 µs):
+
+<p align="center">
+  <img src="img/spice/serv_alu.png" alt="Formas de Onda SPICE da ALU" width="780">
+</p>
+
+#### 2. Célula Sequencial: Flip-Flop Tipo D (`DFF` em RTL)
+Verificação analógica da captura na borda de subida do clock, tempos de setup e hold com transistores BC548:
+
+<p align="center">
+  <img src="img/spice/DFF.png" alt="Simulação SPICE do DFF RTL" width="780">
+</p>
+
+#### 3. Célula Combinacional: Porta Lógica NAND2
+Curvas de chaveamento de transistores bipolares com carga de saída de pior caso:
+
+<p align="center">
+  <img src="img/spice/NAND2.png" alt="Simulação SPICE da NAND2 RTL" width="780">
+</p>
+
+---
+
+## 3. Metodologia de Verificação em 3 Níveis
+
+Para garantir 100% de confiabilidade entre o código SystemVerilog e a placa física, o projeto implementa 3 níveis de validação:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│ Nível 1: Testbenches Unitários e Vetores de Teste (SystemVerilog)     │
+│   tb/tb_serv_<modulo>.sv com vetores exaustivos e determinísticos      │
+├────────────────────────────────────────────────────────────────────────┤
+│ Nível 2: Simulação Gate-Level e Switch-Level de Transistores (fr4lane) │
+│   Verificação do netlist de transistores (.sp) contra o modelo Liberty │
+├────────────────────────────────────────────────────────────────────────┤
+│ Nível 3: Simulação Analógica SPICE Transitória (ngspice)              │
+│   Medição de tempos reais de propagação e cantos PVT (típico/lento/...) │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Roteamento e Geração do KiCad
+### Executando a Bateria de Testes dos 10 Módulos
+
 ```bash
-python -m fr4lane --top serv_ctrl_board --lib relay --no-drc
-python -m fr4lane --top serv_pc_board --lib relay --no-drc
-python -m fr4lane --top serv_alu_board --lib relay --no-drc
-python -m fr4lane --top serv_rf_mem_board --lib relay --no-drc
+# Executa a síntese e simulação elétrica dos 10 módulos individualmente
+python run_all_rtl_modules.py
 ```
 
-### Renderização 3D das Placas
-```bash
-kicad-cli pcb render \
-  --output build/pcb/serv_alu_board_relay/render_3d.png \
-  --rotate -30,0,45 --perspective --floor --width 1920 --height 1080 \
-  build/pcb/serv_alu_board_relay/serv_alu_board_relay.kicad_pcb
+Resultado da execução automatizada:
+```text
+==============================================================================
+Módulo             | NPN   | Res   | Total  | Gate-Lvl | Transistor | Status
+------------------------------------------------------------------------------
+serv_alu           | 115   | 176   | 291    | PASS     | PASS       | [ PASS ]
+serv_ctrl          | 513   | 774   | 1287   | PASS     | PASS       | [ PASS ]
+serv_immdec        | 781   | 1196  | 1977   | PASS     | PASS       | [ PASS ]
+serv_decode        | 365   | 559   | 924    | PASS     | PASS       | [ PASS ]
+serv_state         | 324   | 499   | 823    | PASS     | PASS       | [ PASS ]
+serv_bufreg        | 736   | 1122  | 1858   | PASS     | PASS       | [ PASS ]
+serv_bufreg2       | 1037  | 1590  | 2627   | PASS     | PASS       | [ PASS ]
+serv_mem_if        | 61    | 95    | 156    | PASS     | PASS       | [ PASS ]
+serv_rf_if         | 21    | 32    | 53     | PASS     | PASS       | [ PASS ]
+serv_rf_ram_if     | 467   | 714   | 1181   | PASS     | PASS       | [ PASS ]
+------------------------------------------------------------------------------
+TOTAL CPU (10 PCBs) | 4420  | 6757  | 11177  | ALL OK   | ALL OK     | [ PASS ]
+==============================================================================
 ```
 
 ---
 
-## 5. Compilação e Testes Automáticos em C com Clang / LLVM
+## 4. Barramento Estruturado em SystemVerilog (`serv_pkg.sv`)
 
-Foi configurado um framework completo de verificação em C bare-metal para o SERV usando **Clang RV32I** e **Icarus Verilog**:
+A arquitetura utiliza structs empacotadas (`struct packed`) e unions (`union packed`) para máxima organização:
 
-### Estrutura de Arquivos
-- **[`sw_test/crt0.s`](file:///c:/Users/victo/Documents/pcbflow/examples/serv/sw_test/crt0.s)**: Startup bare-metal (inicializa `sp`, zera `.bss`, chama `main`, grava o retorno de `main()` em `0x00002000` e sinaliza fim em `0x00002004`).
-- **[`sw_test/link.ld`](file:///c:/Users/victo/Documents/pcbflow/examples/serv/sw_test/link.ld)**: Linker script bare-metal (RAM de 8 KB).
-- **[`tb/tb_serv_c.sv`](file:///c:/Users/victo/Documents/pcbflow/examples/serv/tb/tb_serv_c.sv)**: Testbench SystemVerilog parametrizável com Wishbone e registradores MMIO de validação.
-- **[`run_c_test.py`](file:///c:/Users/victo/Documents/pcbflow/examples/serv/run_c_test.py)**: Runner automatizado que compila, gera o firmware, simula e valida o resultado.
+1. **Barramento Externo do Sistema ([`sys_req_t`](rtl/serv_pkg.sv))**:
+   Unifica `ibus` (instruções), `dbus` (dados Wishbone) e `rf` (SRAM externa de registradores) em uma única struct.
+2. **Barramento de Empilhamento ([`j_stack_t`](rtl/serv_pkg.sv))**:
+   Agrupa mais de 30 sinais de controle e temporização em uma `union packed` de 70 bits, permitindo acesso semântico (`stack.signals.timing.cnt_en`) ou acesso aos pinos físicos brutos da placa (`stack.raw_pins`).
+3. **Decodificador RISC-V ([`riscv_inst_t`](rtl/serv_pkg.sv))**:
+   Union sobreposta aos formatos de instrução R, I, S, B, U e J.
 
-### Como Executar os Testes em C
+---
+
+## 5. Compilação e Testes em C com Clang / LLVM
+
+O SERV suporta a compilação de código C bare-metal para **RV32E** (`ilp32e`) e **RV32I** com validação automática de estado:
 
 ```bash
-# Executa todos os testes da pasta sw_test/
+# Executa todos os testes em C com RV32E e PC_WIDTH=13
 python run_c_test.py --all
 
-# Executa um teste específico (ex.: Fibonacci iterativo com validação de retorno)
-python run_c_test.py sw_test/test_fibonacci.c
+# Executa em modo padrão RV32I
+python run_c_test.py --rv32i --all
 
-# Executa teste sobrescrevendo o valor esperado via linha de comando
-python run_c_test.py sw_test/test_simple.c --expected 42
+# Limpa artefatos temporários
+python run_c_test.py --clean
 ```
 
-### Como Escrever Novos Testes em C
-
-Basta criar um arquivo `.c` na pasta `sw_test/` com a anotação `// EXPECTED: <valor>`:
-
-```c
-// EXPECTED: 55
-
-int fib(int n) {
-    if (n <= 1) return n;
-    int a = 0, b = 1;
-    for (int i = 2; i <= n; i++) {
-        int c = a + b;
-        a = b;
-        b = c;
-    }
-    return b;
-}
-
-volatile int n_terms = 10;
-
-int main(void) {
-    // O valor retornado por main() é capturado automaticamente pelo testbench!
-    return fib(n_terms);
-}
-```
+Testes inclusos na suíte:
+- `test_simple.c`: Aritmética básica e verificação de retorno de função.
+- `test_fibonacci.c`: Sequência de Fibonacci iterativa.
+- `test_fibonacci_rec.c`: Fibonacci recursivo (testa chamadas de função e pilha de registradores).
+- `test_array.c`: Manipulação de ponteiros, arrays e laços na memória RAM.

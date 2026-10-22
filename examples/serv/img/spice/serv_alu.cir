@@ -1,0 +1,174 @@
+* serv_alu — circuito sintetizado pelo fr4lane (44 células: AND2, DFF, INV, NAND2, NOR2, NOR3; 291 componentes)
+* família discrete_rtl, canto típico (VDD 5 V, 27 °C)
+* gerado por fr4lane-cellsim --design serv_alu --export; rodar: ngspice -b serv_alu.cir
+*
+* entradas no nível de pior caso: alto = 1.5 V, baixo = 0.4 V; cada saída leva uma carga de referência
+* saída: 1 se >= 1.5 V, 0 se <= 0.5 V
+*
+* vetores de teste (medida: valor esperado):
+*   vetor 0 (0-20 µs): clk=0 i_en=0 i_cnt0=0 i_sub=0 i_bool_op[0]=0 i_bool_op[1]=0 i_cmp_eq=0 i_cmp_sig=0 i_rd_sel[0]=0 i_rd_sel[1]=0 i_rd_sel[2]=0 i_rs1=0 i_op_b=0 i_buf=0  ->  s_o_cmp_0: o_cmp=1, s_o_rd_0: o_rd=0
+*   vetor 1 (20-40 µs): clk=1 i_en=0 i_cnt0=0 i_sub=0 i_bool_op[0]=0 i_bool_op[1]=0 i_cmp_eq=0 i_cmp_sig=0 i_rd_sel[0]=0 i_rd_sel[1]=0 i_rd_sel[2]=0 i_rs1=0 i_op_b=0 i_buf=0  ->  s_o_cmp_1: o_cmp=1, s_o_rd_1: o_rd=0
+*   vetor 2 (40-60 µs): clk=0 i_en=1 i_cnt0=0 i_sub=0 i_bool_op[0]=0 i_bool_op[1]=0 i_cmp_eq=0 i_cmp_sig=0 i_rd_sel[0]=0 i_rd_sel[1]=0 i_rd_sel[2]=0 i_rs1=0 i_op_b=0 i_buf=0  ->  s_o_cmp_2: o_cmp=1, s_o_rd_2: o_rd=0
+*   vetor 3 (60-80 µs): clk=1 i_en=1 i_cnt0=0 i_sub=0 i_bool_op[0]=0 i_bool_op[1]=0 i_cmp_eq=0 i_cmp_sig=0 i_rd_sel[0]=0 i_rd_sel[1]=0 i_rd_sel[2]=0 i_rs1=0 i_op_b=0 i_buf=0  ->  s_o_cmp_3: o_cmp=1, s_o_rd_3: o_rd=0
+*   vetor 4 (80-100 µs): clk=0 i_en=0 i_cnt0=1 i_sub=0 i_bool_op[0]=0 i_bool_op[1]=0 i_cmp_eq=0 i_cmp_sig=0 i_rd_sel[0]=0 i_rd_sel[1]=0 i_rd_sel[2]=0 i_rs1=0 i_op_b=0 i_buf=0  ->  s_o_cmp_4: o_cmp=1, s_o_rd_4: o_rd=0
+*   vetor 5 (100-120 µs): clk=1 i_en=0 i_cnt0=1 i_sub=0 i_bool_op[0]=0 i_bool_op[1]=0 i_cmp_eq=0 i_cmp_sig=0 i_rd_sel[0]=0 i_rd_sel[1]=0 i_rd_sel[2]=0 i_rs1=0 i_op_b=0 i_buf=0  ->  s_o_cmp_5: o_cmp=1, s_o_rd_5: o_rd=0
+*   vetor 6 (120-140 µs): clk=0 i_en=1 i_cnt0=1 i_sub=0 i_bool_op[0]=0 i_bool_op[1]=0 i_cmp_eq=0 i_cmp_sig=0 i_rd_sel[0]=0 i_rd_sel[1]=0 i_rd_sel[2]=0 i_rs1=0 i_op_b=0 i_buf=0  ->  s_o_cmp_6: o_cmp=1, s_o_rd_6: o_rd=0
+*   vetor 7 (140-160 µs): clk=1 i_en=1 i_cnt0=1 i_sub=0 i_bool_op[0]=0 i_bool_op[1]=0 i_cmp_eq=0 i_cmp_sig=0 i_rd_sel[0]=0 i_rd_sel[1]=0 i_rd_sel[2]=0 i_rs1=0 i_op_b=0 i_buf=0  ->  s_o_cmp_7: o_cmp=1, s_o_rd_7: o_rd=0
+*   vetor 8 (160-180 µs): clk=0 i_en=0 i_cnt0=0 i_sub=1 i_bool_op[0]=0 i_bool_op[1]=0 i_cmp_eq=0 i_cmp_sig=0 i_rd_sel[0]=0 i_rd_sel[1]=0 i_rd_sel[2]=0 i_rs1=0 i_op_b=0 i_buf=0  ->  s_o_cmp_8: o_cmp=1, s_o_rd_8: o_rd=0
+*   vetor 9 (180-200 µs): clk=1 i_en=0 i_cnt0=0 i_sub=1 i_bool_op[0]=0 i_bool_op[1]=0 i_cmp_eq=0 i_cmp_sig=0 i_rd_sel[0]=0 i_rd_sel[1]=0 i_rd_sel[2]=0 i_rs1=0 i_op_b=0 i_buf=0  ->  s_o_cmp_9: o_cmp=0, s_o_rd_9: o_rd=0
+*   vetor 10 (200-220 µs): clk=0 i_en=1 i_cnt0=0 i_sub=1 i_bool_op[0]=0 i_bool_op[1]=0 i_cmp_eq=0 i_cmp_sig=0 i_rd_sel[0]=0 i_rd_sel[1]=0 i_rd_sel[2]=0 i_rs1=0 i_op_b=0 i_buf=0  ->  s_o_cmp_10: o_cmp=0, s_o_rd_10: o_rd=0
+*   vetor 11 (220-240 µs): clk=1 i_en=1 i_cnt0=0 i_sub=1 i_bool_op[0]=0 i_bool_op[1]=0 i_cmp_eq=0 i_cmp_sig=0 i_rd_sel[0]=0 i_rd_sel[1]=0 i_rd_sel[2]=0 i_rs1=0 i_op_b=0 i_buf=0  ->  s_o_cmp_11: o_cmp=0, s_o_rd_11: o_rd=0
+*   vetor 12 (240-260 µs): clk=0 i_en=0 i_cnt0=1 i_sub=1 i_bool_op[0]=0 i_bool_op[1]=0 i_cmp_eq=0 i_cmp_sig=0 i_rd_sel[0]=0 i_rd_sel[1]=0 i_rd_sel[2]=0 i_rs1=0 i_op_b=0 i_buf=0  ->  s_o_cmp_12: o_cmp=0, s_o_rd_12: o_rd=0
+*   vetor 13 (260-280 µs): clk=1 i_en=0 i_cnt0=1 i_sub=1 i_bool_op[0]=0 i_bool_op[1]=0 i_cmp_eq=0 i_cmp_sig=0 i_rd_sel[0]=0 i_rd_sel[1]=0 i_rd_sel[2]=0 i_rs1=0 i_op_b=0 i_buf=0  ->  s_o_cmp_13: o_cmp=0, s_o_rd_13: o_rd=0
+*   vetor 14 (280-300 µs): clk=0 i_en=1 i_cnt0=1 i_sub=1 i_bool_op[0]=0 i_bool_op[1]=0 i_cmp_eq=0 i_cmp_sig=0 i_rd_sel[0]=0 i_rd_sel[1]=0 i_rd_sel[2]=0 i_rs1=0 i_op_b=0 i_buf=0  ->  s_o_cmp_14: o_cmp=0, s_o_rd_14: o_rd=0
+*   vetor 15 (300-320 µs): clk=1 i_en=1 i_cnt0=1 i_sub=1 i_bool_op[0]=0 i_bool_op[1]=0 i_cmp_eq=0 i_cmp_sig=0 i_rd_sel[0]=0 i_rd_sel[1]=0 i_rd_sel[2]=0 i_rs1=0 i_op_b=0 i_buf=0  ->  s_o_cmp_15: o_cmp=0, s_o_rd_15: o_rd=0
+*
+* fr4lane-cellsim: canto típico
+.temp 27
+.param kup=1 kb=1
+.model NPN NPN(Is=7.049f Xti=3 Eg=1.11 Vaf=54.76 Bf=250 Ise=78.17f Ne=1.479 Ikf=24.96m Nkf=.5381 Xtb=1.5 Br=1.2 Isc=27.51f Nc=1.775 Ikr=3.321 Rc=.9706 Cjc=4.25p Mjc=.3147 Vjc=.5697 Fc=.5 Cje=11.5p Mje=.6715 Vje=.5 Tr=10n Tf=410.7p Itf=1.12 Xtf=26.19 Vtf=10)
+.subckt NAND2 A B Y VDD GND
+RL VDD Y {1000*kup}
+R1 A b1 {10000*kb}
+R2 B b2 {10000*kb}
+Q1 Y b1 n1 NPN
+Q2 n1 b2 GND NPN
+.ends NAND2
+.subckt INV A Y VDD GND
+RL VDD Y {1000*kup}
+R1 A b1 {10000*kb}
+Q1 Y b1 GND NPN
+.ends INV
+.subckt AND2 A B Y VDD GND
+X1 A B n VDD GND NAND2
+X2 n Y VDD GND INV
+.ends AND2
+.subckt NOR2 A B Y VDD GND
+RL VDD Y {1000*kup}
+R1 A b1 {10000*kb}
+R2 B b2 {10000*kb}
+Q1 Y b1 GND NPN
+Q2 Y b2 GND NPN
+.ends NOR2
+.subckt NOR3 A B C Y VDD GND
+RL VDD Y {1000*kup}
+R1 A b1 {10000*kb}
+R2 B b2 {10000*kb}
+R3 C b3 {10000*kb}
+Q1 Y b1 GND NPN
+Q2 Y b2 GND NPN
+Q3 Y b3 GND NPN
+.ends NOR3
+.subckt DFF D C Q VDD GND
+X0 C ck VDD GND INV
+X1 n4 n2 n1 VDD GND NOR2
+X2 n1 ck n2 VDD GND NOR2
+X3 n2 ck n4 n3 VDD GND NOR3
+X4 n3 D n4 VDD GND NOR2
+X5 n2 QN Q VDD GND NOR2
+X6 Q n3 QN VDD GND NOR2
+.ends DFF
+VDD vdd 0 5
+V_clk n2 0 PWL(0 0.4 2e-05 0.4 2.0002e-05 1.5 4e-05 1.5 4.0002e-05 0.4 6e-05 0.4 6.0002e-05 1.5 8e-05 1.5 8.0002e-05 0.4 0.0001 0.4 0.000100002 1.5 0.00012 1.5 0.000120002 0.4 0.00014 0.4 0.000140002 1.5 0.00016 1.5 0.000160002 0.4 0.00018 0.4 0.000180002 1.5 0.0002 1.5 0.000200002 0.4 0.00022 0.4 0.000220002 1.5 0.00024 1.5 0.000240002 0.4 0.00026 0.4 0.000260002 1.5 0.00028 1.5 0.000280002 0.4 0.0003 0.4 0.000300002 1.5)
+V_i_en n3 0 PWL(0 0.4 4e-05 0.4 4.0002e-05 1.5 8e-05 1.5 8.0002e-05 0.4 0.00012 0.4 0.000120002 1.5 0.00016 1.5 0.000160002 0.4 0.0002 0.4 0.000200002 1.5 0.00024 1.5 0.000240002 0.4 0.00028 0.4 0.000280002 1.5)
+V_i_cnt0 n4 0 PWL(0 0.4 8e-05 0.4 8.0002e-05 1.5 0.00016 1.5 0.000160002 0.4 0.00024 0.4 0.000240002 1.5)
+V_i_sub n5 0 PWL(0 0.4 0.00016 0.4 0.000160002 1.5)
+V_i_bool_op_0_ n6 0 PWL(0 0.4)
+V_i_bool_op_1_ n7 0 PWL(0 0.4)
+V_i_cmp_eq n8 0 PWL(0 0.4)
+V_i_cmp_sig n9 0 PWL(0 0.4)
+V_i_rd_sel_0_ n10 0 PWL(0 0.4)
+V_i_rd_sel_1_ n11 0 PWL(0 0.4)
+V_i_rd_sel_2_ n12 0 PWL(0 0.4)
+V_i_rs1 n13 0 PWL(0 0.4)
+V_i_op_b n14 0 PWL(0 0.4)
+V_i_buf n15 0 PWL(0 0.4)
+XU1 n3 n16 vdd 0 INV
+XU2 n6 n17 vdd 0 INV
+XU3 n4 n18 vdd 0 INV
+XU4 n8 n19 vdd 0 INV
+XU5 n5 n16 n20 vdd 0 NAND2
+XU6 n13 n21 n22 vdd 0 AND2
+XU7 n13 n21 n23 vdd 0 NAND2
+XU8 n13 n21 n24 vdd 0 NOR2
+XU9 n22 n24 n25 vdd 0 NOR2
+XU10 n5 n14 n26 vdd 0 NOR2
+XU11 n5 n14 n27 vdd 0 AND2
+XU12 n26 n27 n28 vdd 0 NOR2
+XU13 n25 n28 n29 vdd 0 NAND2
+XU14 n29 n30 vdd 0 INV
+XU15 n23 n29 n31 vdd 0 NAND2
+XU16 n3 n31 n32 vdd 0 NAND2
+XU17 n20 n32 n33 vdd 0 NAND2
+XU18 n13 n14 n34 vdd 0 AND2
+XU19 n13 n14 n35 vdd 0 NOR2
+XU20 n34 n35 n36 vdd 0 NOR2
+XU21 n17 n36 n37 vdd 0 NAND2
+XU22 n7 n34 n38 vdd 0 NAND2
+XU23 n37 n38 n39 vdd 0 NAND2
+XU24 n12 n39 n40 vdd 0 NAND2
+XU25 n25 n28 n41 vdd 0 NOR2
+XU26 n30 n41 n42 vdd 0 NOR2
+XU27 n10 n42 n43 vdd 0 AND2
+XU28 n11 n44 n45 vdd 0 NAND2
+XU29 n18 n45 n46 vdd 0 NOR2
+XU30 n15 n43 n46 n47 vdd 0 NOR3
+XU31 n40 n47 n48 vdd 0 NAND2
+XU32 n44 n4 n49 vdd 0 NOR2
+XU33 n19 n42 n49 n50 vdd 0 NOR3
+XU34 n9 n36 n51 vdd 0 NAND2
+XU35 n31 n51 n52 vdd 0 NOR2
+XU36 n31 n51 n53 vdd 0 AND2
+XU37 n8 n52 n53 n54 vdd 0 NOR3
+XU38 n50 n54 n55 vdd 0 NOR2
+XU39 n55 n56 vdd 0 INV
+XU40 n16 n50 n54 n57 vdd 0 NOR3
+XU41 n3 n44 n58 vdd 0 NOR2
+XU42 n57 n58 n59 vdd 0 NOR2
+XFF1 n59 n2 n44 vdd 0 DFF
+XFF2 n33 n2 n21 vdd 0 DFF
+Xld_o_cmp n56 ldo_o_cmp_Y vdd 0 INV
+Xld_o_rd n48 ldo_o_rd_Y vdd 0 INV
+.tran 4e-08 0.00032
+.control
+run
+linearize
+set wr_singlescale
+set wr_vecnames
+wrdata serv_alu.dat v(n2) v(n3) v(n4) v(n5) v(n6) v(n7) v(n8) v(n9) v(n10) v(n11) v(n12) v(n13) v(n14) v(n15) v(n56) v(n48)
+meas tran s_o_cmp_0 FIND v(n56) AT=1.9e-05
+meas tran s_o_rd_0 FIND v(n48) AT=1.9e-05
+meas tran s_o_cmp_1 FIND v(n56) AT=3.9e-05
+meas tran s_o_rd_1 FIND v(n48) AT=3.9e-05
+meas tran s_o_cmp_2 FIND v(n56) AT=5.9e-05
+meas tran s_o_rd_2 FIND v(n48) AT=5.9e-05
+meas tran s_o_cmp_3 FIND v(n56) AT=7.9e-05
+meas tran s_o_rd_3 FIND v(n48) AT=7.9e-05
+meas tran s_o_cmp_4 FIND v(n56) AT=9.9e-05
+meas tran s_o_rd_4 FIND v(n48) AT=9.9e-05
+meas tran s_o_cmp_5 FIND v(n56) AT=0.000119
+meas tran s_o_rd_5 FIND v(n48) AT=0.000119
+meas tran s_o_cmp_6 FIND v(n56) AT=0.000139
+meas tran s_o_rd_6 FIND v(n48) AT=0.000139
+meas tran s_o_cmp_7 FIND v(n56) AT=0.000159
+meas tran s_o_rd_7 FIND v(n48) AT=0.000159
+meas tran s_o_cmp_8 FIND v(n56) AT=0.000179
+meas tran s_o_rd_8 FIND v(n48) AT=0.000179
+meas tran s_o_cmp_9 FIND v(n56) AT=0.000199
+meas tran t_o_cmp_9 WHEN v(n56)=1 CROSS=LAST FROM=0.00018 TO=0.0002
+meas tran s_o_rd_9 FIND v(n48) AT=0.000199
+meas tran s_o_cmp_10 FIND v(n56) AT=0.000219
+meas tran s_o_rd_10 FIND v(n48) AT=0.000219
+meas tran s_o_cmp_11 FIND v(n56) AT=0.000239
+meas tran s_o_rd_11 FIND v(n48) AT=0.000239
+meas tran s_o_cmp_12 FIND v(n56) AT=0.000259
+meas tran s_o_rd_12 FIND v(n48) AT=0.000259
+meas tran s_o_cmp_13 FIND v(n56) AT=0.000279
+meas tran s_o_rd_13 FIND v(n48) AT=0.000279
+meas tran s_o_cmp_14 FIND v(n56) AT=0.000299
+meas tran s_o_rd_14 FIND v(n48) AT=0.000299
+meas tran s_o_cmp_15 FIND v(n56) AT=0.000319
+meas tran s_o_rd_15 FIND v(n48) AT=0.000319
+quit
+.endc
+.end
