@@ -50,3 +50,15 @@ flip-flop D, borda de subida (6 NORs + inversor de clock)
 
 Um circuito inteiro, sintetizado pelo fr4lane: 44 células, 291 componentes e 16 vetores. Resultados e gráfico em [serv_alu.md](serv_alu.md); dados em [serv_alu.csv](serv_alu.csv); netlist em [serv_alu.cir](serv_alu.cir).
 
+## Circuito serv_rf_if
+
+Um circuito inteiro, sintetizado pelo fr4lane: 9 células, 53 componentes e 16 vetores. Resultados e gráfico em [serv_rf_if.md](serv_rf_if.md); dados em [serv_rf_if.csv](serv_rf_if.csv); netlist em [serv_rf_if.cir](serv_rf_if.cir).
+
+## Circuito serv_mem_if
+
+Um circuito inteiro, sintetizado pelo fr4lane: 27 células, 156 componentes e 16 vetores. Resultados e gráfico em [serv_mem_if.md](serv_mem_if.md); dados em [serv_mem_if.csv](serv_mem_if.csv); netlist em [serv_mem_if.cir](serv_mem_if.cir).
+
+## Circuito serv_immdec
+
+Um circuito inteiro, sintetizado pelo fr4lane: 221 células, 1977 componentes e 16 vetores. Resultados e gráfico em [serv_immdec.md](serv_immdec.md); dados em [serv_immdec.csv](serv_immdec.csv); netlist em [serv_immdec.cir](serv_immdec.cir).
+

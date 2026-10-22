@@ -1,0 +1,256 @@
+* serv_mem_if — circuito sintetizado pelo fr4lane (27 células: AND2, DFF, INV, NAND2, NOR2, NOR3; 156 componentes)
+* família discrete_rtl, canto típico (VDD 5 V, 27 °C)
+* gerado por fr4lane-cellsim --design serv_mem_if --export; rodar: ngspice -b serv_mem_if.cir
+*
+* entradas no nível de pior caso: alto = 1.5 V, baixo = 0.4 V; cada saída leva uma carga de referência
+* saída: 1 se >= 1.5 V, 0 se <= 0.5 V
+*
+* vetores de teste (medida: valor esperado):
+*   vetor 0 (0-20 µs): i_clk=1 i_bytecnt[0]=0 i_bytecnt[1]=0 i_lsb[0]=1 i_lsb[1]=0 i_signed=0 i_word=0 i_half=1 i_bufreg2_q=0  ->  s_o_misalign_0: o_misalign=0, s_o_rd_0: o_rd=0, s_o_wb_sel_0__0: o_wb_sel[0]=0, s_o_wb_sel_1__0: o_wb_sel[1]=1, s_o_wb_sel_2__0: o_wb_sel[2]=0, s_o_wb_sel_3__0: o_wb_sel[3]=0
+*   vetor 1 (20-40 µs): i_clk=0 i_bytecnt[0]=0 i_bytecnt[1]=0 i_lsb[0]=0 i_lsb[1]=0 i_signed=0 i_word=1 i_half=0 i_bufreg2_q=0  ->  s_o_misalign_1: o_misalign=0, s_o_rd_1: o_rd=0, s_o_wb_sel_0__1: o_wb_sel[0]=1, s_o_wb_sel_1__1: o_wb_sel[1]=1, s_o_wb_sel_2__1: o_wb_sel[2]=1, s_o_wb_sel_3__1: o_wb_sel[3]=1
+*   vetor 2 (40-60 µs): i_clk=1 i_bytecnt[0]=0 i_bytecnt[1]=1 i_lsb[0]=0 i_lsb[1]=0 i_signed=0 i_word=0 i_half=0 i_bufreg2_q=1  ->  s_o_misalign_2: o_misalign=0, s_o_rd_2: o_rd=0, s_o_wb_sel_0__2: o_wb_sel[0]=1, s_o_wb_sel_1__2: o_wb_sel[1]=0, s_o_wb_sel_2__2: o_wb_sel[2]=0, s_o_wb_sel_3__2: o_wb_sel[3]=0
+*   vetor 3 (60-80 µs): i_clk=0 i_bytecnt[0]=0 i_bytecnt[1]=0 i_lsb[0]=1 i_lsb[1]=1 i_signed=1 i_word=1 i_half=0 i_bufreg2_q=0  ->  s_o_misalign_3: o_misalign=0, s_o_rd_3: o_rd=0, s_o_wb_sel_0__3: o_wb_sel[0]=0, s_o_wb_sel_1__3: o_wb_sel[1]=1, s_o_wb_sel_2__3: o_wb_sel[2]=1, s_o_wb_sel_3__3: o_wb_sel[3]=1
+*   vetor 4 (80-100 µs): i_clk=1 i_bytecnt[0]=1 i_bytecnt[1]=0 i_lsb[0]=1 i_lsb[1]=1 i_signed=1 i_word=1 i_half=1 i_bufreg2_q=1  ->  s_o_misalign_4: o_misalign=0, s_o_rd_4: o_rd=1, s_o_wb_sel_0__4: o_wb_sel[0]=0, s_o_wb_sel_1__4: o_wb_sel[1]=1, s_o_wb_sel_2__4: o_wb_sel[2]=1, s_o_wb_sel_3__4: o_wb_sel[3]=1
+*   vetor 5 (100-120 µs): i_clk=0 i_bytecnt[0]=0 i_bytecnt[1]=1 i_lsb[0]=1 i_lsb[1]=0 i_signed=0 i_word=1 i_half=1 i_bufreg2_q=1  ->  s_o_misalign_5: o_misalign=0, s_o_rd_5: o_rd=1, s_o_wb_sel_0__5: o_wb_sel[0]=0, s_o_wb_sel_1__5: o_wb_sel[1]=1, s_o_wb_sel_2__5: o_wb_sel[2]=1, s_o_wb_sel_3__5: o_wb_sel[3]=1
+*   vetor 6 (120-140 µs): i_clk=1 i_bytecnt[0]=1 i_bytecnt[1]=0 i_lsb[0]=0 i_lsb[1]=0 i_signed=1 i_word=1 i_half=1 i_bufreg2_q=1  ->  s_o_misalign_6: o_misalign=0, s_o_rd_6: o_rd=1, s_o_wb_sel_0__6: o_wb_sel[0]=1, s_o_wb_sel_1__6: o_wb_sel[1]=1, s_o_wb_sel_2__6: o_wb_sel[2]=1, s_o_wb_sel_3__6: o_wb_sel[3]=1
+*   vetor 7 (140-160 µs): i_clk=0 i_bytecnt[0]=0 i_bytecnt[1]=1 i_lsb[0]=0 i_lsb[1]=0 i_signed=0 i_word=0 i_half=1 i_bufreg2_q=1  ->  s_o_misalign_7: o_misalign=0, s_o_rd_7: o_rd=0, s_o_wb_sel_0__7: o_wb_sel[0]=1, s_o_wb_sel_1__7: o_wb_sel[1]=1, s_o_wb_sel_2__7: o_wb_sel[2]=0, s_o_wb_sel_3__7: o_wb_sel[3]=0
+*   vetor 8 (160-180 µs): i_clk=0 i_bytecnt[0]=1 i_bytecnt[1]=1 i_lsb[0]=0 i_lsb[1]=1 i_signed=0 i_word=1 i_half=1 i_bufreg2_q=0  ->  s_o_misalign_8: o_misalign=0, s_o_rd_8: o_rd=0, s_o_wb_sel_0__8: o_wb_sel[0]=0, s_o_wb_sel_1__8: o_wb_sel[1]=1, s_o_wb_sel_2__8: o_wb_sel[2]=1, s_o_wb_sel_3__8: o_wb_sel[3]=1
+*   vetor 9 (180-200 µs): i_clk=0 i_bytecnt[0]=0 i_bytecnt[1]=0 i_lsb[0]=0 i_lsb[1]=0 i_signed=1 i_word=1 i_half=0 i_bufreg2_q=0  ->  s_o_misalign_9: o_misalign=0, s_o_rd_9: o_rd=0, s_o_wb_sel_0__9: o_wb_sel[0]=1, s_o_wb_sel_1__9: o_wb_sel[1]=1, s_o_wb_sel_2__9: o_wb_sel[2]=1, s_o_wb_sel_3__9: o_wb_sel[3]=1
+*   vetor 10 (200-220 µs): i_clk=1 i_bytecnt[0]=1 i_bytecnt[1]=0 i_lsb[0]=0 i_lsb[1]=1 i_signed=1 i_word=1 i_half=1 i_bufreg2_q=1  ->  s_o_misalign_10: o_misalign=0, s_o_rd_10: o_rd=1, s_o_wb_sel_0__10: o_wb_sel[0]=0, s_o_wb_sel_1__10: o_wb_sel[1]=1, s_o_wb_sel_2__10: o_wb_sel[2]=1, s_o_wb_sel_3__10: o_wb_sel[3]=1
+*   vetor 11 (220-240 µs): i_clk=1 i_bytecnt[0]=0 i_bytecnt[1]=1 i_lsb[0]=1 i_lsb[1]=1 i_signed=0 i_word=0 i_half=0 i_bufreg2_q=0  ->  s_o_misalign_11: o_misalign=0, s_o_rd_11: o_rd=0, s_o_wb_sel_0__11: o_wb_sel[0]=0, s_o_wb_sel_1__11: o_wb_sel[1]=0, s_o_wb_sel_2__11: o_wb_sel[2]=0, s_o_wb_sel_3__11: o_wb_sel[3]=1
+*   vetor 12 (240-260 µs): i_clk=1 i_bytecnt[0]=1 i_bytecnt[1]=1 i_lsb[0]=1 i_lsb[1]=0 i_signed=0 i_word=0 i_half=1 i_bufreg2_q=1  ->  s_o_misalign_12: o_misalign=0, s_o_rd_12: o_rd=0, s_o_wb_sel_0__12: o_wb_sel[0]=0, s_o_wb_sel_1__12: o_wb_sel[1]=1, s_o_wb_sel_2__12: o_wb_sel[2]=0, s_o_wb_sel_3__12: o_wb_sel[3]=0
+*   vetor 13 (260-280 µs): i_clk=1 i_bytecnt[0]=1 i_bytecnt[1]=0 i_lsb[0]=1 i_lsb[1]=1 i_signed=1 i_word=0 i_half=1 i_bufreg2_q=1  ->  s_o_misalign_13: o_misalign=0, s_o_rd_13: o_rd=1, s_o_wb_sel_0__13: o_wb_sel[0]=0, s_o_wb_sel_1__13: o_wb_sel[1]=0, s_o_wb_sel_2__13: o_wb_sel[2]=0, s_o_wb_sel_3__13: o_wb_sel[3]=1
+*   vetor 14 (280-300 µs): i_clk=0 i_bytecnt[0]=1 i_bytecnt[1]=0 i_lsb[0]=0 i_lsb[1]=0 i_signed=0 i_word=0 i_half=0 i_bufreg2_q=0  ->  s_o_misalign_14: o_misalign=0, s_o_rd_14: o_rd=0, s_o_wb_sel_0__14: o_wb_sel[0]=1, s_o_wb_sel_1__14: o_wb_sel[1]=0, s_o_wb_sel_2__14: o_wb_sel[2]=0, s_o_wb_sel_3__14: o_wb_sel[3]=0
+*   vetor 15 (300-320 µs): i_clk=0 i_bytecnt[0]=0 i_bytecnt[1]=0 i_lsb[0]=1 i_lsb[1]=0 i_signed=0 i_word=1 i_half=1 i_bufreg2_q=1  ->  s_o_misalign_15: o_misalign=0, s_o_rd_15: o_rd=1, s_o_wb_sel_0__15: o_wb_sel[0]=0, s_o_wb_sel_1__15: o_wb_sel[1]=1, s_o_wb_sel_2__15: o_wb_sel[2]=1, s_o_wb_sel_3__15: o_wb_sel[3]=1
+*
+* fr4lane-cellsim: canto típico
+.temp 27
+.param kup=1 kb=1
+.model NPN NPN(Is=7.049f Xti=3 Eg=1.11 Vaf=54.76 Bf=250 Ise=78.17f Ne=1.479 Ikf=24.96m Nkf=.5381 Xtb=1.5 Br=1.2 Isc=27.51f Nc=1.775 Ikr=3.321 Rc=.9706 Cjc=4.25p Mjc=.3147 Vjc=.5697 Fc=.5 Cje=11.5p Mje=.6715 Vje=.5 Tr=10n Tf=410.7p Itf=1.12 Xtf=26.19 Vtf=10)
+.subckt NAND2 A B Y VDD GND
+RL VDD Y {1000*kup}
+R1 A b1 {10000*kb}
+R2 B b2 {10000*kb}
+Q1 Y b1 n1 NPN
+Q2 n1 b2 GND NPN
+.ends NAND2
+.subckt INV A Y VDD GND
+RL VDD Y {1000*kup}
+R1 A b1 {10000*kb}
+Q1 Y b1 GND NPN
+.ends INV
+.subckt AND2 A B Y VDD GND
+X1 A B n VDD GND NAND2
+X2 n Y VDD GND INV
+.ends AND2
+.subckt NOR2 A B Y VDD GND
+RL VDD Y {1000*kup}
+R1 A b1 {10000*kb}
+R2 B b2 {10000*kb}
+Q1 Y b1 GND NPN
+Q2 Y b2 GND NPN
+.ends NOR2
+.subckt NOR3 A B C Y VDD GND
+RL VDD Y {1000*kup}
+R1 A b1 {10000*kb}
+R2 B b2 {10000*kb}
+R3 C b3 {10000*kb}
+Q1 Y b1 GND NPN
+Q2 Y b2 GND NPN
+Q3 Y b3 GND NPN
+.ends NOR3
+.subckt DFF D C Q VDD GND
+X0 C ck VDD GND INV
+X1 n4 n2 n1 VDD GND NOR2
+X2 n1 ck n2 VDD GND NOR2
+X3 n2 ck n4 n3 VDD GND NOR3
+X4 n3 D n4 VDD GND NOR2
+X5 n2 QN Q VDD GND NOR2
+X6 Q n3 QN VDD GND NOR2
+.ends DFF
+VDD vdd 0 5
+V_i_clk n2 0 PWL(0 1.5 2e-05 1.5 2.0002e-05 0.4 4e-05 0.4 4.0002e-05 1.5 6e-05 1.5 6.0002e-05 0.4 8e-05 0.4 8.0002e-05 1.5 0.0001 1.5 0.000100002 0.4 0.00012 0.4 0.000120002 1.5 0.00014 1.5 0.000140002 0.4 0.0002 0.4 0.000200002 1.5 0.00028 1.5 0.000280002 0.4)
+V_i_bytecnt_0_ n3 0 PWL(0 0.4 8e-05 0.4 8.0002e-05 1.5 0.0001 1.5 0.000100002 0.4 0.00012 0.4 0.000120002 1.5 0.00014 1.5 0.000140002 0.4 0.00016 0.4 0.000160002 1.5 0.00018 1.5 0.000180002 0.4 0.0002 0.4 0.000200002 1.5 0.00022 1.5 0.000220002 0.4 0.00024 0.4 0.000240002 1.5 0.0003 1.5 0.000300002 0.4)
+V_i_bytecnt_1_ n4 0 PWL(0 0.4 4e-05 0.4 4.0002e-05 1.5 6e-05 1.5 6.0002e-05 0.4 0.0001 0.4 0.000100002 1.5 0.00012 1.5 0.000120002 0.4 0.00014 0.4 0.000140002 1.5 0.00018 1.5 0.000180002 0.4 0.00022 0.4 0.000220002 1.5 0.00026 1.5 0.000260002 0.4)
+V_i_lsb_0_ n5 0 PWL(0 1.5 2e-05 1.5 2.0002e-05 0.4 6e-05 0.4 6.0002e-05 1.5 0.00012 1.5 0.000120002 0.4 0.00022 0.4 0.000220002 1.5 0.00028 1.5 0.000280002 0.4 0.0003 0.4 0.000300002 1.5)
+V_i_lsb_1_ n6 0 PWL(0 0.4 6e-05 0.4 6.0002e-05 1.5 0.0001 1.5 0.000100002 0.4 0.00016 0.4 0.000160002 1.5 0.00018 1.5 0.000180002 0.4 0.0002 0.4 0.000200002 1.5 0.00024 1.5 0.000240002 0.4 0.00026 0.4 0.000260002 1.5 0.00028 1.5 0.000280002 0.4)
+V_i_signed n7 0 PWL(0 0.4 6e-05 0.4 6.0002e-05 1.5 0.0001 1.5 0.000100002 0.4 0.00012 0.4 0.000120002 1.5 0.00014 1.5 0.000140002 0.4 0.00018 0.4 0.000180002 1.5 0.00022 1.5 0.000220002 0.4 0.00026 0.4 0.000260002 1.5 0.00028 1.5 0.000280002 0.4)
+V_i_word n8 0 PWL(0 0.4 2e-05 0.4 2.0002e-05 1.5 4e-05 1.5 4.0002e-05 0.4 6e-05 0.4 6.0002e-05 1.5 0.00014 1.5 0.000140002 0.4 0.00016 0.4 0.000160002 1.5 0.00022 1.5 0.000220002 0.4 0.0003 0.4 0.000300002 1.5)
+V_i_half n9 0 PWL(0 1.5 2e-05 1.5 2.0002e-05 0.4 8e-05 0.4 8.0002e-05 1.5 0.00018 1.5 0.000180002 0.4 0.0002 0.4 0.000200002 1.5 0.00022 1.5 0.000220002 0.4 0.00024 0.4 0.000240002 1.5 0.00028 1.5 0.000280002 0.4 0.0003 0.4 0.000300002 1.5)
+V_i_bufreg2_q n10 0 PWL(0 0.4 4e-05 0.4 4.0002e-05 1.5 6e-05 1.5 6.0002e-05 0.4 8e-05 0.4 8.0002e-05 1.5 0.00016 1.5 0.000160002 0.4 0.0002 0.4 0.000200002 1.5 0.00022 1.5 0.000220002 0.4 0.00024 0.4 0.000240002 1.5 0.00028 1.5 0.000280002 0.4 0.0003 0.4 0.000300002 1.5)
+XU1 n5 n11 vdd 0 INV
+XU2 n9 n12 vdd 0 INV
+XU3 n8 n13 vdd 0 INV
+XU4 n4 n14 vdd 0 INV
+XU5 n15 n16 vdd 0 INV
+XU6 n6 n5 n17 vdd 0 NOR2
+XU7 n5 n9 n18 vdd 0 NOR2
+XU8 n18 n19 vdd 0 INV
+XU9 n6 n18 n20 vdd 0 NOR2
+XU10 n8 n20 n21 vdd 0 NOR2
+XU11 n21 n22 vdd 0 INV
+XU12 n6 n11 n23 vdd 0 NAND2
+XU13 n13 n23 n24 vdd 0 NAND2
+XU14 n6 n19 n25 vdd 0 NAND2
+XU15 n13 n25 n26 vdd 0 NAND2
+XU16 n12 n3 n27 vdd 0 NAND2
+XU17 n14 n27 n28 vdd 0 AND2
+XU18 n14 n27 n29 vdd 0 NAND2
+XU19 n8 n28 n30 vdd 0 NOR2
+XU20 n13 n29 n31 vdd 0 NAND2
+XU21 n10 n31 n32 vdd 0 NAND2
+XU22 n8 n16 n28 n33 vdd 0 NOR3
+XU23 n15 n30 n34 vdd 0 NAND2
+XU24 n7 n33 n35 vdd 0 NAND2
+XU25 n32 n34 n36 vdd 0 NAND2
+XU26 n32 n35 n37 vdd 0 NAND2
+XFF1 n36 n2 n15 vdd 0 DFF
+Xld_o_misalign 0 ldo_o_misalign_Y vdd 0 INV
+Xld_o_rd n37 ldo_o_rd_Y vdd 0 INV
+Xld_o_wb_sel_0_ n17 ldo_o_wb_sel_0__Y vdd 0 INV
+Xld_o_wb_sel_1_ n22 ldo_o_wb_sel_1__Y vdd 0 INV
+Xld_o_wb_sel_2_ n24 ldo_o_wb_sel_2__Y vdd 0 INV
+Xld_o_wb_sel_3_ n26 ldo_o_wb_sel_3__Y vdd 0 INV
+.tran 4e-08 0.00032
+.control
+run
+linearize
+set wr_singlescale
+set wr_vecnames
+wrdata serv_mem_if.dat v(n2) v(n3) v(n4) v(n5) v(n6) v(n7) v(n8) v(n9) v(n10) v(n37) v(n17) v(n22) v(n24) v(n26)
+meas tran s_o_misalign_0 FIND v(0) AT=1.9e-05
+meas tran s_o_rd_0 FIND v(n37) AT=1.9e-05
+meas tran s_o_wb_sel_0__0 FIND v(n17) AT=1.9e-05
+meas tran s_o_wb_sel_1__0 FIND v(n22) AT=1.9e-05
+meas tran s_o_wb_sel_2__0 FIND v(n24) AT=1.9e-05
+meas tran s_o_wb_sel_3__0 FIND v(n26) AT=1.9e-05
+meas tran s_o_misalign_1 FIND v(0) AT=3.9e-05
+meas tran s_o_rd_1 FIND v(n37) AT=3.9e-05
+meas tran s_o_wb_sel_0__1 FIND v(n17) AT=3.9e-05
+meas tran t_o_wb_sel_0__1 WHEN v(n17)=1 CROSS=LAST FROM=2e-05 TO=4e-05
+meas tran s_o_wb_sel_1__1 FIND v(n22) AT=3.9e-05
+meas tran s_o_wb_sel_2__1 FIND v(n24) AT=3.9e-05
+meas tran t_o_wb_sel_2__1 WHEN v(n24)=1 CROSS=LAST FROM=2e-05 TO=4e-05
+meas tran s_o_wb_sel_3__1 FIND v(n26) AT=3.9e-05
+meas tran t_o_wb_sel_3__1 WHEN v(n26)=1 CROSS=LAST FROM=2e-05 TO=4e-05
+meas tran s_o_misalign_2 FIND v(0) AT=5.9e-05
+meas tran s_o_rd_2 FIND v(n37) AT=5.9e-05
+meas tran s_o_wb_sel_0__2 FIND v(n17) AT=5.9e-05
+meas tran s_o_wb_sel_1__2 FIND v(n22) AT=5.9e-05
+meas tran t_o_wb_sel_1__2 WHEN v(n22)=1 CROSS=LAST FROM=4e-05 TO=6e-05
+meas tran s_o_wb_sel_2__2 FIND v(n24) AT=5.9e-05
+meas tran t_o_wb_sel_2__2 WHEN v(n24)=1 CROSS=LAST FROM=4e-05 TO=6e-05
+meas tran s_o_wb_sel_3__2 FIND v(n26) AT=5.9e-05
+meas tran t_o_wb_sel_3__2 WHEN v(n26)=1 CROSS=LAST FROM=4e-05 TO=6e-05
+meas tran s_o_misalign_3 FIND v(0) AT=7.9e-05
+meas tran s_o_rd_3 FIND v(n37) AT=7.9e-05
+meas tran s_o_wb_sel_0__3 FIND v(n17) AT=7.9e-05
+meas tran t_o_wb_sel_0__3 WHEN v(n17)=1 CROSS=LAST FROM=6e-05 TO=8e-05
+meas tran s_o_wb_sel_1__3 FIND v(n22) AT=7.9e-05
+meas tran t_o_wb_sel_1__3 WHEN v(n22)=1 CROSS=LAST FROM=6e-05 TO=8e-05
+meas tran s_o_wb_sel_2__3 FIND v(n24) AT=7.9e-05
+meas tran t_o_wb_sel_2__3 WHEN v(n24)=1 CROSS=LAST FROM=6e-05 TO=8e-05
+meas tran s_o_wb_sel_3__3 FIND v(n26) AT=7.9e-05
+meas tran t_o_wb_sel_3__3 WHEN v(n26)=1 CROSS=LAST FROM=6e-05 TO=8e-05
+meas tran s_o_misalign_4 FIND v(0) AT=9.9e-05
+meas tran s_o_rd_4 FIND v(n37) AT=9.9e-05
+meas tran t_o_rd_4 WHEN v(n37)=1 CROSS=LAST FROM=8e-05 TO=0.0001
+meas tran s_o_wb_sel_0__4 FIND v(n17) AT=9.9e-05
+meas tran s_o_wb_sel_1__4 FIND v(n22) AT=9.9e-05
+meas tran s_o_wb_sel_2__4 FIND v(n24) AT=9.9e-05
+meas tran s_o_wb_sel_3__4 FIND v(n26) AT=9.9e-05
+meas tran s_o_misalign_5 FIND v(0) AT=0.000119
+meas tran s_o_rd_5 FIND v(n37) AT=0.000119
+meas tran s_o_wb_sel_0__5 FIND v(n17) AT=0.000119
+meas tran s_o_wb_sel_1__5 FIND v(n22) AT=0.000119
+meas tran s_o_wb_sel_2__5 FIND v(n24) AT=0.000119
+meas tran s_o_wb_sel_3__5 FIND v(n26) AT=0.000119
+meas tran s_o_misalign_6 FIND v(0) AT=0.000139
+meas tran s_o_rd_6 FIND v(n37) AT=0.000139
+meas tran s_o_wb_sel_0__6 FIND v(n17) AT=0.000139
+meas tran t_o_wb_sel_0__6 WHEN v(n17)=1 CROSS=LAST FROM=0.00012 TO=0.00014
+meas tran s_o_wb_sel_1__6 FIND v(n22) AT=0.000139
+meas tran s_o_wb_sel_2__6 FIND v(n24) AT=0.000139
+meas tran s_o_wb_sel_3__6 FIND v(n26) AT=0.000139
+meas tran s_o_misalign_7 FIND v(0) AT=0.000159
+meas tran s_o_rd_7 FIND v(n37) AT=0.000159
+meas tran t_o_rd_7 WHEN v(n37)=1 CROSS=LAST FROM=0.00014 TO=0.00016
+meas tran s_o_wb_sel_0__7 FIND v(n17) AT=0.000159
+meas tran s_o_wb_sel_1__7 FIND v(n22) AT=0.000159
+meas tran s_o_wb_sel_2__7 FIND v(n24) AT=0.000159
+meas tran t_o_wb_sel_2__7 WHEN v(n24)=1 CROSS=LAST FROM=0.00014 TO=0.00016
+meas tran s_o_wb_sel_3__7 FIND v(n26) AT=0.000159
+meas tran t_o_wb_sel_3__7 WHEN v(n26)=1 CROSS=LAST FROM=0.00014 TO=0.00016
+meas tran s_o_misalign_8 FIND v(0) AT=0.000179
+meas tran s_o_rd_8 FIND v(n37) AT=0.000179
+meas tran s_o_wb_sel_0__8 FIND v(n17) AT=0.000179
+meas tran t_o_wb_sel_0__8 WHEN v(n17)=1 CROSS=LAST FROM=0.00016 TO=0.00018
+meas tran s_o_wb_sel_1__8 FIND v(n22) AT=0.000179
+meas tran s_o_wb_sel_2__8 FIND v(n24) AT=0.000179
+meas tran t_o_wb_sel_2__8 WHEN v(n24)=1 CROSS=LAST FROM=0.00016 TO=0.00018
+meas tran s_o_wb_sel_3__8 FIND v(n26) AT=0.000179
+meas tran t_o_wb_sel_3__8 WHEN v(n26)=1 CROSS=LAST FROM=0.00016 TO=0.00018
+meas tran s_o_misalign_9 FIND v(0) AT=0.000199
+meas tran s_o_rd_9 FIND v(n37) AT=0.000199
+meas tran s_o_wb_sel_0__9 FIND v(n17) AT=0.000199
+meas tran t_o_wb_sel_0__9 WHEN v(n17)=1 CROSS=LAST FROM=0.00018 TO=0.0002
+meas tran s_o_wb_sel_1__9 FIND v(n22) AT=0.000199
+meas tran s_o_wb_sel_2__9 FIND v(n24) AT=0.000199
+meas tran s_o_wb_sel_3__9 FIND v(n26) AT=0.000199
+meas tran s_o_misalign_10 FIND v(0) AT=0.000219
+meas tran s_o_rd_10 FIND v(n37) AT=0.000219
+meas tran t_o_rd_10 WHEN v(n37)=1 CROSS=LAST FROM=0.0002 TO=0.00022
+meas tran s_o_wb_sel_0__10 FIND v(n17) AT=0.000219
+meas tran t_o_wb_sel_0__10 WHEN v(n17)=1 CROSS=LAST FROM=0.0002 TO=0.00022
+meas tran s_o_wb_sel_1__10 FIND v(n22) AT=0.000219
+meas tran s_o_wb_sel_2__10 FIND v(n24) AT=0.000219
+meas tran s_o_wb_sel_3__10 FIND v(n26) AT=0.000219
+meas tran s_o_misalign_11 FIND v(0) AT=0.000239
+meas tran s_o_rd_11 FIND v(n37) AT=0.000239
+meas tran t_o_rd_11 WHEN v(n37)=1 CROSS=LAST FROM=0.00022 TO=0.00024
+meas tran s_o_wb_sel_0__11 FIND v(n17) AT=0.000239
+meas tran s_o_wb_sel_1__11 FIND v(n22) AT=0.000239
+meas tran t_o_wb_sel_1__11 WHEN v(n22)=1 CROSS=LAST FROM=0.00022 TO=0.00024
+meas tran s_o_wb_sel_2__11 FIND v(n24) AT=0.000239
+meas tran t_o_wb_sel_2__11 WHEN v(n24)=1 CROSS=LAST FROM=0.00022 TO=0.00024
+meas tran s_o_wb_sel_3__11 FIND v(n26) AT=0.000239
+meas tran s_o_misalign_12 FIND v(0) AT=0.000259
+meas tran s_o_rd_12 FIND v(n37) AT=0.000259
+meas tran s_o_wb_sel_0__12 FIND v(n17) AT=0.000259
+meas tran s_o_wb_sel_1__12 FIND v(n22) AT=0.000259
+meas tran t_o_wb_sel_1__12 WHEN v(n22)=1 CROSS=LAST FROM=0.00024 TO=0.00026
+meas tran s_o_wb_sel_2__12 FIND v(n24) AT=0.000259
+meas tran s_o_wb_sel_3__12 FIND v(n26) AT=0.000259
+meas tran t_o_wb_sel_3__12 WHEN v(n26)=1 CROSS=LAST FROM=0.00024 TO=0.00026
+meas tran s_o_misalign_13 FIND v(0) AT=0.000279
+meas tran s_o_rd_13 FIND v(n37) AT=0.000279
+meas tran t_o_rd_13 WHEN v(n37)=1 CROSS=LAST FROM=0.00026 TO=0.00028
+meas tran s_o_wb_sel_0__13 FIND v(n17) AT=0.000279
+meas tran s_o_wb_sel_1__13 FIND v(n22) AT=0.000279
+meas tran t_o_wb_sel_1__13 WHEN v(n22)=1 CROSS=LAST FROM=0.00026 TO=0.00028
+meas tran s_o_wb_sel_2__13 FIND v(n24) AT=0.000279
+meas tran s_o_wb_sel_3__13 FIND v(n26) AT=0.000279
+meas tran t_o_wb_sel_3__13 WHEN v(n26)=1 CROSS=LAST FROM=0.00026 TO=0.00028
+meas tran s_o_misalign_14 FIND v(0) AT=0.000299
+meas tran s_o_rd_14 FIND v(n37) AT=0.000299
+meas tran t_o_rd_14 WHEN v(n37)=1 CROSS=LAST FROM=0.00028 TO=0.0003
+meas tran s_o_wb_sel_0__14 FIND v(n17) AT=0.000299
+meas tran t_o_wb_sel_0__14 WHEN v(n17)=1 CROSS=LAST FROM=0.00028 TO=0.0003
+meas tran s_o_wb_sel_1__14 FIND v(n22) AT=0.000299
+meas tran s_o_wb_sel_2__14 FIND v(n24) AT=0.000299
+meas tran s_o_wb_sel_3__14 FIND v(n26) AT=0.000299
+meas tran t_o_wb_sel_3__14 WHEN v(n26)=1 CROSS=LAST FROM=0.00028 TO=0.0003
+meas tran s_o_misalign_15 FIND v(0) AT=0.000319
+meas tran s_o_rd_15 FIND v(n37) AT=0.000319
+meas tran t_o_rd_15 WHEN v(n37)=1 CROSS=LAST FROM=0.0003 TO=0.00032
+meas tran s_o_wb_sel_0__15 FIND v(n17) AT=0.000319
+meas tran t_o_wb_sel_0__15 WHEN v(n17)=1 CROSS=LAST FROM=0.0003 TO=0.00032
+meas tran s_o_wb_sel_1__15 FIND v(n22) AT=0.000319
+meas tran t_o_wb_sel_1__15 WHEN v(n22)=1 CROSS=LAST FROM=0.0003 TO=0.00032
+meas tran s_o_wb_sel_2__15 FIND v(n24) AT=0.000319
+meas tran t_o_wb_sel_2__15 WHEN v(n24)=1 CROSS=LAST FROM=0.0003 TO=0.00032
+meas tran s_o_wb_sel_3__15 FIND v(n26) AT=0.000319
+meas tran t_o_wb_sel_3__15 WHEN v(n26)=1 CROSS=LAST FROM=0.0003 TO=0.00032
+quit
+.endc
+.end

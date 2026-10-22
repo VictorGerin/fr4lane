@@ -1,0 +1,615 @@
+* serv_immdec — circuito sintetizado pelo fr4lane (221 células: AND2, BUF, DFF, INV, NAND2, NOR2, NOR3; 1977 componentes)
+* família discrete_rtl, canto típico (VDD 5 V, 27 °C)
+* gerado por fr4lane-cellsim --design serv_immdec --export; rodar: ngspice -b serv_immdec.cir
+*
+* entradas no nível de pior caso: alto = 1.5 V, baixo = 0.4 V; cada saída leva uma carga de referência
+* saída: 1 se >= 1.5 V, 0 se <= 0.5 V
+*
+* vetores de teste (medida: valor esperado):
+*   vetor 0 (0-20 µs): i_clk=0 i_cnt_en=0 i_cnt_done=1 i_immdec_en[0]=0 i_immdec_en[1]=0 i_immdec_en[2]=0 i_immdec_en[3]=1 i_ctrl[0]=1 i_ctrl[1]=1 i_ctrl[2]=1 i_ctrl[3]=0 i_wb_en=1 i_wb_rdt[0]=1 i_wb_rdt[1]=1 i_wb_rdt[2]=0 i_wb_rdt[3]=1 i_wb_rdt[4]=0 i_wb_rdt[5]=1 i_wb_rdt[6]=1 i_wb_rdt[7]=0 i_wb_rdt[8]=0 i_wb_rdt[9]=0 i_wb_rdt[10]=0 i_wb_rdt[11]=1 i_wb_rdt[12]=1 i_wb_rdt[13]=1 i_wb_rdt[14]=0 i_wb_rdt[15]=0 i_wb_rdt[16]=0 i_wb_rdt[17]=0 i_wb_rdt[18]=1 i_wb_rdt[19]=1 i_wb_rdt[20]=0 i_wb_rdt[21]=0 i_wb_rdt[22]=1 i_wb_rdt[23]=0 i_wb_rdt[24]=0  ->  s_o_rd_addr_0__0: o_rd_addr[0]=0, s_o_rd_addr_1__0: o_rd_addr[1]=0, s_o_rd_addr_2__0: o_rd_addr[2]=0, s_o_rd_addr_3__0: o_rd_addr[3]=0, s_o_rd_addr_4__0: o_rd_addr[4]=0, s_o_rs1_addr_0__0: o_rs1_addr[0]=0, s_o_rs1_addr_1__0: o_rs1_addr[1]=0, s_o_rs1_addr_2__0: o_rs1_addr[2]=0, s_o_rs1_addr_3__0: o_rs1_addr[3]=0, s_o_rs1_addr_4__0: o_rs1_addr[4]=0, s_o_rs2_addr_0__0: o_rs2_addr[0]=0, s_o_rs2_addr_1__0: o_rs2_addr[1]=0, s_o_rs2_addr_2__0: o_rs2_addr[2]=0, s_o_rs2_addr_3__0: o_rs2_addr[3]=0, s_o_rs2_addr_4__0: o_rs2_addr[4]=0, s_o_imm_0: o_imm=0
+*   vetor 1 (20-40 µs): i_clk=0 i_cnt_en=0 i_cnt_done=1 i_immdec_en[0]=1 i_immdec_en[1]=1 i_immdec_en[2]=1 i_immdec_en[3]=0 i_ctrl[0]=0 i_ctrl[1]=0 i_ctrl[2]=0 i_ctrl[3]=1 i_wb_en=0 i_wb_rdt[0]=1 i_wb_rdt[1]=1 i_wb_rdt[2]=0 i_wb_rdt[3]=0 i_wb_rdt[4]=0 i_wb_rdt[5]=0 i_wb_rdt[6]=1 i_wb_rdt[7]=1 i_wb_rdt[8]=0 i_wb_rdt[9]=0 i_wb_rdt[10]=1 i_wb_rdt[11]=0 i_wb_rdt[12]=1 i_wb_rdt[13]=0 i_wb_rdt[14]=0 i_wb_rdt[15]=0 i_wb_rdt[16]=0 i_wb_rdt[17]=0 i_wb_rdt[18]=1 i_wb_rdt[19]=0 i_wb_rdt[20]=1 i_wb_rdt[21]=1 i_wb_rdt[22]=1 i_wb_rdt[23]=0 i_wb_rdt[24]=0  ->  s_o_rd_addr_0__1: o_rd_addr[0]=0, s_o_rd_addr_1__1: o_rd_addr[1]=0, s_o_rd_addr_2__1: o_rd_addr[2]=0, s_o_rd_addr_3__1: o_rd_addr[3]=0, s_o_rd_addr_4__1: o_rd_addr[4]=0, s_o_rs1_addr_0__1: o_rs1_addr[0]=0, s_o_rs1_addr_1__1: o_rs1_addr[1]=0, s_o_rs1_addr_2__1: o_rs1_addr[2]=0, s_o_rs1_addr_3__1: o_rs1_addr[3]=0, s_o_rs1_addr_4__1: o_rs1_addr[4]=0, s_o_rs2_addr_0__1: o_rs2_addr[0]=0, s_o_rs2_addr_1__1: o_rs2_addr[1]=0, s_o_rs2_addr_2__1: o_rs2_addr[2]=0, s_o_rs2_addr_3__1: o_rs2_addr[3]=0, s_o_rs2_addr_4__1: o_rs2_addr[4]=0, s_o_imm_1: o_imm=0
+*   vetor 2 (40-60 µs): i_clk=1 i_cnt_en=1 i_cnt_done=0 i_immdec_en[0]=0 i_immdec_en[1]=0 i_immdec_en[2]=1 i_immdec_en[3]=0 i_ctrl[0]=1 i_ctrl[1]=0 i_ctrl[2]=0 i_ctrl[3]=0 i_wb_en=1 i_wb_rdt[0]=1 i_wb_rdt[1]=0 i_wb_rdt[2]=1 i_wb_rdt[3]=1 i_wb_rdt[4]=1 i_wb_rdt[5]=0 i_wb_rdt[6]=0 i_wb_rdt[7]=0 i_wb_rdt[8]=1 i_wb_rdt[9]=0 i_wb_rdt[10]=0 i_wb_rdt[11]=0 i_wb_rdt[12]=1 i_wb_rdt[13]=1 i_wb_rdt[14]=0 i_wb_rdt[15]=0 i_wb_rdt[16]=1 i_wb_rdt[17]=1 i_wb_rdt[18]=1 i_wb_rdt[19]=0 i_wb_rdt[20]=0 i_wb_rdt[21]=1 i_wb_rdt[22]=1 i_wb_rdt[23]=1 i_wb_rdt[24]=1  ->  s_o_rd_addr_0__2: o_rd_addr[0]=0, s_o_rd_addr_1__2: o_rd_addr[1]=0, s_o_rd_addr_2__2: o_rd_addr[2]=0, s_o_rd_addr_3__2: o_rd_addr[3]=0, s_o_rd_addr_4__2: o_rd_addr[4]=0, s_o_rs1_addr_0__2: o_rs1_addr[0]=0, s_o_rs1_addr_1__2: o_rs1_addr[1]=0, s_o_rs1_addr_2__2: o_rs1_addr[2]=0, s_o_rs1_addr_3__2: o_rs1_addr[3]=0, s_o_rs1_addr_4__2: o_rs1_addr[4]=0, s_o_rs2_addr_0__2: o_rs2_addr[0]=0, s_o_rs2_addr_1__2: o_rs2_addr[1]=0, s_o_rs2_addr_2__2: o_rs2_addr[2]=0, s_o_rs2_addr_3__2: o_rs2_addr[3]=0, s_o_rs2_addr_4__2: o_rs2_addr[4]=0, s_o_imm_2: o_imm=0
+*   vetor 3 (60-80 µs): i_clk=1 i_cnt_en=1 i_cnt_done=0 i_immdec_en[0]=1 i_immdec_en[1]=1 i_immdec_en[2]=0 i_immdec_en[3]=0 i_ctrl[0]=0 i_ctrl[1]=0 i_ctrl[2]=0 i_ctrl[3]=1 i_wb_en=1 i_wb_rdt[0]=0 i_wb_rdt[1]=0 i_wb_rdt[2]=1 i_wb_rdt[3]=1 i_wb_rdt[4]=0 i_wb_rdt[5]=1 i_wb_rdt[6]=1 i_wb_rdt[7]=1 i_wb_rdt[8]=0 i_wb_rdt[9]=0 i_wb_rdt[10]=1 i_wb_rdt[11]=1 i_wb_rdt[12]=0 i_wb_rdt[13]=1 i_wb_rdt[14]=1 i_wb_rdt[15]=0 i_wb_rdt[16]=0 i_wb_rdt[17]=1 i_wb_rdt[18]=0 i_wb_rdt[19]=1 i_wb_rdt[20]=0 i_wb_rdt[21]=0 i_wb_rdt[22]=0 i_wb_rdt[23]=1 i_wb_rdt[24]=1  ->  s_o_rd_addr_0__3: o_rd_addr[0]=0, s_o_rd_addr_1__3: o_rd_addr[1]=0, s_o_rd_addr_2__3: o_rd_addr[2]=0, s_o_rd_addr_3__3: o_rd_addr[3]=0, s_o_rd_addr_4__3: o_rd_addr[4]=0, s_o_rs1_addr_0__3: o_rs1_addr[0]=0, s_o_rs1_addr_1__3: o_rs1_addr[1]=0, s_o_rs1_addr_2__3: o_rs1_addr[2]=0, s_o_rs1_addr_3__3: o_rs1_addr[3]=0, s_o_rs1_addr_4__3: o_rs1_addr[4]=0, s_o_rs2_addr_0__3: o_rs2_addr[0]=0, s_o_rs2_addr_1__3: o_rs2_addr[1]=0, s_o_rs2_addr_2__3: o_rs2_addr[2]=0, s_o_rs2_addr_3__3: o_rs2_addr[3]=0, s_o_rs2_addr_4__3: o_rs2_addr[4]=0, s_o_imm_3: o_imm=0
+*   vetor 4 (80-100 µs): i_clk=0 i_cnt_en=1 i_cnt_done=1 i_immdec_en[0]=0 i_immdec_en[1]=1 i_immdec_en[2]=0 i_immdec_en[3]=0 i_ctrl[0]=0 i_ctrl[1]=0 i_ctrl[2]=1 i_ctrl[3]=1 i_wb_en=0 i_wb_rdt[0]=0 i_wb_rdt[1]=0 i_wb_rdt[2]=1 i_wb_rdt[3]=1 i_wb_rdt[4]=1 i_wb_rdt[5]=0 i_wb_rdt[6]=0 i_wb_rdt[7]=1 i_wb_rdt[8]=0 i_wb_rdt[9]=1 i_wb_rdt[10]=1 i_wb_rdt[11]=1 i_wb_rdt[12]=1 i_wb_rdt[13]=0 i_wb_rdt[14]=0 i_wb_rdt[15]=1 i_wb_rdt[16]=0 i_wb_rdt[17]=0 i_wb_rdt[18]=1 i_wb_rdt[19]=1 i_wb_rdt[20]=1 i_wb_rdt[21]=0 i_wb_rdt[22]=1 i_wb_rdt[23]=1 i_wb_rdt[24]=0  ->  s_o_rd_addr_0__4: o_rd_addr[0]=0, s_o_rd_addr_1__4: o_rd_addr[1]=0, s_o_rd_addr_2__4: o_rd_addr[2]=0, s_o_rd_addr_3__4: o_rd_addr[3]=0, s_o_rd_addr_4__4: o_rd_addr[4]=0, s_o_rs1_addr_0__4: o_rs1_addr[0]=0, s_o_rs1_addr_1__4: o_rs1_addr[1]=0, s_o_rs1_addr_2__4: o_rs1_addr[2]=0, s_o_rs1_addr_3__4: o_rs1_addr[3]=0, s_o_rs1_addr_4__4: o_rs1_addr[4]=0, s_o_rs2_addr_0__4: o_rs2_addr[0]=0, s_o_rs2_addr_1__4: o_rs2_addr[1]=0, s_o_rs2_addr_2__4: o_rs2_addr[2]=0, s_o_rs2_addr_3__4: o_rs2_addr[3]=0, s_o_rs2_addr_4__4: o_rs2_addr[4]=0, s_o_imm_4: o_imm=0
+*   vetor 5 (100-120 µs): i_clk=0 i_cnt_en=0 i_cnt_done=1 i_immdec_en[0]=1 i_immdec_en[1]=0 i_immdec_en[2]=0 i_immdec_en[3]=0 i_ctrl[0]=1 i_ctrl[1]=0 i_ctrl[2]=1 i_ctrl[3]=1 i_wb_en=1 i_wb_rdt[0]=0 i_wb_rdt[1]=1 i_wb_rdt[2]=0 i_wb_rdt[3]=0 i_wb_rdt[4]=1 i_wb_rdt[5]=1 i_wb_rdt[6]=1 i_wb_rdt[7]=0 i_wb_rdt[8]=0 i_wb_rdt[9]=0 i_wb_rdt[10]=0 i_wb_rdt[11]=0 i_wb_rdt[12]=0 i_wb_rdt[13]=0 i_wb_rdt[14]=0 i_wb_rdt[15]=1 i_wb_rdt[16]=1 i_wb_rdt[17]=0 i_wb_rdt[18]=0 i_wb_rdt[19]=0 i_wb_rdt[20]=1 i_wb_rdt[21]=1 i_wb_rdt[22]=1 i_wb_rdt[23]=1 i_wb_rdt[24]=1  ->  s_o_rd_addr_0__5: o_rd_addr[0]=0, s_o_rd_addr_1__5: o_rd_addr[1]=0, s_o_rd_addr_2__5: o_rd_addr[2]=0, s_o_rd_addr_3__5: o_rd_addr[3]=0, s_o_rd_addr_4__5: o_rd_addr[4]=0, s_o_rs1_addr_0__5: o_rs1_addr[0]=0, s_o_rs1_addr_1__5: o_rs1_addr[1]=0, s_o_rs1_addr_2__5: o_rs1_addr[2]=0, s_o_rs1_addr_3__5: o_rs1_addr[3]=0, s_o_rs1_addr_4__5: o_rs1_addr[4]=0, s_o_rs2_addr_0__5: o_rs2_addr[0]=0, s_o_rs2_addr_1__5: o_rs2_addr[1]=0, s_o_rs2_addr_2__5: o_rs2_addr[2]=0, s_o_rs2_addr_3__5: o_rs2_addr[3]=0, s_o_rs2_addr_4__5: o_rs2_addr[4]=0, s_o_imm_5: o_imm=0
+*   vetor 6 (120-140 µs): i_clk=0 i_cnt_en=1 i_cnt_done=0 i_immdec_en[0]=0 i_immdec_en[1]=1 i_immdec_en[2]=1 i_immdec_en[3]=0 i_ctrl[0]=1 i_ctrl[1]=1 i_ctrl[2]=1 i_ctrl[3]=0 i_wb_en=0 i_wb_rdt[0]=1 i_wb_rdt[1]=1 i_wb_rdt[2]=0 i_wb_rdt[3]=1 i_wb_rdt[4]=0 i_wb_rdt[5]=0 i_wb_rdt[6]=1 i_wb_rdt[7]=0 i_wb_rdt[8]=1 i_wb_rdt[9]=1 i_wb_rdt[10]=1 i_wb_rdt[11]=1 i_wb_rdt[12]=1 i_wb_rdt[13]=0 i_wb_rdt[14]=1 i_wb_rdt[15]=0 i_wb_rdt[16]=1 i_wb_rdt[17]=0 i_wb_rdt[18]=1 i_wb_rdt[19]=1 i_wb_rdt[20]=0 i_wb_rdt[21]=0 i_wb_rdt[22]=0 i_wb_rdt[23]=1 i_wb_rdt[24]=1  ->  s_o_rd_addr_0__6: o_rd_addr[0]=0, s_o_rd_addr_1__6: o_rd_addr[1]=0, s_o_rd_addr_2__6: o_rd_addr[2]=0, s_o_rd_addr_3__6: o_rd_addr[3]=0, s_o_rd_addr_4__6: o_rd_addr[4]=0, s_o_rs1_addr_0__6: o_rs1_addr[0]=0, s_o_rs1_addr_1__6: o_rs1_addr[1]=0, s_o_rs1_addr_2__6: o_rs1_addr[2]=0, s_o_rs1_addr_3__6: o_rs1_addr[3]=0, s_o_rs1_addr_4__6: o_rs1_addr[4]=0, s_o_rs2_addr_0__6: o_rs2_addr[0]=0, s_o_rs2_addr_1__6: o_rs2_addr[1]=0, s_o_rs2_addr_2__6: o_rs2_addr[2]=0, s_o_rs2_addr_3__6: o_rs2_addr[3]=0, s_o_rs2_addr_4__6: o_rs2_addr[4]=0, s_o_imm_6: o_imm=0
+*   vetor 7 (140-160 µs): i_clk=1 i_cnt_en=0 i_cnt_done=1 i_immdec_en[0]=1 i_immdec_en[1]=0 i_immdec_en[2]=1 i_immdec_en[3]=0 i_ctrl[0]=0 i_ctrl[1]=1 i_ctrl[2]=0 i_ctrl[3]=1 i_wb_en=0 i_wb_rdt[0]=0 i_wb_rdt[1]=1 i_wb_rdt[2]=1 i_wb_rdt[3]=1 i_wb_rdt[4]=0 i_wb_rdt[5]=0 i_wb_rdt[6]=1 i_wb_rdt[7]=0 i_wb_rdt[8]=0 i_wb_rdt[9]=0 i_wb_rdt[10]=0 i_wb_rdt[11]=0 i_wb_rdt[12]=0 i_wb_rdt[13]=1 i_wb_rdt[14]=0 i_wb_rdt[15]=0 i_wb_rdt[16]=1 i_wb_rdt[17]=1 i_wb_rdt[18]=1 i_wb_rdt[19]=0 i_wb_rdt[20]=1 i_wb_rdt[21]=0 i_wb_rdt[22]=0 i_wb_rdt[23]=0 i_wb_rdt[24]=1  ->  s_o_rd_addr_0__7: o_rd_addr[0]=0, s_o_rd_addr_1__7: o_rd_addr[1]=0, s_o_rd_addr_2__7: o_rd_addr[2]=0, s_o_rd_addr_3__7: o_rd_addr[3]=0, s_o_rd_addr_4__7: o_rd_addr[4]=0, s_o_rs1_addr_0__7: o_rs1_addr[0]=0, s_o_rs1_addr_1__7: o_rs1_addr[1]=0, s_o_rs1_addr_2__7: o_rs1_addr[2]=0, s_o_rs1_addr_3__7: o_rs1_addr[3]=0, s_o_rs1_addr_4__7: o_rs1_addr[4]=0, s_o_rs2_addr_0__7: o_rs2_addr[0]=0, s_o_rs2_addr_1__7: o_rs2_addr[1]=0, s_o_rs2_addr_2__7: o_rs2_addr[2]=0, s_o_rs2_addr_3__7: o_rs2_addr[3]=0, s_o_rs2_addr_4__7: o_rs2_addr[4]=0, s_o_imm_7: o_imm=0
+*   vetor 8 (160-180 µs): i_clk=0 i_cnt_en=1 i_cnt_done=0 i_immdec_en[0]=0 i_immdec_en[1]=0 i_immdec_en[2]=1 i_immdec_en[3]=0 i_ctrl[0]=1 i_ctrl[1]=0 i_ctrl[2]=1 i_ctrl[3]=0 i_wb_en=0 i_wb_rdt[0]=0 i_wb_rdt[1]=0 i_wb_rdt[2]=1 i_wb_rdt[3]=0 i_wb_rdt[4]=1 i_wb_rdt[5]=0 i_wb_rdt[6]=1 i_wb_rdt[7]=1 i_wb_rdt[8]=1 i_wb_rdt[9]=1 i_wb_rdt[10]=1 i_wb_rdt[11]=1 i_wb_rdt[12]=1 i_wb_rdt[13]=0 i_wb_rdt[14]=0 i_wb_rdt[15]=0 i_wb_rdt[16]=1 i_wb_rdt[17]=1 i_wb_rdt[18]=1 i_wb_rdt[19]=1 i_wb_rdt[20]=0 i_wb_rdt[21]=1 i_wb_rdt[22]=1 i_wb_rdt[23]=0 i_wb_rdt[24]=0  ->  s_o_rd_addr_0__8: o_rd_addr[0]=0, s_o_rd_addr_1__8: o_rd_addr[1]=0, s_o_rd_addr_2__8: o_rd_addr[2]=0, s_o_rd_addr_3__8: o_rd_addr[3]=0, s_o_rd_addr_4__8: o_rd_addr[4]=0, s_o_rs1_addr_0__8: o_rs1_addr[0]=0, s_o_rs1_addr_1__8: o_rs1_addr[1]=0, s_o_rs1_addr_2__8: o_rs1_addr[2]=0, s_o_rs1_addr_3__8: o_rs1_addr[3]=0, s_o_rs1_addr_4__8: o_rs1_addr[4]=0, s_o_rs2_addr_0__8: o_rs2_addr[0]=0, s_o_rs2_addr_1__8: o_rs2_addr[1]=0, s_o_rs2_addr_2__8: o_rs2_addr[2]=0, s_o_rs2_addr_3__8: o_rs2_addr[3]=0, s_o_rs2_addr_4__8: o_rs2_addr[4]=0, s_o_imm_8: o_imm=0
+*   vetor 9 (180-200 µs): i_clk=1 i_cnt_en=0 i_cnt_done=0 i_immdec_en[0]=1 i_immdec_en[1]=1 i_immdec_en[2]=1 i_immdec_en[3]=0 i_ctrl[0]=0 i_ctrl[1]=1 i_ctrl[2]=1 i_ctrl[3]=0 i_wb_en=0 i_wb_rdt[0]=1 i_wb_rdt[1]=1 i_wb_rdt[2]=1 i_wb_rdt[3]=1 i_wb_rdt[4]=1 i_wb_rdt[5]=1 i_wb_rdt[6]=0 i_wb_rdt[7]=0 i_wb_rdt[8]=0 i_wb_rdt[9]=0 i_wb_rdt[10]=1 i_wb_rdt[11]=1 i_wb_rdt[12]=0 i_wb_rdt[13]=1 i_wb_rdt[14]=1 i_wb_rdt[15]=0 i_wb_rdt[16]=0 i_wb_rdt[17]=1 i_wb_rdt[18]=1 i_wb_rdt[19]=1 i_wb_rdt[20]=0 i_wb_rdt[21]=0 i_wb_rdt[22]=1 i_wb_rdt[23]=0 i_wb_rdt[24]=1  ->  s_o_rd_addr_0__9: o_rd_addr[0]=0, s_o_rd_addr_1__9: o_rd_addr[1]=0, s_o_rd_addr_2__9: o_rd_addr[2]=0, s_o_rd_addr_3__9: o_rd_addr[3]=0, s_o_rd_addr_4__9: o_rd_addr[4]=0, s_o_rs1_addr_0__9: o_rs1_addr[0]=0, s_o_rs1_addr_1__9: o_rs1_addr[1]=0, s_o_rs1_addr_2__9: o_rs1_addr[2]=0, s_o_rs1_addr_3__9: o_rs1_addr[3]=0, s_o_rs1_addr_4__9: o_rs1_addr[4]=0, s_o_rs2_addr_0__9: o_rs2_addr[0]=0, s_o_rs2_addr_1__9: o_rs2_addr[1]=0, s_o_rs2_addr_2__9: o_rs2_addr[2]=0, s_o_rs2_addr_3__9: o_rs2_addr[3]=0, s_o_rs2_addr_4__9: o_rs2_addr[4]=0, s_o_imm_9: o_imm=0
+*   vetor 10 (200-220 µs): i_clk=0 i_cnt_en=0 i_cnt_done=1 i_immdec_en[0]=1 i_immdec_en[1]=1 i_immdec_en[2]=0 i_immdec_en[3]=1 i_ctrl[0]=1 i_ctrl[1]=0 i_ctrl[2]=1 i_ctrl[3]=1 i_wb_en=1 i_wb_rdt[0]=1 i_wb_rdt[1]=1 i_wb_rdt[2]=0 i_wb_rdt[3]=1 i_wb_rdt[4]=0 i_wb_rdt[5]=0 i_wb_rdt[6]=1 i_wb_rdt[7]=0 i_wb_rdt[8]=1 i_wb_rdt[9]=0 i_wb_rdt[10]=1 i_wb_rdt[11]=1 i_wb_rdt[12]=1 i_wb_rdt[13]=1 i_wb_rdt[14]=1 i_wb_rdt[15]=0 i_wb_rdt[16]=0 i_wb_rdt[17]=0 i_wb_rdt[18]=0 i_wb_rdt[19]=0 i_wb_rdt[20]=1 i_wb_rdt[21]=0 i_wb_rdt[22]=0 i_wb_rdt[23]=0 i_wb_rdt[24]=0  ->  s_o_rd_addr_0__10: o_rd_addr[0]=0, s_o_rd_addr_1__10: o_rd_addr[1]=0, s_o_rd_addr_2__10: o_rd_addr[2]=0, s_o_rd_addr_3__10: o_rd_addr[3]=0, s_o_rd_addr_4__10: o_rd_addr[4]=0, s_o_rs1_addr_0__10: o_rs1_addr[0]=0, s_o_rs1_addr_1__10: o_rs1_addr[1]=0, s_o_rs1_addr_2__10: o_rs1_addr[2]=0, s_o_rs1_addr_3__10: o_rs1_addr[3]=0, s_o_rs1_addr_4__10: o_rs1_addr[4]=0, s_o_rs2_addr_0__10: o_rs2_addr[0]=0, s_o_rs2_addr_1__10: o_rs2_addr[1]=0, s_o_rs2_addr_2__10: o_rs2_addr[2]=0, s_o_rs2_addr_3__10: o_rs2_addr[3]=0, s_o_rs2_addr_4__10: o_rs2_addr[4]=0, s_o_imm_10: o_imm=0
+*   vetor 11 (220-240 µs): i_clk=0 i_cnt_en=1 i_cnt_done=1 i_immdec_en[0]=1 i_immdec_en[1]=1 i_immdec_en[2]=0 i_immdec_en[3]=0 i_ctrl[0]=0 i_ctrl[1]=0 i_ctrl[2]=1 i_ctrl[3]=0 i_wb_en=0 i_wb_rdt[0]=0 i_wb_rdt[1]=0 i_wb_rdt[2]=0 i_wb_rdt[3]=0 i_wb_rdt[4]=0 i_wb_rdt[5]=1 i_wb_rdt[6]=0 i_wb_rdt[7]=1 i_wb_rdt[8]=1 i_wb_rdt[9]=0 i_wb_rdt[10]=0 i_wb_rdt[11]=1 i_wb_rdt[12]=0 i_wb_rdt[13]=1 i_wb_rdt[14]=0 i_wb_rdt[15]=1 i_wb_rdt[16]=0 i_wb_rdt[17]=0 i_wb_rdt[18]=0 i_wb_rdt[19]=1 i_wb_rdt[20]=0 i_wb_rdt[21]=0 i_wb_rdt[22]=0 i_wb_rdt[23]=0 i_wb_rdt[24]=0  ->  s_o_rd_addr_0__11: o_rd_addr[0]=0, s_o_rd_addr_1__11: o_rd_addr[1]=0, s_o_rd_addr_2__11: o_rd_addr[2]=0, s_o_rd_addr_3__11: o_rd_addr[3]=0, s_o_rd_addr_4__11: o_rd_addr[4]=0, s_o_rs1_addr_0__11: o_rs1_addr[0]=0, s_o_rs1_addr_1__11: o_rs1_addr[1]=0, s_o_rs1_addr_2__11: o_rs1_addr[2]=0, s_o_rs1_addr_3__11: o_rs1_addr[3]=0, s_o_rs1_addr_4__11: o_rs1_addr[4]=0, s_o_rs2_addr_0__11: o_rs2_addr[0]=0, s_o_rs2_addr_1__11: o_rs2_addr[1]=0, s_o_rs2_addr_2__11: o_rs2_addr[2]=0, s_o_rs2_addr_3__11: o_rs2_addr[3]=0, s_o_rs2_addr_4__11: o_rs2_addr[4]=0, s_o_imm_11: o_imm=0
+*   vetor 12 (240-260 µs): i_clk=1 i_cnt_en=0 i_cnt_done=0 i_immdec_en[0]=1 i_immdec_en[1]=1 i_immdec_en[2]=1 i_immdec_en[3]=0 i_ctrl[0]=0 i_ctrl[1]=0 i_ctrl[2]=0 i_ctrl[3]=1 i_wb_en=1 i_wb_rdt[0]=0 i_wb_rdt[1]=1 i_wb_rdt[2]=1 i_wb_rdt[3]=0 i_wb_rdt[4]=1 i_wb_rdt[5]=1 i_wb_rdt[6]=0 i_wb_rdt[7]=1 i_wb_rdt[8]=0 i_wb_rdt[9]=1 i_wb_rdt[10]=0 i_wb_rdt[11]=1 i_wb_rdt[12]=1 i_wb_rdt[13]=1 i_wb_rdt[14]=0 i_wb_rdt[15]=1 i_wb_rdt[16]=1 i_wb_rdt[17]=1 i_wb_rdt[18]=0 i_wb_rdt[19]=0 i_wb_rdt[20]=0 i_wb_rdt[21]=1 i_wb_rdt[22]=1 i_wb_rdt[23]=0 i_wb_rdt[24]=1  ->  s_o_rd_addr_0__12: o_rd_addr[0]=0, s_o_rd_addr_1__12: o_rd_addr[1]=0, s_o_rd_addr_2__12: o_rd_addr[2]=0, s_o_rd_addr_3__12: o_rd_addr[3]=0, s_o_rd_addr_4__12: o_rd_addr[4]=0, s_o_rs1_addr_0__12: o_rs1_addr[0]=0, s_o_rs1_addr_1__12: o_rs1_addr[1]=0, s_o_rs1_addr_2__12: o_rs1_addr[2]=0, s_o_rs1_addr_3__12: o_rs1_addr[3]=0, s_o_rs1_addr_4__12: o_rs1_addr[4]=0, s_o_rs2_addr_0__12: o_rs2_addr[0]=0, s_o_rs2_addr_1__12: o_rs2_addr[1]=0, s_o_rs2_addr_2__12: o_rs2_addr[2]=0, s_o_rs2_addr_3__12: o_rs2_addr[3]=0, s_o_rs2_addr_4__12: o_rs2_addr[4]=0, s_o_imm_12: o_imm=0
+*   vetor 13 (260-280 µs): i_clk=1 i_cnt_en=0 i_cnt_done=1 i_immdec_en[0]=0 i_immdec_en[1]=1 i_immdec_en[2]=1 i_immdec_en[3]=1 i_ctrl[0]=0 i_ctrl[1]=1 i_ctrl[2]=0 i_ctrl[3]=0 i_wb_en=1 i_wb_rdt[0]=1 i_wb_rdt[1]=0 i_wb_rdt[2]=1 i_wb_rdt[3]=0 i_wb_rdt[4]=0 i_wb_rdt[5]=0 i_wb_rdt[6]=0 i_wb_rdt[7]=0 i_wb_rdt[8]=0 i_wb_rdt[9]=0 i_wb_rdt[10]=0 i_wb_rdt[11]=1 i_wb_rdt[12]=1 i_wb_rdt[13]=0 i_wb_rdt[14]=1 i_wb_rdt[15]=0 i_wb_rdt[16]=0 i_wb_rdt[17]=0 i_wb_rdt[18]=0 i_wb_rdt[19]=0 i_wb_rdt[20]=0 i_wb_rdt[21]=1 i_wb_rdt[22]=0 i_wb_rdt[23]=1 i_wb_rdt[24]=1  ->  s_o_rd_addr_0__13: o_rd_addr[0]=0, s_o_rd_addr_1__13: o_rd_addr[1]=0, s_o_rd_addr_2__13: o_rd_addr[2]=0, s_o_rd_addr_3__13: o_rd_addr[3]=0, s_o_rd_addr_4__13: o_rd_addr[4]=0, s_o_rs1_addr_0__13: o_rs1_addr[0]=0, s_o_rs1_addr_1__13: o_rs1_addr[1]=0, s_o_rs1_addr_2__13: o_rs1_addr[2]=0, s_o_rs1_addr_3__13: o_rs1_addr[3]=0, s_o_rs1_addr_4__13: o_rs1_addr[4]=0, s_o_rs2_addr_0__13: o_rs2_addr[0]=0, s_o_rs2_addr_1__13: o_rs2_addr[1]=0, s_o_rs2_addr_2__13: o_rs2_addr[2]=0, s_o_rs2_addr_3__13: o_rs2_addr[3]=0, s_o_rs2_addr_4__13: o_rs2_addr[4]=0, s_o_imm_13: o_imm=0
+*   vetor 14 (280-300 µs): i_clk=1 i_cnt_en=1 i_cnt_done=0 i_immdec_en[0]=0 i_immdec_en[1]=1 i_immdec_en[2]=0 i_immdec_en[3]=1 i_ctrl[0]=0 i_ctrl[1]=1 i_ctrl[2]=1 i_ctrl[3]=1 i_wb_en=0 i_wb_rdt[0]=0 i_wb_rdt[1]=1 i_wb_rdt[2]=1 i_wb_rdt[3]=0 i_wb_rdt[4]=1 i_wb_rdt[5]=0 i_wb_rdt[6]=1 i_wb_rdt[7]=1 i_wb_rdt[8]=0 i_wb_rdt[9]=1 i_wb_rdt[10]=1 i_wb_rdt[11]=0 i_wb_rdt[12]=0 i_wb_rdt[13]=0 i_wb_rdt[14]=1 i_wb_rdt[15]=0 i_wb_rdt[16]=0 i_wb_rdt[17]=1 i_wb_rdt[18]=0 i_wb_rdt[19]=1 i_wb_rdt[20]=0 i_wb_rdt[21]=1 i_wb_rdt[22]=1 i_wb_rdt[23]=0 i_wb_rdt[24]=0  ->  s_o_rd_addr_0__14: o_rd_addr[0]=0, s_o_rd_addr_1__14: o_rd_addr[1]=0, s_o_rd_addr_2__14: o_rd_addr[2]=0, s_o_rd_addr_3__14: o_rd_addr[3]=0, s_o_rd_addr_4__14: o_rd_addr[4]=0, s_o_rs1_addr_0__14: o_rs1_addr[0]=0, s_o_rs1_addr_1__14: o_rs1_addr[1]=0, s_o_rs1_addr_2__14: o_rs1_addr[2]=0, s_o_rs1_addr_3__14: o_rs1_addr[3]=0, s_o_rs1_addr_4__14: o_rs1_addr[4]=0, s_o_rs2_addr_0__14: o_rs2_addr[0]=0, s_o_rs2_addr_1__14: o_rs2_addr[1]=0, s_o_rs2_addr_2__14: o_rs2_addr[2]=0, s_o_rs2_addr_3__14: o_rs2_addr[3]=0, s_o_rs2_addr_4__14: o_rs2_addr[4]=0, s_o_imm_14: o_imm=0
+*   vetor 15 (300-320 µs): i_clk=1 i_cnt_en=0 i_cnt_done=1 i_immdec_en[0]=1 i_immdec_en[1]=1 i_immdec_en[2]=1 i_immdec_en[3]=0 i_ctrl[0]=1 i_ctrl[1]=0 i_ctrl[2]=0 i_ctrl[3]=1 i_wb_en=0 i_wb_rdt[0]=1 i_wb_rdt[1]=1 i_wb_rdt[2]=1 i_wb_rdt[3]=0 i_wb_rdt[4]=1 i_wb_rdt[5]=0 i_wb_rdt[6]=1 i_wb_rdt[7]=0 i_wb_rdt[8]=0 i_wb_rdt[9]=1 i_wb_rdt[10]=0 i_wb_rdt[11]=0 i_wb_rdt[12]=0 i_wb_rdt[13]=0 i_wb_rdt[14]=1 i_wb_rdt[15]=1 i_wb_rdt[16]=1 i_wb_rdt[17]=0 i_wb_rdt[18]=1 i_wb_rdt[19]=1 i_wb_rdt[20]=0 i_wb_rdt[21]=1 i_wb_rdt[22]=0 i_wb_rdt[23]=0 i_wb_rdt[24]=1  ->  s_o_rd_addr_0__15: o_rd_addr[0]=0, s_o_rd_addr_1__15: o_rd_addr[1]=0, s_o_rd_addr_2__15: o_rd_addr[2]=0, s_o_rd_addr_3__15: o_rd_addr[3]=0, s_o_rd_addr_4__15: o_rd_addr[4]=0, s_o_rs1_addr_0__15: o_rs1_addr[0]=0, s_o_rs1_addr_1__15: o_rs1_addr[1]=0, s_o_rs1_addr_2__15: o_rs1_addr[2]=0, s_o_rs1_addr_3__15: o_rs1_addr[3]=0, s_o_rs1_addr_4__15: o_rs1_addr[4]=0, s_o_rs2_addr_0__15: o_rs2_addr[0]=0, s_o_rs2_addr_1__15: o_rs2_addr[1]=0, s_o_rs2_addr_2__15: o_rs2_addr[2]=0, s_o_rs2_addr_3__15: o_rs2_addr[3]=0, s_o_rs2_addr_4__15: o_rs2_addr[4]=0, s_o_imm_15: o_imm=0
+*
+* fr4lane-cellsim: canto típico
+.temp 27
+.param kup=1 kb=1
+.model NPN NPN(Is=7.049f Xti=3 Eg=1.11 Vaf=54.76 Bf=250 Ise=78.17f Ne=1.479 Ikf=24.96m Nkf=.5381 Xtb=1.5 Br=1.2 Isc=27.51f Nc=1.775 Ikr=3.321 Rc=.9706 Cjc=4.25p Mjc=.3147 Vjc=.5697 Fc=.5 Cje=11.5p Mje=.6715 Vje=.5 Tr=10n Tf=410.7p Itf=1.12 Xtf=26.19 Vtf=10)
+.subckt NAND2 A B Y VDD GND
+RL VDD Y {1000*kup}
+R1 A b1 {10000*kb}
+R2 B b2 {10000*kb}
+Q1 Y b1 n1 NPN
+Q2 n1 b2 GND NPN
+.ends NAND2
+.subckt INV A Y VDD GND
+RL VDD Y {1000*kup}
+R1 A b1 {10000*kb}
+Q1 Y b1 GND NPN
+.ends INV
+.subckt AND2 A B Y VDD GND
+X1 A B n VDD GND NAND2
+X2 n Y VDD GND INV
+.ends AND2
+.subckt BUF A Y VDD GND
+X1 A an VDD GND INV
+X2 an Y VDD GND INV
+.ends BUF
+.subckt NOR2 A B Y VDD GND
+RL VDD Y {1000*kup}
+R1 A b1 {10000*kb}
+R2 B b2 {10000*kb}
+Q1 Y b1 GND NPN
+Q2 Y b2 GND NPN
+.ends NOR2
+.subckt NOR3 A B C Y VDD GND
+RL VDD Y {1000*kup}
+R1 A b1 {10000*kb}
+R2 B b2 {10000*kb}
+R3 C b3 {10000*kb}
+Q1 Y b1 GND NPN
+Q2 Y b2 GND NPN
+Q3 Y b3 GND NPN
+.ends NOR3
+.subckt DFF D C Q VDD GND
+X0 C ck VDD GND INV
+X1 n4 n2 n1 VDD GND NOR2
+X2 n1 ck n2 VDD GND NOR2
+X3 n2 ck n4 n3 VDD GND NOR3
+X4 n3 D n4 VDD GND NOR2
+X5 n2 QN Q VDD GND NOR2
+X6 Q n3 QN VDD GND NOR2
+.ends DFF
+VDD vdd 0 5
+V_i_clk n2 0 PWL(0 0.4 4e-05 0.4 4.0002e-05 1.5 8e-05 1.5 8.0002e-05 0.4 0.00014 0.4 0.000140002 1.5 0.00016 1.5 0.000160002 0.4 0.00018 0.4 0.000180002 1.5 0.0002 1.5 0.000200002 0.4 0.00024 0.4 0.000240002 1.5)
+V_i_cnt_en n3 0 PWL(0 0.4 4e-05 0.4 4.0002e-05 1.5 0.0001 1.5 0.000100002 0.4 0.00012 0.4 0.000120002 1.5 0.00014 1.5 0.000140002 0.4 0.00016 0.4 0.000160002 1.5 0.00018 1.5 0.000180002 0.4 0.00022 0.4 0.000220002 1.5 0.00024 1.5 0.000240002 0.4 0.00028 0.4 0.000280002 1.5 0.0003 1.5 0.000300002 0.4)
+V_i_cnt_done n4 0 PWL(0 1.5 4e-05 1.5 4.0002e-05 0.4 8e-05 0.4 8.0002e-05 1.5 0.00012 1.5 0.000120002 0.4 0.00014 0.4 0.000140002 1.5 0.00016 1.5 0.000160002 0.4 0.0002 0.4 0.000200002 1.5 0.00024 1.5 0.000240002 0.4 0.00026 0.4 0.000260002 1.5 0.00028 1.5 0.000280002 0.4 0.0003 0.4 0.000300002 1.5)
+V_i_immdec_en_0_ n5 0 PWL(0 0.4 2e-05 0.4 2.0002e-05 1.5 4e-05 1.5 4.0002e-05 0.4 6e-05 0.4 6.0002e-05 1.5 8e-05 1.5 8.0002e-05 0.4 0.0001 0.4 0.000100002 1.5 0.00012 1.5 0.000120002 0.4 0.00014 0.4 0.000140002 1.5 0.00016 1.5 0.000160002 0.4 0.00018 0.4 0.000180002 1.5 0.00026 1.5 0.000260002 0.4 0.0003 0.4 0.000300002 1.5)
+V_i_immdec_en_1_ n6 0 PWL(0 0.4 2e-05 0.4 2.0002e-05 1.5 4e-05 1.5 4.0002e-05 0.4 6e-05 0.4 6.0002e-05 1.5 0.0001 1.5 0.000100002 0.4 0.00012 0.4 0.000120002 1.5 0.00014 1.5 0.000140002 0.4 0.00018 0.4 0.000180002 1.5)
+V_i_immdec_en_2_ n7 0 PWL(0 0.4 2e-05 0.4 2.0002e-05 1.5 6e-05 1.5 6.0002e-05 0.4 0.00012 0.4 0.000120002 1.5 0.0002 1.5 0.000200002 0.4 0.00024 0.4 0.000240002 1.5 0.00028 1.5 0.000280002 0.4 0.0003 0.4 0.000300002 1.5)
+V_i_immdec_en_3_ n8 0 PWL(0 1.5 2e-05 1.5 2.0002e-05 0.4 0.0002 0.4 0.000200002 1.5 0.00022 1.5 0.000220002 0.4 0.00026 0.4 0.000260002 1.5 0.0003 1.5 0.000300002 0.4)
+V_i_ctrl_0_ n9 0 PWL(0 1.5 2e-05 1.5 2.0002e-05 0.4 4e-05 0.4 4.0002e-05 1.5 6e-05 1.5 6.0002e-05 0.4 0.0001 0.4 0.000100002 1.5 0.00014 1.5 0.000140002 0.4 0.00016 0.4 0.000160002 1.5 0.00018 1.5 0.000180002 0.4 0.0002 0.4 0.000200002 1.5 0.00022 1.5 0.000220002 0.4 0.0003 0.4 0.000300002 1.5)
+V_i_ctrl_1_ n10 0 PWL(0 1.5 2e-05 1.5 2.0002e-05 0.4 0.00012 0.4 0.000120002 1.5 0.00016 1.5 0.000160002 0.4 0.00018 0.4 0.000180002 1.5 0.0002 1.5 0.000200002 0.4 0.00026 0.4 0.000260002 1.5 0.0003 1.5 0.000300002 0.4)
+V_i_ctrl_2_ n11 0 PWL(0 1.5 2e-05 1.5 2.0002e-05 0.4 8e-05 0.4 8.0002e-05 1.5 0.00014 1.5 0.000140002 0.4 0.00016 0.4 0.000160002 1.5 0.00024 1.5 0.000240002 0.4 0.00028 0.4 0.000280002 1.5 0.0003 1.5 0.000300002 0.4)
+V_i_ctrl_3_ n12 0 PWL(0 0.4 2e-05 0.4 2.0002e-05 1.5 4e-05 1.5 4.0002e-05 0.4 6e-05 0.4 6.0002e-05 1.5 0.00012 1.5 0.000120002 0.4 0.00014 0.4 0.000140002 1.5 0.00016 1.5 0.000160002 0.4 0.0002 0.4 0.000200002 1.5 0.00022 1.5 0.000220002 0.4 0.00024 0.4 0.000240002 1.5 0.00026 1.5 0.000260002 0.4 0.00028 0.4 0.000280002 1.5)
+V_i_wb_en n13 0 PWL(0 1.5 2e-05 1.5 2.0002e-05 0.4 4e-05 0.4 4.0002e-05 1.5 8e-05 1.5 8.0002e-05 0.4 0.0001 0.4 0.000100002 1.5 0.00012 1.5 0.000120002 0.4 0.0002 0.4 0.000200002 1.5 0.00022 1.5 0.000220002 0.4 0.00024 0.4 0.000240002 1.5 0.00028 1.5 0.000280002 0.4)
+V_i_wb_rdt_0_ n14 0 PWL(0 1.5 6e-05 1.5 6.0002e-05 0.4 0.00012 0.4 0.000120002 1.5 0.00014 1.5 0.000140002 0.4 0.00018 0.4 0.000180002 1.5 0.00022 1.5 0.000220002 0.4 0.00026 0.4 0.000260002 1.5 0.00028 1.5 0.000280002 0.4 0.0003 0.4 0.000300002 1.5)
+V_i_wb_rdt_1_ n15 0 PWL(0 1.5 4e-05 1.5 4.0002e-05 0.4 0.0001 0.4 0.000100002 1.5 0.00016 1.5 0.000160002 0.4 0.00018 0.4 0.000180002 1.5 0.00022 1.5 0.000220002 0.4 0.00024 0.4 0.000240002 1.5 0.00026 1.5 0.000260002 0.4 0.00028 0.4 0.000280002 1.5)
+V_i_wb_rdt_2_ n16 0 PWL(0 0.4 4e-05 0.4 4.0002e-05 1.5 0.0001 1.5 0.000100002 0.4 0.00014 0.4 0.000140002 1.5 0.0002 1.5 0.000200002 0.4 0.00024 0.4 0.000240002 1.5)
+V_i_wb_rdt_3_ n17 0 PWL(0 1.5 2e-05 1.5 2.0002e-05 0.4 4e-05 0.4 4.0002e-05 1.5 0.0001 1.5 0.000100002 0.4 0.00012 0.4 0.000120002 1.5 0.00016 1.5 0.000160002 0.4 0.00018 0.4 0.000180002 1.5 0.00022 1.5 0.000220002 0.4)
+V_i_wb_rdt_4_ n18 0 PWL(0 0.4 4e-05 0.4 4.0002e-05 1.5 6e-05 1.5 6.0002e-05 0.4 8e-05 0.4 8.0002e-05 1.5 0.00012 1.5 0.000120002 0.4 0.00016 0.4 0.000160002 1.5 0.0002 1.5 0.000200002 0.4 0.00024 0.4 0.000240002 1.5 0.00026 1.5 0.000260002 0.4 0.00028 0.4 0.000280002 1.5)
+V_i_wb_rdt_5_ n19 0 PWL(0 1.5 2e-05 1.5 2.0002e-05 0.4 6e-05 0.4 6.0002e-05 1.5 8e-05 1.5 8.0002e-05 0.4 0.0001 0.4 0.000100002 1.5 0.00012 1.5 0.000120002 0.4 0.00018 0.4 0.000180002 1.5 0.0002 1.5 0.000200002 0.4 0.00022 0.4 0.000220002 1.5 0.00026 1.5 0.000260002 0.4)
+V_i_wb_rdt_6_ n20 0 PWL(0 1.5 4e-05 1.5 4.0002e-05 0.4 6e-05 0.4 6.0002e-05 1.5 8e-05 1.5 8.0002e-05 0.4 0.0001 0.4 0.000100002 1.5 0.00018 1.5 0.000180002 0.4 0.0002 0.4 0.000200002 1.5 0.00022 1.5 0.000220002 0.4 0.00028 0.4 0.000280002 1.5)
+V_i_wb_rdt_7_ n21 0 PWL(0 0.4 2e-05 0.4 2.0002e-05 1.5 4e-05 1.5 4.0002e-05 0.4 6e-05 0.4 6.0002e-05 1.5 0.0001 1.5 0.000100002 0.4 0.00016 0.4 0.000160002 1.5 0.00018 1.5 0.000180002 0.4 0.00022 0.4 0.000220002 1.5 0.00026 1.5 0.000260002 0.4 0.00028 0.4 0.000280002 1.5 0.0003 1.5 0.000300002 0.4)
+V_i_wb_rdt_8_ n22 0 PWL(0 0.4 4e-05 0.4 4.0002e-05 1.5 6e-05 1.5 6.0002e-05 0.4 0.00012 0.4 0.000120002 1.5 0.00014 1.5 0.000140002 0.4 0.00016 0.4 0.000160002 1.5 0.00018 1.5 0.000180002 0.4 0.0002 0.4 0.000200002 1.5 0.00024 1.5 0.000240002 0.4)
+V_i_wb_rdt_9_ n23 0 PWL(0 0.4 8e-05 0.4 8.0002e-05 1.5 0.0001 1.5 0.000100002 0.4 0.00012 0.4 0.000120002 1.5 0.00014 1.5 0.000140002 0.4 0.00016 0.4 0.000160002 1.5 0.00018 1.5 0.000180002 0.4 0.00024 0.4 0.000240002 1.5 0.00026 1.5 0.000260002 0.4 0.00028 0.4 0.000280002 1.5)
+V_i_wb_rdt_10_ n24 0 PWL(0 0.4 2e-05 0.4 2.0002e-05 1.5 4e-05 1.5 4.0002e-05 0.4 6e-05 0.4 6.0002e-05 1.5 0.0001 1.5 0.000100002 0.4 0.00012 0.4 0.000120002 1.5 0.00014 1.5 0.000140002 0.4 0.00016 0.4 0.000160002 1.5 0.00022 1.5 0.000220002 0.4 0.00028 0.4 0.000280002 1.5 0.0003 1.5 0.000300002 0.4)
+V_i_wb_rdt_11_ n25 0 PWL(0 1.5 2e-05 1.5 2.0002e-05 0.4 6e-05 0.4 6.0002e-05 1.5 0.0001 1.5 0.000100002 0.4 0.00012 0.4 0.000120002 1.5 0.00014 1.5 0.000140002 0.4 0.00016 0.4 0.000160002 1.5 0.00028 1.5 0.000280002 0.4)
+V_i_wb_rdt_12_ n26 0 PWL(0 1.5 6e-05 1.5 6.0002e-05 0.4 8e-05 0.4 8.0002e-05 1.5 0.0001 1.5 0.000100002 0.4 0.00012 0.4 0.000120002 1.5 0.00014 1.5 0.000140002 0.4 0.00016 0.4 0.000160002 1.5 0.00018 1.5 0.000180002 0.4 0.0002 0.4 0.000200002 1.5 0.00022 1.5 0.000220002 0.4 0.00024 0.4 0.000240002 1.5 0.00028 1.5 0.000280002 0.4)
+V_i_wb_rdt_13_ n27 0 PWL(0 1.5 2e-05 1.5 2.0002e-05 0.4 4e-05 0.4 4.0002e-05 1.5 8e-05 1.5 8.0002e-05 0.4 0.00014 0.4 0.000140002 1.5 0.00016 1.5 0.000160002 0.4 0.00018 0.4 0.000180002 1.5 0.00026 1.5 0.000260002 0.4)
+V_i_wb_rdt_14_ n28 0 PWL(0 0.4 6e-05 0.4 6.0002e-05 1.5 8e-05 1.5 8.0002e-05 0.4 0.00012 0.4 0.000120002 1.5 0.00014 1.5 0.000140002 0.4 0.00018 0.4 0.000180002 1.5 0.00022 1.5 0.000220002 0.4 0.00026 0.4 0.000260002 1.5)
+V_i_wb_rdt_15_ n29 0 PWL(0 0.4 8e-05 0.4 8.0002e-05 1.5 0.00012 1.5 0.000120002 0.4 0.00022 0.4 0.000220002 1.5 0.00026 1.5 0.000260002 0.4 0.0003 0.4 0.000300002 1.5)
+V_i_wb_rdt_16_ n30 0 PWL(0 0.4 4e-05 0.4 4.0002e-05 1.5 6e-05 1.5 6.0002e-05 0.4 0.0001 0.4 0.000100002 1.5 0.00018 1.5 0.000180002 0.4 0.00024 0.4 0.000240002 1.5 0.00026 1.5 0.000260002 0.4 0.0003 0.4 0.000300002 1.5)
+V_i_wb_rdt_17_ n31 0 PWL(0 0.4 4e-05 0.4 4.0002e-05 1.5 8e-05 1.5 8.0002e-05 0.4 0.00014 0.4 0.000140002 1.5 0.0002 1.5 0.000200002 0.4 0.00024 0.4 0.000240002 1.5 0.00026 1.5 0.000260002 0.4 0.00028 0.4 0.000280002 1.5 0.0003 1.5 0.000300002 0.4)
+V_i_wb_rdt_18_ n32 0 PWL(0 1.5 6e-05 1.5 6.0002e-05 0.4 8e-05 0.4 8.0002e-05 1.5 0.0001 1.5 0.000100002 0.4 0.00012 0.4 0.000120002 1.5 0.0002 1.5 0.000200002 0.4 0.0003 0.4 0.000300002 1.5)
+V_i_wb_rdt_19_ n33 0 PWL(0 1.5 2e-05 1.5 2.0002e-05 0.4 6e-05 0.4 6.0002e-05 1.5 0.0001 1.5 0.000100002 0.4 0.00012 0.4 0.000120002 1.5 0.00014 1.5 0.000140002 0.4 0.00016 0.4 0.000160002 1.5 0.0002 1.5 0.000200002 0.4 0.00022 0.4 0.000220002 1.5 0.00024 1.5 0.000240002 0.4 0.00028 0.4 0.000280002 1.5)
+V_i_wb_rdt_20_ n34 0 PWL(0 0.4 2e-05 0.4 2.0002e-05 1.5 4e-05 1.5 4.0002e-05 0.4 8e-05 0.4 8.0002e-05 1.5 0.00012 1.5 0.000120002 0.4 0.00014 0.4 0.000140002 1.5 0.00016 1.5 0.000160002 0.4 0.0002 0.4 0.000200002 1.5 0.00022 1.5 0.000220002 0.4)
+V_i_wb_rdt_21_ n35 0 PWL(0 0.4 2e-05 0.4 2.0002e-05 1.5 6e-05 1.5 6.0002e-05 0.4 0.0001 0.4 0.000100002 1.5 0.00012 1.5 0.000120002 0.4 0.00016 0.4 0.000160002 1.5 0.00018 1.5 0.000180002 0.4 0.00024 0.4 0.000240002 1.5)
+V_i_wb_rdt_22_ n36 0 PWL(0 1.5 6e-05 1.5 6.0002e-05 0.4 8e-05 0.4 8.0002e-05 1.5 0.00012 1.5 0.000120002 0.4 0.00016 0.4 0.000160002 1.5 0.0002 1.5 0.000200002 0.4 0.00024 0.4 0.000240002 1.5 0.00026 1.5 0.000260002 0.4 0.00028 0.4 0.000280002 1.5 0.0003 1.5 0.000300002 0.4)
+V_i_wb_rdt_23_ n37 0 PWL(0 0.4 4e-05 0.4 4.0002e-05 1.5 0.00014 1.5 0.000140002 0.4 0.00026 0.4 0.000260002 1.5 0.00028 1.5 0.000280002 0.4)
+V_i_wb_rdt_24_ n38 0 PWL(0 0.4 4e-05 0.4 4.0002e-05 1.5 8e-05 1.5 8.0002e-05 0.4 0.0001 0.4 0.000100002 1.5 0.00016 1.5 0.000160002 0.4 0.00018 0.4 0.000180002 1.5 0.0002 1.5 0.000200002 0.4 0.00024 0.4 0.000240002 1.5 0.00028 1.5 0.000280002 0.4 0.0003 0.4 0.000300002 1.5)
+XU1 n39 n40 vdd 0 INV
+XU2 n41 n42 vdd 0 INV
+XU3 n43 n44 vdd 0 INV
+XU4 n45 n46 vdd 0 INV
+XU5 n47 n48 vdd 0 INV
+XU6 n49 n50 vdd 0 INV
+XU7 n51 n52 vdd 0 INV
+XU8 n53 n54 vdd 0 INV
+XU9 n55 n56 vdd 0 INV
+XU10 n57 n58 vdd 0 INV
+XU11 n59 n60 vdd 0 INV
+XU12 n61 n62 vdd 0 INV
+XU13 n4 n63 vdd 0 INV
+XU14 n64 n65 vdd 0 INV
+XU15 n66 n67 vdd 0 INV
+XU16 n12 n68 vdd 0 INV
+XU17 n69 n9 n70 vdd 0 AND2
+XU18 n60 n9 n71 vdd 0 NOR2
+XU19 n61 n63 n72 vdd 0 NOR2
+XU20 n4 n70 n71 n73 vdd 0 NOR3
+XU21 n72 n73 n74 vdd 0 NOR2
+XU22 n3 n5 n75 vdd 0 AND2
+XU23 n3 n5 n76 vdd 0 NAND2
+XU24 n41 n46 n76 n77 vdd 0 NOR3
+XU25 n41 n15 n78 vdd 0 NAND2
+XU26 n42 n79 n80 vdd 0 NAND2
+XU27 n75 n80 n81 vdd 0 NOR2
+XU28 n77 n81 n82 vdd 0 NOR2
+XU29 n78 n82 n83 vdd 0 NAND2
+XU30 n41 n75 n84 vdd 0 NOR2
+XU31 n69 n84 n85 vdd 0 NAND2
+XU32 n76 n80 n86 vdd 0 NOR2
+XU33 n41 n14 n87 vdd 0 AND2
+XU34 n86 n87 n88 vdd 0 NOR2
+XU35 n85 n88 n89 vdd 0 NAND2
+XU36 n41 n62 n90 vdd 0 NOR2
+XU37 n42 n61 n91 vdd 0 NAND2
+XU38 n41 n38 n92 vdd 0 NAND2
+XU39 n91 n92 n93 vdd 0 NAND2
+XU40 n3 n6 n94 vdd 0 NAND2
+XU41 n94 n95 vdd 0 INV
+XU42 n41 n95 n96 vdd 0 NOR2
+XU43 n96 n97 vdd 0 INV
+XU44 n59 n12 n98 vdd 0 NOR2
+XU45 n61 n68 n99 vdd 0 NOR2
+XU46 n100 n98 n99 n101 vdd 0 NOR3
+XU47 n100 n26 n102 vdd 0 AND2
+XU48 n96 n101 n102 n103 vdd 0 NOR3
+XU49 n104 n97 n105 vdd 0 NOR2
+XU50 n103 n105 n106 vdd 0 NOR2
+XU51 n100 n3 n67 n107 vdd 0 NOR3
+XU52 n3 n90 n108 vdd 0 NAND2
+XU53 n87 n107 n109 vdd 0 NOR2
+XU54 n108 n109 n110 vdd 0 NAND2
+XU55 n3 n8 n111 vdd 0 NAND2
+XU56 n111 n112 vdd 0 INV
+XU57 n100 n112 n113 vdd 0 NOR2
+XU58 n113 n114 vdd 0 INV
+XU59 n115 n114 n116 vdd 0 NOR2
+XU60 n61 n10 n117 vdd 0 AND2
+XU61 n65 n10 n118 vdd 0 NOR2
+XU62 n11 n117 n118 n119 vdd 0 NOR3
+XU63 n67 n11 n120 vdd 0 NAND2
+XU64 n42 n120 n121 vdd 0 NAND2
+XU65 n119 n121 n122 vdd 0 NOR2
+XU66 n100 n37 n123 vdd 0 AND2
+XU67 n113 n122 n123 n124 vdd 0 NOR3
+XU68 n116 n124 n125 vdd 0 NOR2
+XU69 n100 n31 n126 vdd 0 AND2
+XU70 n3 n7 n127 vdd 0 NAND2
+XU71 n127 n128 vdd 0 INV
+XU72 n100 n48 n129 vdd 0 NOR2
+XU73 n42 n130 n131 vdd 0 NAND2
+XU74 n127 n129 n132 vdd 0 NAND2
+XU75 n127 n131 n133 vdd 0 NOR2
+XU76 n126 n133 n134 vdd 0 NOR2
+XU77 n132 n134 n135 vdd 0 NAND2
+XU78 n100 n18 n136 vdd 0 AND2
+XU79 n40 n137 n138 vdd 0 NOR2
+XU80 n76 n138 n139 vdd 0 NAND2
+XU81 n76 n131 n140 vdd 0 NOR2
+XU82 n136 n140 n141 vdd 0 NOR2
+XU83 n139 n141 n142 vdd 0 NAND2
+XU84 n137 n94 n143 vdd 0 NOR2
+XU85 n104 n143 n144 vdd 0 NAND2
+XU86 n42 n145 n146 vdd 0 NAND2
+XU87 n145 n96 n147 vdd 0 NAND2
+XU88 n137 n25 n148 vdd 0 NAND2
+XU89 n144 n148 n149 vdd 0 AND2
+XU90 n147 n149 n150 vdd 0 NAND2
+XU91 n151 n96 n152 vdd 0 NAND2
+XU92 n137 n24 n153 vdd 0 NAND2
+XU93 n146 n153 n154 vdd 0 NAND2
+XU94 n97 n154 n155 vdd 0 NAND2
+XU95 n152 n155 n156 vdd 0 NAND2
+XU96 n157 n96 n158 vdd 0 NAND2
+XU97 n137 n23 n159 vdd 0 NAND2
+XU98 n151 n143 n160 vdd 0 NAND2
+XU99 n159 n160 n161 vdd 0 AND2
+XU100 n158 n161 n162 vdd 0 NAND2
+XU101 n157 n143 n163 vdd 0 NAND2
+XU102 n137 n54 n164 vdd 0 NOR2
+XU103 n94 n164 n165 vdd 0 NAND2
+XU104 n137 n22 n166 vdd 0 NAND2
+XU105 n165 n166 n167 vdd 0 AND2
+XU106 n163 n167 n168 vdd 0 NAND2
+XU107 n137 n21 n169 vdd 0 NAND2
+XU108 n170 n56 n171 vdd 0 NOR2
+XU109 n94 n171 n172 vdd 0 NAND2
+XU110 n95 n164 n173 vdd 0 NAND2
+XU111 n169 n172 n174 vdd 0 AND2
+XU112 n173 n174 n175 vdd 0 NAND2
+XU113 n176 n96 n177 vdd 0 NAND2
+XU114 n95 n171 n178 vdd 0 NAND2
+XU115 n170 n20 n179 vdd 0 NAND2
+XU116 n178 n179 n180 vdd 0 AND2
+XU117 n177 n180 n181 vdd 0 NAND2
+XU118 n176 n143 n182 vdd 0 NAND2
+XU119 n57 n96 n183 vdd 0 NAND2
+XU120 n170 n19 n184 vdd 0 NAND2
+XU121 n182 n184 n185 vdd 0 AND2
+XU122 n183 n185 n186 vdd 0 NAND2
+XU123 n64 n96 n187 vdd 0 NAND2
+XU124 n170 n58 n94 n188 vdd 0 NOR3
+XU125 n170 n27 n189 vdd 0 AND2
+XU126 n188 n189 n190 vdd 0 NOR2
+XU127 n187 n190 n191 vdd 0 NAND2
+XU128 n170 n111 n192 vdd 0 NOR2
+XU129 n115 n192 n193 vdd 0 NAND2
+XU130 n42 n194 n195 vdd 0 NAND2
+XU131 n194 n113 n196 vdd 0 NAND2
+XU132 n170 n36 n197 vdd 0 NAND2
+XU133 n193 n197 n198 vdd 0 AND2
+XU134 n196 n198 n199 vdd 0 NAND2
+XU135 n200 n113 n201 vdd 0 NAND2
+XU136 n170 n35 n202 vdd 0 NAND2
+XU137 n195 n202 n203 vdd 0 NAND2
+XU138 n114 n203 n204 vdd 0 NAND2
+XU139 n201 n204 n205 vdd 0 NAND2
+XU140 n206 n113 n207 vdd 0 NAND2
+XU141 n208 n34 n209 vdd 0 NAND2
+XU142 n200 n192 n210 vdd 0 NAND2
+XU143 n209 n210 n211 vdd 0 AND2
+XU144 n207 n211 n212 vdd 0 NAND2
+XU145 n213 n113 n214 vdd 0 NAND2
+XU146 n208 n33 n215 vdd 0 NAND2
+XU147 n206 n192 n216 vdd 0 NAND2
+XU148 n215 n216 n217 vdd 0 AND2
+XU149 n214 n217 n218 vdd 0 NAND2
+XU150 n213 n192 n219 vdd 0 NAND2
+XU151 n112 n131 n220 vdd 0 NOR2
+XU152 n208 n32 n221 vdd 0 AND2
+XU153 n220 n221 n222 vdd 0 NOR2
+XU154 n219 n222 n223 vdd 0 NAND2
+XU155 n208 n30 n224 vdd 0 NAND2
+XU156 n208 n50 n225 vdd 0 NOR2
+XU157 n127 n225 n226 vdd 0 NAND2
+XU158 n128 n129 n227 vdd 0 NAND2
+XU159 n224 n226 n228 vdd 0 AND2
+XU160 n227 n228 n229 vdd 0 NAND2
+XU161 n208 n128 n230 vdd 0 NOR2
+XU162 n231 n230 n232 vdd 0 NAND2
+XU163 n128 n225 n233 vdd 0 NAND2
+XU164 n208 n29 n234 vdd 0 NAND2
+XU165 n233 n234 n235 vdd 0 AND2
+XU166 n232 n235 n236 vdd 0 NAND2
+XU167 n208 n51 n128 n237 vdd 0 NOR3
+XU168 n42 n28 n238 vdd 0 NOR2
+XU169 n239 n231 n127 n240 vdd 0 NOR3
+XU170 n237 n238 n240 n241 vdd 0 NOR3
+XU171 n59 n230 n242 vdd 0 NAND2
+XU172 n239 n52 n127 n243 vdd 0 NOR3
+XU173 n189 n243 n244 vdd 0 NOR2
+XU174 n242 n244 n245 vdd 0 NAND2
+XU175 n43 n84 n246 vdd 0 NAND2
+XU176 n75 n138 n247 vdd 0 NAND2
+XU177 n17 n239 n248 vdd 0 NAND2
+XU178 n247 n248 n249 vdd 0 AND2
+XU179 n246 n249 n250 vdd 0 NAND2
+XU180 n239 n44 n76 n251 vdd 0 NOR3
+XU181 n239 n46 n75 n252 vdd 0 NOR3
+XU182 n239 n16 n253 vdd 0 NAND2
+XU183 n251 n252 n254 vdd 0 NOR2
+XU184 n253 n254 n255 vdd 0 NAND2
+XFF1 n89 n256 n69 vdd 0 DFF
+XFF2 n83 n256 n79 vdd 0 DFF
+XFF3 n255 n256 n45 vdd 0 DFF
+XFF4 n250 n256 n43 vdd 0 DFF
+XFF5 n142 n256 n39 vdd 0 DFF
+XFF6 n245 n256 n59 vdd 0 DFF
+XFF7 n241 n256 n51 vdd 0 DFF
+XFF8 n236 n256 n231 vdd 0 DFF
+XFF9 n229 n257 n49 vdd 0 DFF
+XFF10 n135 n257 n47 vdd 0 DFF
+XFF11 n223 n257 n130 vdd 0 DFF
+XFF12 n218 n257 n213 vdd 0 DFF
+XFF13 n212 n257 n206 vdd 0 DFF
+XFF14 n205 n257 n200 vdd 0 DFF
+XFF15 n199 n257 n194 vdd 0 DFF
+XFF16 n125 n257 n115 vdd 0 DFF
+XFF17 n110 n258 n66 vdd 0 DFF
+XFF18 n191 n258 n64 vdd 0 DFF
+XFF19 n186 n258 n57 vdd 0 DFF
+XFF20 n181 n258 n176 vdd 0 DFF
+XFF21 n175 n258 n55 vdd 0 DFF
+XFF22 n168 n258 n53 vdd 0 DFF
+XFF23 n162 n258 n157 vdd 0 DFF
+XFF24 n156 n258 n151 vdd 0 DFF
+XFF25 n150 n259 n145 vdd 0 DFF
+XFF26 n106 n259 n104 vdd 0 DFF
+XFF27 n93 n259 n61 vdd 0 DFF
+XB1 n2 n256 vdd 0 BUF
+XB2 n2 n257 vdd 0 BUF
+XB3 n2 n258 vdd 0 BUF
+XB4 n2 n259 vdd 0 BUF
+XB5 n13 n41 vdd 0 BUF
+XB6 n13 n100 vdd 0 BUF
+XB7 n13 n137 vdd 0 BUF
+XB8 n13 n170 vdd 0 BUF
+XB9 n13 n208 vdd 0 BUF
+XB10 n13 n239 vdd 0 BUF
+Xld_o_rd_addr_0_ n69 ldo_o_rd_addr_0__Y vdd 0 INV
+Xld_o_rd_addr_1_ n79 ldo_o_rd_addr_1__Y vdd 0 INV
+Xld_o_rd_addr_2_ n45 ldo_o_rd_addr_2__Y vdd 0 INV
+Xld_o_rd_addr_3_ n43 ldo_o_rd_addr_3__Y vdd 0 INV
+Xld_o_rd_addr_4_ n39 ldo_o_rd_addr_4__Y vdd 0 INV
+Xld_o_rs1_addr_0_ n53 ldo_o_rs1_addr_0__Y vdd 0 INV
+Xld_o_rs1_addr_1_ n157 ldo_o_rs1_addr_1__Y vdd 0 INV
+Xld_o_rs1_addr_2_ n151 ldo_o_rs1_addr_2__Y vdd 0 INV
+Xld_o_rs1_addr_3_ n145 ldo_o_rs1_addr_3__Y vdd 0 INV
+Xld_o_rs1_addr_4_ n104 ldo_o_rs1_addr_4__Y vdd 0 INV
+Xld_o_rs2_addr_0_ n59 ldo_o_rs2_addr_0__Y vdd 0 INV
+Xld_o_rs2_addr_1_ n51 ldo_o_rs2_addr_1__Y vdd 0 INV
+Xld_o_rs2_addr_2_ n231 ldo_o_rs2_addr_2__Y vdd 0 INV
+Xld_o_rs2_addr_3_ n49 ldo_o_rs2_addr_3__Y vdd 0 INV
+Xld_o_rs2_addr_4_ n47 ldo_o_rs2_addr_4__Y vdd 0 INV
+Xld_o_imm n74 ldo_o_imm_Y vdd 0 INV
+.tran 4e-08 0.00032
+.control
+run
+linearize
+set wr_singlescale
+set wr_vecnames
+wrdata serv_immdec.dat v(n2) v(n3) v(n4) v(n5) v(n6) v(n7) v(n8) v(n9) v(n10) v(n11) v(n12) v(n13) v(n14) v(n15) v(n16) v(n17) v(n18) v(n19) v(n20) v(n21) v(n22) v(n23) v(n24) v(n25) v(n26) v(n27) v(n28) v(n29) v(n30) v(n31) v(n32) v(n33) v(n34) v(n35) v(n36) v(n37) v(n38) v(n69) v(n79) v(n45) v(n43) v(n39) v(n53) v(n157) v(n151) v(n145) v(n104) v(n59) v(n51) v(n231) v(n49) v(n47) v(n74)
+meas tran s_o_rd_addr_0__0 FIND v(n69) AT=1.9e-05
+meas tran s_o_rd_addr_1__0 FIND v(n79) AT=1.9e-05
+meas tran s_o_rd_addr_2__0 FIND v(n45) AT=1.9e-05
+meas tran s_o_rd_addr_3__0 FIND v(n43) AT=1.9e-05
+meas tran s_o_rd_addr_4__0 FIND v(n39) AT=1.9e-05
+meas tran s_o_rs1_addr_0__0 FIND v(n53) AT=1.9e-05
+meas tran s_o_rs1_addr_1__0 FIND v(n157) AT=1.9e-05
+meas tran s_o_rs1_addr_2__0 FIND v(n151) AT=1.9e-05
+meas tran s_o_rs1_addr_3__0 FIND v(n145) AT=1.9e-05
+meas tran s_o_rs1_addr_4__0 FIND v(n104) AT=1.9e-05
+meas tran s_o_rs2_addr_0__0 FIND v(n59) AT=1.9e-05
+meas tran s_o_rs2_addr_1__0 FIND v(n51) AT=1.9e-05
+meas tran s_o_rs2_addr_2__0 FIND v(n231) AT=1.9e-05
+meas tran s_o_rs2_addr_3__0 FIND v(n49) AT=1.9e-05
+meas tran s_o_rs2_addr_4__0 FIND v(n47) AT=1.9e-05
+meas tran s_o_imm_0 FIND v(n74) AT=1.9e-05
+meas tran s_o_rd_addr_0__1 FIND v(n69) AT=3.9e-05
+meas tran s_o_rd_addr_1__1 FIND v(n79) AT=3.9e-05
+meas tran s_o_rd_addr_2__1 FIND v(n45) AT=3.9e-05
+meas tran s_o_rd_addr_3__1 FIND v(n43) AT=3.9e-05
+meas tran s_o_rd_addr_4__1 FIND v(n39) AT=3.9e-05
+meas tran s_o_rs1_addr_0__1 FIND v(n53) AT=3.9e-05
+meas tran s_o_rs1_addr_1__1 FIND v(n157) AT=3.9e-05
+meas tran s_o_rs1_addr_2__1 FIND v(n151) AT=3.9e-05
+meas tran s_o_rs1_addr_3__1 FIND v(n145) AT=3.9e-05
+meas tran s_o_rs1_addr_4__1 FIND v(n104) AT=3.9e-05
+meas tran s_o_rs2_addr_0__1 FIND v(n59) AT=3.9e-05
+meas tran s_o_rs2_addr_1__1 FIND v(n51) AT=3.9e-05
+meas tran s_o_rs2_addr_2__1 FIND v(n231) AT=3.9e-05
+meas tran s_o_rs2_addr_3__1 FIND v(n49) AT=3.9e-05
+meas tran s_o_rs2_addr_4__1 FIND v(n47) AT=3.9e-05
+meas tran s_o_imm_1 FIND v(n74) AT=3.9e-05
+meas tran s_o_rd_addr_0__2 FIND v(n69) AT=5.9e-05
+meas tran s_o_rd_addr_1__2 FIND v(n79) AT=5.9e-05
+meas tran s_o_rd_addr_2__2 FIND v(n45) AT=5.9e-05
+meas tran s_o_rd_addr_3__2 FIND v(n43) AT=5.9e-05
+meas tran s_o_rd_addr_4__2 FIND v(n39) AT=5.9e-05
+meas tran s_o_rs1_addr_0__2 FIND v(n53) AT=5.9e-05
+meas tran s_o_rs1_addr_1__2 FIND v(n157) AT=5.9e-05
+meas tran s_o_rs1_addr_2__2 FIND v(n151) AT=5.9e-05
+meas tran s_o_rs1_addr_3__2 FIND v(n145) AT=5.9e-05
+meas tran s_o_rs1_addr_4__2 FIND v(n104) AT=5.9e-05
+meas tran s_o_rs2_addr_0__2 FIND v(n59) AT=5.9e-05
+meas tran s_o_rs2_addr_1__2 FIND v(n51) AT=5.9e-05
+meas tran s_o_rs2_addr_2__2 FIND v(n231) AT=5.9e-05
+meas tran s_o_rs2_addr_3__2 FIND v(n49) AT=5.9e-05
+meas tran s_o_rs2_addr_4__2 FIND v(n47) AT=5.9e-05
+meas tran s_o_imm_2 FIND v(n74) AT=5.9e-05
+meas tran s_o_rd_addr_0__3 FIND v(n69) AT=7.9e-05
+meas tran s_o_rd_addr_1__3 FIND v(n79) AT=7.9e-05
+meas tran s_o_rd_addr_2__3 FIND v(n45) AT=7.9e-05
+meas tran s_o_rd_addr_3__3 FIND v(n43) AT=7.9e-05
+meas tran s_o_rd_addr_4__3 FIND v(n39) AT=7.9e-05
+meas tran s_o_rs1_addr_0__3 FIND v(n53) AT=7.9e-05
+meas tran s_o_rs1_addr_1__3 FIND v(n157) AT=7.9e-05
+meas tran s_o_rs1_addr_2__3 FIND v(n151) AT=7.9e-05
+meas tran s_o_rs1_addr_3__3 FIND v(n145) AT=7.9e-05
+meas tran s_o_rs1_addr_4__3 FIND v(n104) AT=7.9e-05
+meas tran s_o_rs2_addr_0__3 FIND v(n59) AT=7.9e-05
+meas tran s_o_rs2_addr_1__3 FIND v(n51) AT=7.9e-05
+meas tran s_o_rs2_addr_2__3 FIND v(n231) AT=7.9e-05
+meas tran s_o_rs2_addr_3__3 FIND v(n49) AT=7.9e-05
+meas tran s_o_rs2_addr_4__3 FIND v(n47) AT=7.9e-05
+meas tran s_o_imm_3 FIND v(n74) AT=7.9e-05
+meas tran s_o_rd_addr_0__4 FIND v(n69) AT=9.9e-05
+meas tran s_o_rd_addr_1__4 FIND v(n79) AT=9.9e-05
+meas tran s_o_rd_addr_2__4 FIND v(n45) AT=9.9e-05
+meas tran s_o_rd_addr_3__4 FIND v(n43) AT=9.9e-05
+meas tran s_o_rd_addr_4__4 FIND v(n39) AT=9.9e-05
+meas tran s_o_rs1_addr_0__4 FIND v(n53) AT=9.9e-05
+meas tran s_o_rs1_addr_1__4 FIND v(n157) AT=9.9e-05
+meas tran s_o_rs1_addr_2__4 FIND v(n151) AT=9.9e-05
+meas tran s_o_rs1_addr_3__4 FIND v(n145) AT=9.9e-05
+meas tran s_o_rs1_addr_4__4 FIND v(n104) AT=9.9e-05
+meas tran s_o_rs2_addr_0__4 FIND v(n59) AT=9.9e-05
+meas tran s_o_rs2_addr_1__4 FIND v(n51) AT=9.9e-05
+meas tran s_o_rs2_addr_2__4 FIND v(n231) AT=9.9e-05
+meas tran s_o_rs2_addr_3__4 FIND v(n49) AT=9.9e-05
+meas tran s_o_rs2_addr_4__4 FIND v(n47) AT=9.9e-05
+meas tran s_o_imm_4 FIND v(n74) AT=9.9e-05
+meas tran s_o_rd_addr_0__5 FIND v(n69) AT=0.000119
+meas tran s_o_rd_addr_1__5 FIND v(n79) AT=0.000119
+meas tran s_o_rd_addr_2__5 FIND v(n45) AT=0.000119
+meas tran s_o_rd_addr_3__5 FIND v(n43) AT=0.000119
+meas tran s_o_rd_addr_4__5 FIND v(n39) AT=0.000119
+meas tran s_o_rs1_addr_0__5 FIND v(n53) AT=0.000119
+meas tran s_o_rs1_addr_1__5 FIND v(n157) AT=0.000119
+meas tran s_o_rs1_addr_2__5 FIND v(n151) AT=0.000119
+meas tran s_o_rs1_addr_3__5 FIND v(n145) AT=0.000119
+meas tran s_o_rs1_addr_4__5 FIND v(n104) AT=0.000119
+meas tran s_o_rs2_addr_0__5 FIND v(n59) AT=0.000119
+meas tran s_o_rs2_addr_1__5 FIND v(n51) AT=0.000119
+meas tran s_o_rs2_addr_2__5 FIND v(n231) AT=0.000119
+meas tran s_o_rs2_addr_3__5 FIND v(n49) AT=0.000119
+meas tran s_o_rs2_addr_4__5 FIND v(n47) AT=0.000119
+meas tran s_o_imm_5 FIND v(n74) AT=0.000119
+meas tran s_o_rd_addr_0__6 FIND v(n69) AT=0.000139
+meas tran s_o_rd_addr_1__6 FIND v(n79) AT=0.000139
+meas tran s_o_rd_addr_2__6 FIND v(n45) AT=0.000139
+meas tran s_o_rd_addr_3__6 FIND v(n43) AT=0.000139
+meas tran s_o_rd_addr_4__6 FIND v(n39) AT=0.000139
+meas tran s_o_rs1_addr_0__6 FIND v(n53) AT=0.000139
+meas tran s_o_rs1_addr_1__6 FIND v(n157) AT=0.000139
+meas tran s_o_rs1_addr_2__6 FIND v(n151) AT=0.000139
+meas tran s_o_rs1_addr_3__6 FIND v(n145) AT=0.000139
+meas tran s_o_rs1_addr_4__6 FIND v(n104) AT=0.000139
+meas tran s_o_rs2_addr_0__6 FIND v(n59) AT=0.000139
+meas tran s_o_rs2_addr_1__6 FIND v(n51) AT=0.000139
+meas tran s_o_rs2_addr_2__6 FIND v(n231) AT=0.000139
+meas tran s_o_rs2_addr_3__6 FIND v(n49) AT=0.000139
+meas tran s_o_rs2_addr_4__6 FIND v(n47) AT=0.000139
+meas tran s_o_imm_6 FIND v(n74) AT=0.000139
+meas tran s_o_rd_addr_0__7 FIND v(n69) AT=0.000159
+meas tran s_o_rd_addr_1__7 FIND v(n79) AT=0.000159
+meas tran s_o_rd_addr_2__7 FIND v(n45) AT=0.000159
+meas tran s_o_rd_addr_3__7 FIND v(n43) AT=0.000159
+meas tran s_o_rd_addr_4__7 FIND v(n39) AT=0.000159
+meas tran s_o_rs1_addr_0__7 FIND v(n53) AT=0.000159
+meas tran s_o_rs1_addr_1__7 FIND v(n157) AT=0.000159
+meas tran s_o_rs1_addr_2__7 FIND v(n151) AT=0.000159
+meas tran s_o_rs1_addr_3__7 FIND v(n145) AT=0.000159
+meas tran s_o_rs1_addr_4__7 FIND v(n104) AT=0.000159
+meas tran s_o_rs2_addr_0__7 FIND v(n59) AT=0.000159
+meas tran s_o_rs2_addr_1__7 FIND v(n51) AT=0.000159
+meas tran s_o_rs2_addr_2__7 FIND v(n231) AT=0.000159
+meas tran s_o_rs2_addr_3__7 FIND v(n49) AT=0.000159
+meas tran s_o_rs2_addr_4__7 FIND v(n47) AT=0.000159
+meas tran s_o_imm_7 FIND v(n74) AT=0.000159
+meas tran s_o_rd_addr_0__8 FIND v(n69) AT=0.000179
+meas tran s_o_rd_addr_1__8 FIND v(n79) AT=0.000179
+meas tran s_o_rd_addr_2__8 FIND v(n45) AT=0.000179
+meas tran s_o_rd_addr_3__8 FIND v(n43) AT=0.000179
+meas tran s_o_rd_addr_4__8 FIND v(n39) AT=0.000179
+meas tran s_o_rs1_addr_0__8 FIND v(n53) AT=0.000179
+meas tran s_o_rs1_addr_1__8 FIND v(n157) AT=0.000179
+meas tran s_o_rs1_addr_2__8 FIND v(n151) AT=0.000179
+meas tran s_o_rs1_addr_3__8 FIND v(n145) AT=0.000179
+meas tran s_o_rs1_addr_4__8 FIND v(n104) AT=0.000179
+meas tran s_o_rs2_addr_0__8 FIND v(n59) AT=0.000179
+meas tran s_o_rs2_addr_1__8 FIND v(n51) AT=0.000179
+meas tran s_o_rs2_addr_2__8 FIND v(n231) AT=0.000179
+meas tran s_o_rs2_addr_3__8 FIND v(n49) AT=0.000179
+meas tran s_o_rs2_addr_4__8 FIND v(n47) AT=0.000179
+meas tran s_o_imm_8 FIND v(n74) AT=0.000179
+meas tran s_o_rd_addr_0__9 FIND v(n69) AT=0.000199
+meas tran s_o_rd_addr_1__9 FIND v(n79) AT=0.000199
+meas tran s_o_rd_addr_2__9 FIND v(n45) AT=0.000199
+meas tran s_o_rd_addr_3__9 FIND v(n43) AT=0.000199
+meas tran s_o_rd_addr_4__9 FIND v(n39) AT=0.000199
+meas tran s_o_rs1_addr_0__9 FIND v(n53) AT=0.000199
+meas tran s_o_rs1_addr_1__9 FIND v(n157) AT=0.000199
+meas tran s_o_rs1_addr_2__9 FIND v(n151) AT=0.000199
+meas tran s_o_rs1_addr_3__9 FIND v(n145) AT=0.000199
+meas tran s_o_rs1_addr_4__9 FIND v(n104) AT=0.000199
+meas tran s_o_rs2_addr_0__9 FIND v(n59) AT=0.000199
+meas tran s_o_rs2_addr_1__9 FIND v(n51) AT=0.000199
+meas tran s_o_rs2_addr_2__9 FIND v(n231) AT=0.000199
+meas tran s_o_rs2_addr_3__9 FIND v(n49) AT=0.000199
+meas tran s_o_rs2_addr_4__9 FIND v(n47) AT=0.000199
+meas tran s_o_imm_9 FIND v(n74) AT=0.000199
+meas tran s_o_rd_addr_0__10 FIND v(n69) AT=0.000219
+meas tran s_o_rd_addr_1__10 FIND v(n79) AT=0.000219
+meas tran s_o_rd_addr_2__10 FIND v(n45) AT=0.000219
+meas tran s_o_rd_addr_3__10 FIND v(n43) AT=0.000219
+meas tran s_o_rd_addr_4__10 FIND v(n39) AT=0.000219
+meas tran s_o_rs1_addr_0__10 FIND v(n53) AT=0.000219
+meas tran s_o_rs1_addr_1__10 FIND v(n157) AT=0.000219
+meas tran s_o_rs1_addr_2__10 FIND v(n151) AT=0.000219
+meas tran s_o_rs1_addr_3__10 FIND v(n145) AT=0.000219
+meas tran s_o_rs1_addr_4__10 FIND v(n104) AT=0.000219
+meas tran s_o_rs2_addr_0__10 FIND v(n59) AT=0.000219
+meas tran s_o_rs2_addr_1__10 FIND v(n51) AT=0.000219
+meas tran s_o_rs2_addr_2__10 FIND v(n231) AT=0.000219
+meas tran s_o_rs2_addr_3__10 FIND v(n49) AT=0.000219
+meas tran s_o_rs2_addr_4__10 FIND v(n47) AT=0.000219
+meas tran s_o_imm_10 FIND v(n74) AT=0.000219
+meas tran s_o_rd_addr_0__11 FIND v(n69) AT=0.000239
+meas tran s_o_rd_addr_1__11 FIND v(n79) AT=0.000239
+meas tran s_o_rd_addr_2__11 FIND v(n45) AT=0.000239
+meas tran s_o_rd_addr_3__11 FIND v(n43) AT=0.000239
+meas tran s_o_rd_addr_4__11 FIND v(n39) AT=0.000239
+meas tran s_o_rs1_addr_0__11 FIND v(n53) AT=0.000239
+meas tran s_o_rs1_addr_1__11 FIND v(n157) AT=0.000239
+meas tran s_o_rs1_addr_2__11 FIND v(n151) AT=0.000239
+meas tran s_o_rs1_addr_3__11 FIND v(n145) AT=0.000239
+meas tran s_o_rs1_addr_4__11 FIND v(n104) AT=0.000239
+meas tran s_o_rs2_addr_0__11 FIND v(n59) AT=0.000239
+meas tran s_o_rs2_addr_1__11 FIND v(n51) AT=0.000239
+meas tran s_o_rs2_addr_2__11 FIND v(n231) AT=0.000239
+meas tran s_o_rs2_addr_3__11 FIND v(n49) AT=0.000239
+meas tran s_o_rs2_addr_4__11 FIND v(n47) AT=0.000239
+meas tran s_o_imm_11 FIND v(n74) AT=0.000239
+meas tran s_o_rd_addr_0__12 FIND v(n69) AT=0.000259
+meas tran s_o_rd_addr_1__12 FIND v(n79) AT=0.000259
+meas tran s_o_rd_addr_2__12 FIND v(n45) AT=0.000259
+meas tran s_o_rd_addr_3__12 FIND v(n43) AT=0.000259
+meas tran s_o_rd_addr_4__12 FIND v(n39) AT=0.000259
+meas tran s_o_rs1_addr_0__12 FIND v(n53) AT=0.000259
+meas tran s_o_rs1_addr_1__12 FIND v(n157) AT=0.000259
+meas tran s_o_rs1_addr_2__12 FIND v(n151) AT=0.000259
+meas tran s_o_rs1_addr_3__12 FIND v(n145) AT=0.000259
+meas tran s_o_rs1_addr_4__12 FIND v(n104) AT=0.000259
+meas tran s_o_rs2_addr_0__12 FIND v(n59) AT=0.000259
+meas tran s_o_rs2_addr_1__12 FIND v(n51) AT=0.000259
+meas tran s_o_rs2_addr_2__12 FIND v(n231) AT=0.000259
+meas tran s_o_rs2_addr_3__12 FIND v(n49) AT=0.000259
+meas tran s_o_rs2_addr_4__12 FIND v(n47) AT=0.000259
+meas tran s_o_imm_12 FIND v(n74) AT=0.000259
+meas tran s_o_rd_addr_0__13 FIND v(n69) AT=0.000279
+meas tran s_o_rd_addr_1__13 FIND v(n79) AT=0.000279
+meas tran s_o_rd_addr_2__13 FIND v(n45) AT=0.000279
+meas tran s_o_rd_addr_3__13 FIND v(n43) AT=0.000279
+meas tran s_o_rd_addr_4__13 FIND v(n39) AT=0.000279
+meas tran s_o_rs1_addr_0__13 FIND v(n53) AT=0.000279
+meas tran s_o_rs1_addr_1__13 FIND v(n157) AT=0.000279
+meas tran s_o_rs1_addr_2__13 FIND v(n151) AT=0.000279
+meas tran s_o_rs1_addr_3__13 FIND v(n145) AT=0.000279
+meas tran s_o_rs1_addr_4__13 FIND v(n104) AT=0.000279
+meas tran s_o_rs2_addr_0__13 FIND v(n59) AT=0.000279
+meas tran s_o_rs2_addr_1__13 FIND v(n51) AT=0.000279
+meas tran s_o_rs2_addr_2__13 FIND v(n231) AT=0.000279
+meas tran s_o_rs2_addr_3__13 FIND v(n49) AT=0.000279
+meas tran s_o_rs2_addr_4__13 FIND v(n47) AT=0.000279
+meas tran s_o_imm_13 FIND v(n74) AT=0.000279
+meas tran s_o_rd_addr_0__14 FIND v(n69) AT=0.000299
+meas tran s_o_rd_addr_1__14 FIND v(n79) AT=0.000299
+meas tran s_o_rd_addr_2__14 FIND v(n45) AT=0.000299
+meas tran s_o_rd_addr_3__14 FIND v(n43) AT=0.000299
+meas tran s_o_rd_addr_4__14 FIND v(n39) AT=0.000299
+meas tran s_o_rs1_addr_0__14 FIND v(n53) AT=0.000299
+meas tran s_o_rs1_addr_1__14 FIND v(n157) AT=0.000299
+meas tran s_o_rs1_addr_2__14 FIND v(n151) AT=0.000299
+meas tran s_o_rs1_addr_3__14 FIND v(n145) AT=0.000299
+meas tran s_o_rs1_addr_4__14 FIND v(n104) AT=0.000299
+meas tran s_o_rs2_addr_0__14 FIND v(n59) AT=0.000299
+meas tran s_o_rs2_addr_1__14 FIND v(n51) AT=0.000299
+meas tran s_o_rs2_addr_2__14 FIND v(n231) AT=0.000299
+meas tran s_o_rs2_addr_3__14 FIND v(n49) AT=0.000299
+meas tran s_o_rs2_addr_4__14 FIND v(n47) AT=0.000299
+meas tran s_o_imm_14 FIND v(n74) AT=0.000299
+meas tran s_o_rd_addr_0__15 FIND v(n69) AT=0.000319
+meas tran s_o_rd_addr_1__15 FIND v(n79) AT=0.000319
+meas tran s_o_rd_addr_2__15 FIND v(n45) AT=0.000319
+meas tran s_o_rd_addr_3__15 FIND v(n43) AT=0.000319
+meas tran s_o_rd_addr_4__15 FIND v(n39) AT=0.000319
+meas tran s_o_rs1_addr_0__15 FIND v(n53) AT=0.000319
+meas tran s_o_rs1_addr_1__15 FIND v(n157) AT=0.000319
+meas tran s_o_rs1_addr_2__15 FIND v(n151) AT=0.000319
+meas tran s_o_rs1_addr_3__15 FIND v(n145) AT=0.000319
+meas tran s_o_rs1_addr_4__15 FIND v(n104) AT=0.000319
+meas tran s_o_rs2_addr_0__15 FIND v(n59) AT=0.000319
+meas tran s_o_rs2_addr_1__15 FIND v(n51) AT=0.000319
+meas tran s_o_rs2_addr_2__15 FIND v(n231) AT=0.000319
+meas tran s_o_rs2_addr_3__15 FIND v(n49) AT=0.000319
+meas tran s_o_rs2_addr_4__15 FIND v(n47) AT=0.000319
+meas tran s_o_imm_15 FIND v(n74) AT=0.000319
+quit
+.endc
+.end

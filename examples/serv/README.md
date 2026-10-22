@@ -8,63 +8,117 @@ Implementação em **SystemVerilog moderno** do núcleo [SERV](https://github.co
 
 Para viabilizar a fabricação, montagem prática e depuração individual, a CPU foi particionada em **10 placas modulares** conectadas por um backplane padronizado:
 
-| # | Módulo (PCB) | Arquivo RTL | Função Principal | Transistores (BC548) | Resistores | Total Componentes |
-|---|---|---|---|---:|---:|---:|
-| **1** | **`serv_rf_if`** | [`rtl/serv_rf_if.sv`](rtl/serv_rf_if.sv) | Multiplexador do Banco de Registradores | 21 | 32 | **53** |
-| **2** | **`serv_mem_if`** | [`rtl/serv_mem_if.sv`](rtl/serv_mem_if.sv) | Alinhamento de Memória (Byte/Half/Word) | 61 | 95 | **156** |
-| **3** | **`serv_alu`** | [`rtl/serv_alu.sv`](rtl/serv_alu.sv) | ALU Serial de 1 bit (ADD/SUB/XOR/OR/AND/SLT) | 115 | 176 | **291** |
-| **4** | **`serv_state`** | [`rtl/serv_state.sv`](rtl/serv_state.sv) | FSM Principal de Controle | 324 | 499 | **823** |
-| **5** | **`serv_decode`** | [`rtl/serv_decode.sv`](rtl/serv_decode.sv) | Decodificador de Instruções RISC-V | 365 | 559 | **924** |
-| **6** | **`serv_rf_ram_if`** | [`rtl/serv_rf_ram_if.sv`](rtl/serv_rf_ram_if.sv) | Adaptador Serial para SRAM Externa de 2 bits | 467 | 714 | **1.181** |
-| **7** | **`serv_ctrl`** | [`rtl/serv_ctrl.sv`](rtl/serv_ctrl.sv) | Program Counter (PC) e Somador de Saltos | 513 | 774 | **1.287** |
-| **8** | **`serv_bufreg`** | [`rtl/serv_bufreg.sv`](rtl/serv_bufreg.sv) | Registrador Shift de Endereço/Deslocamento | 736 | 1.122 | **1.858** |
-| **9** | **`serv_immdec`** | [`rtl/serv_immdec.sv`](rtl/serv_immdec.sv) | Gerador e Extensor Serial de Imediatos | 781 | 1.196 | **1.977** |
-| **10**| **`serv_bufreg2`** | [`rtl/serv_bufreg2.sv`](rtl/serv_bufreg2.sv) | Registrador Shift de Dados e Memória | 1.037 | 1.590 | **2.627** |
-| **TOTAL** | **CPU Completa** | **10 Placas Modulares** | **RV32E / RV32I Completo** | **4.420 NPN** | **6.757 Res** | **11.177** |
+| # | Módulo (PCB) | Arquivo RTL | Função Principal | Transistores (BC548) | Resistores | Total Componentes | Dimensões / Status |
+|---|---|---|---|---:|---:|---:|:---:|
+| **1** | **`serv_rf_if`** | [`rtl/serv_rf_if.sv`](rtl/serv_rf_if.sv) | Multiplexador do Banco de Registradores | 21 | 32 | **53** | 89 × 90 mm (Roteada) |
+| **2** | **`serv_mem_if`** | [`rtl/serv_mem_if.sv`](rtl/serv_mem_if.sv) | Alinhamento de Memória (Byte/Half/Word) | 61 | 95 | **156** | 134 × 89 mm (Roteada) |
+| **3** | **`serv_alu`** | [`rtl/serv_alu.sv`](rtl/serv_alu.sv) | ALU Serial de 1 bit (ADD/SUB/XOR/OR/AND/SLT) | 115 | 176 | **291** | 158 × 131 mm (Roteada) |
+| **4** | **`serv_state`** | [`rtl/serv_state.sv`](rtl/serv_state.sv) | FSM Principal de Controle | 324 | 499 | **823** | 260 × 201 mm (Roteada) |
+| **5** | **`serv_decode`** | [`rtl/serv_decode.sv`](rtl/serv_decode.sv) | Decodificador de Instruções RISC-V | 365 | 559 | **924** | Síntese & TB OK |
+| **6** | **`serv_rf_ram_if`** | [`rtl/serv_rf_ram_if.sv`](rtl/serv_rf_ram_if.sv) | Adaptador Serial para SRAM Externa de 2 bits | 467 | 714 | **1.181** | Síntese & TB OK |
+| **7** | **`serv_ctrl`** | [`rtl/serv_ctrl.sv`](rtl/serv_ctrl.sv) | Program Counter (PC) e Somador de Saltos | 513 | 774 | **1.287** | Síntese & TB OK |
+| **8** | **`serv_bufreg`** | [`rtl/serv_bufreg.sv`](rtl/serv_bufreg.sv) | Registrador Shift de Endereço/Deslocamento | 736 | 1.122 | **1.858** | Síntese & TB OK |
+| **9** | **`serv_immdec`** | [`rtl/serv_immdec.sv`](rtl/serv_immdec.sv) | Gerador e Extensor Serial de Imediatos | 781 | 1.196 | **1.977** | 379 × 314 mm (Roteada) |
+| **10**| **`serv_bufreg2`** | [`rtl/serv_bufreg2.sv`](rtl/serv_bufreg2.sv) | Registrador Shift de Dados e Memória | 1.037 | 1.590 | **2.627** | Síntese & TB OK |
+| **TOTAL** | **CPU Completa** | **10 Placas Modulares** | **RV32E / RV32I Completo** | **4.420 NPN** | **6.757 Res** | **11.177** | **10 Módulos Integrados** |
 
 ---
 
-## 2. Galeria 3D e Simulações Analógicas SPICE
+## 2. Galeria 3D dos Módulos RTL (KiCad 10 Raytracing)
 
-### Renderização 3D da Placa da ALU (`serv_alu`) em RTL
-Placa compacta de 158 × 131 mm com 115 transistores BC548B e 176 resistores, roteada a 100% com 0 conflitos:
+Todas as placas são geradas automaticamente pelo compilador de silício em PCB `fr4lane`, posicionadas com otimização analítica, 100% roteadas com o algoritmo A* adaptativo (0 violações de folga e 0 nets incompletas) e renderizadas com traçado de raios (raytracing) foto-realista no KiCad 10:
+
+### 1. Placa da ALU Serial (`serv_alu`)
+*Dimensões: 158 × 131 mm | 291 componentes (115 transistores BC548 + 176 resistores)*
 
 <p align="center">
   <img src="img/serv_alu_rtl_3d.png" alt="Placa da ALU do SERV em Transistores RTL (3D)" width="780">
 </p>
 
+### 2. Placa do Multiplexador de Registradores (`serv_rf_if`)
+*Dimensões: 89 × 90 mm | 53 componentes (21 transistores BC548 + 32 resistores)*
+
+<p align="center">
+  <img src="img/serv_rf_if_rtl_3d.png" alt="Placa do RF Interface em RTL (3D)" width="780">
+</p>
+
+### 3. Placa da Interface de Memória Wishbone (`serv_mem_if`)
+*Dimensões: 134 × 89 mm | 156 componentes (61 transistores BC548 + 95 resistores)*
+
+<p align="center">
+  <img src="img/serv_mem_if_rtl_3d.png" alt="Placa da Memória Interface em RTL (3D)" width="780">
+</p>
+
+### 4. Placa da Máquina de Estados Finita (`serv_state`)
+*Dimensões: 260 × 201 mm | 823 componentes (324 transistores BC548 + 499 resistores)*
+
+<p align="center">
+  <img src="img/serv_state_rtl_3d.png" alt="Placa da FSM State do SERV em RTL (3D)" width="780">
+</p>
+
+### 5. Placa do Decodificador de Imediatos (`serv_immdec`)
+*Dimensões: 379 × 314 mm | 1.977 componentes (781 transistores BC548 + 1.196 resistores)*
+
+<p align="center">
+  <img src="img/serv_immdec_rtl_3d.png" alt="Placa do Immdec do SERV em RTL (3D)" width="780">
+</p>
+
 ---
 
-### Simulações Elétricas Analógicas SPICE (ngspice)
+## 3. Simulações Analógicas SPICE (ngspice)
 
-Cada célula e módulo foi simulado no **ngspice** com o modelo de transistor real do **BC548B** através do `fr4lane-cellsim`, sob 4 cantos PVT (típico, lento, rápido e quente):
+Cada célula padrão e circuito sintetizado foi submetido à simulação analógica transitória no **ngspice** utilizando o modelo SPICE de componentes reais (**transistor bipolar BC548B NPN** e resistores de 1/4W com 5% de tolerância) sob **4 cantos PVT** de pior caso:
 
-#### 1. Formas de Onda Transitórias da ALU (`serv_alu`)
-Simulação analógica completa dos 291 componentes discretos da ALU executando operações seriais com medição de atraso do caminho crítico (1,65 µs):
+- **Típico**: $V_{DD} = 5.0\text{ V}$, $25^\circ\text{C}$, resistores nominais, $\beta = 200$.
+- **Lento**: $V_{DD} = 4.75\text{ V}$, $0^\circ\text{C}$, resistores $+5\%$, $\beta = 110$ (pior caso de atraso).
+- **Rápido**: $V_{DD} = 5.25\text{ V}$, $70^\circ\text{C}$, resistores $-5\%$, $\beta = 450$ (maior consumo).
+- **Quente**: $V_{DD} = 4.75\text{ V}$, $70^\circ\text{C}$, resistores $+5\%$, $\beta = 110$.
 
-<p align="center">
-  <img src="img/spice/serv_alu.png" alt="Formas de Onda SPICE da ALU" width="780">
-</p>
+### Gráficos de Formas de Onda Analógicas dos Módulos
 
-#### 2. Célula Sequencial: Flip-Flop Tipo D (`DFF` em RTL)
-Verificação analógica da captura na borda de subida do clock, tempos de setup e hold com transistores BC548:
-
-<p align="center">
-  <img src="img/spice/DFF.png" alt="Simulação SPICE do DFF RTL" width="780">
-</p>
-
-#### 3. Célula Combinacional: Porta Lógica NAND2
-Curvas de chaveamento de transistores bipolares com carga de saída de pior caso:
+#### A. Circuito Completo da ALU Serial (`serv_alu`)
+*Simulação analógica de 291 componentes com 16 vetores de teste cobrindo todas as operações da ALU. Atraso do caminho crítico medido: **1,65 µs**.*
 
 <p align="center">
-  <img src="img/spice/NAND2.png" alt="Simulação SPICE da NAND2 RTL" width="780">
+  <img src="img/spice/serv_alu.png" alt="Formas de Onda SPICE da ALU" width="800">
 </p>
+
+#### B. Circuito de Alinhamento de Memória (`serv_mem_if`)
+*Simulação analógica de 156 componentes verificando a máscara de bytes e lógica de alinhamento Wishbone.*
+
+<p align="center">
+  <img src="img/spice/serv_mem_if.png" alt="Formas de Onda SPICE da Interface de Memória" width="800">
+</p>
+
+#### C. Circuito do Mux de Registradores (`serv_rf_if`)
+*Simulação analógica de 53 componentes verificando o bypass do registrador x0 (hardwired zero) e seleção de fontes de dados.*
+
+<p align="center">
+  <img src="img/spice/serv_rf_if.png" alt="Formas de Onda SPICE do RF Interface" width="800">
+</p>
+
+#### D. Circuito do Decodificador de Imediatos (`serv_immdec`)
+*Simulação analógica de 1.977 componentes no ngspice gerando campos imediatos I, S, B, U e J a partir do barramento de instrução.*
+
+<p align="center">
+  <img src="img/spice/serv_immdec.png" alt="Formas de Onda SPICE do Immdec" width="800">
+</p>
+
+### Gráficos das Células Fundamentais RTL (BC548B)
+
+| Flip-Flop Tipo D (`DFF`) | Porta Lógica NAND2 |
+|:---:|:---:|
+| ![DFF](img/spice/DFF.png) | ![NAND2](img/spice/NAND2.png) |
+| *Captura na borda de subida, medição de setup e hold* | *Chaveamento de NPNs em série com carga capacitiva máxima* |
+| **Porta Lógica NOR2** | **Inversor RTL (`INV`)** |
+| ![NOR2](img/spice/NOR2.png) | ![INV](img/spice/INV.png) |
+| *2 transistores NPN em paralelo + resistor de pull-up* | *1 transistor NPN e divisor resistivo de entrada* |
 
 ---
 
-## 3. Metodologia de Verificação em 3 Níveis
+## 4. Metodologia de Verificação em 3 Níveis
 
-Para garantir 100% de confiabilidade entre o código SystemVerilog e a placa física, o projeto implementa 3 níveis de validação:
+Para garantir 100% de correspondência entre a especificação RISC-V e a PCB de transistores físicos:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -79,14 +133,50 @@ Para garantir 100% de confiabilidade entre o código SystemVerilog e a placa fí
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Executando a Bateria de Testes dos 10 Módulos
+### Detalhamento dos Vetores de Teste por Módulo
+
+1. **[`tb/tb_serv_alu.sv`](tb/tb_serv_alu.sv)** (14 vetores):
+   - Operações aritméticas completas: `ADD` serial de 32 bits, `SUB` com carry inicial, flags de overflow.
+   - Lógica booleana: `XOR`, `OR`, `AND`.
+   - Comparações seriais: `SLT` (menor com sinal), `SLTU` (menor sem sinal), `BEQ` (igualdade de branch).
+2. **[`tb/tb_serv_ctrl.sv`](tb/tb_serv_ctrl.sv)** (9 vetores):
+   - Reset síncrono e inicialização de PC.
+   - Incremento sequencial de 4 bytes (`PC + 4`).
+   - Saltos relativos com offsets positivos e negativos em complemento de 2.
+   - Saltos absolutos via registrador (`JALR`).
+3. **[`tb/tb_serv_immdec.sv`](tb/tb_serv_immdec.sv)** (4 vetores):
+   - Imediatos tipo I positivos e negativos com extensão de sinal de 32 bits.
+   - Imediatos tipo S (Store) com montagem de campos dispersos.
+   - Imediatos tipo U (LUI / AUIPC) com deslocamento de 12 bits.
+4. **[`tb/tb_serv_decode.sv`](tb/tb_serv_decode.sv)** (8 vetores):
+   - Decodificação de instruções de 32 bits: `ADDI`, `ADD`, `SUB`, `AND`, `LW`, `SW`, `BEQ`, `JAL`.
+   - Verificação de ativação dos sinais de controle para todos os módulos periféricos.
+5. **[`tb/tb_serv_state.sv`](tb/tb_serv_state.sv)** (4 vetores):
+   - FSM de 32 ciclos por instrução (temporização de bit serial de `cnt[0]` até `cnt[31]`).
+   - Controle de instruções de 2 estágios (`two-stage branch` e acessos de memória).
+6. **[`tb/tb_serv_bufreg.sv`](tb/tb_serv_bufreg.sv)** (3 vetores):
+   - Alinhamento e cálculo de endereços efetivos de memória.
+7. **[`tb/tb_serv_bufreg2.sv`](tb/tb_serv_bufreg2.sv)** (3 vetores):
+   - Carga paralela de palavras de 32 bits e serialização para o Wishbone.
+8. **[`tb/tb_serv_mem_if.sv`](tb/tb_serv_mem_if.sv)** (7 vetores):
+   - Byte enables (`wb_sel[3:0]`) para acessos em Byte (8 bits), Halfword (16 bits) e Word (32 bits).
+9. **[`tb/tb_serv_rf_if.sv`](tb/tb_serv_rf_if.sv)** (5 vetores):
+   - Bloqueio estrito de escrita no registrador `x0` (hardwired to zero).
+   - Multiplexação entre ALU e barramento de dados da memória.
+10. **[`tb/tb_serv_rf_ram_if.sv`](tb/tb_serv_rf_ram_if.sv)** (3 vetores):
+    - Handshake com interface de SRAM síncrona de 2 bits e geração de endereços.
+
+---
+
+### Executando a Bateria de Testes Automatizada
 
 ```bash
-# Executa a síntese e simulação elétrica dos 10 módulos individualmente
+# Executa a síntese e a simulação de transistores dos 10 módulos
 python run_all_rtl_modules.py
 ```
 
-Resultado da execução automatizada:
+Resultado da execução automatizada (**100% aprovado em gate-level e transistor switch-level**):
+
 ```text
 ==============================================================================
 Módulo             | NPN   | Res   | Total  | Gate-Lvl | Transistor | Status
@@ -108,7 +198,7 @@ TOTAL CPU (10 PCBs) | 4420  | 6757  | 11177  | ALL OK   | ALL OK     | [ PASS ]
 
 ---
 
-## 4. Barramento Estruturado em SystemVerilog (`serv_pkg.sv`)
+## 5. Barramento Estruturado em SystemVerilog (`serv_pkg.sv`)
 
 A arquitetura utiliza structs empacotadas (`struct packed`) e unions (`union packed`) para máxima organização:
 
@@ -121,7 +211,7 @@ A arquitetura utiliza structs empacotadas (`struct packed`) e unions (`union pac
 
 ---
 
-## 5. Compilação e Testes em C com Clang / LLVM
+## 6. Compilação e Testes em C com Clang / LLVM
 
 O SERV suporta a compilação de código C bare-metal para **RV32E** (`ilp32e`) e **RV32I** com validação automática de estado:
 
