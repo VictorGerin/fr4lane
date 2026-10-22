@@ -17,20 +17,12 @@ module serv_system #(
    input  logic                clk,
    input  logic                i_rst,
 
-   // 1. Barramento de Instruções (Wishbone)
-   output serv_pkg::ibus_req_t o_ibus,
-   input  serv_pkg::ibus_rsp_t i_ibus,
-
-   // 2. Barramento de Dados (Wishbone)
-   output serv_pkg::dbus_req_t o_dbus,
-   input  serv_pkg::dbus_rsp_t i_dbus,
-
-   // 3. SRAM externa do banco de registradores (rf)
-   output serv_pkg::rf_req_t   o_rf,
-   input  serv_pkg::rf_rsp_t   i_rf
+   // Barramento do sistema (ibus + dbus + rf unificados em struct aninhada)
+   output serv_pkg::sys_req_t  o_sys,
+   input  serv_pkg::sys_rsp_t  i_sys
 );
 
-   // Sinais internos dos barramentos
+   // Sinais internos dos barramentos externos
    logic [31:0]      o_ibus_adr;
    logic             o_ibus_cyc;
    logic [31:0]      o_dbus_adr;
@@ -44,143 +36,92 @@ module serv_system #(
    logic [AW_RF-1:0] o_rf_raddr_raw;
    logic             o_rf_ren_raw;
 
-   assign o_ibus.adr = o_ibus_adr;
-   assign o_ibus.cyc = o_ibus_cyc;
+   assign o_sys.ibus.adr = o_ibus_adr;
+   assign o_sys.ibus.cyc = o_ibus_cyc;
 
-   assign o_dbus.adr = o_dbus_adr;
-   assign o_dbus.dat = o_dbus_dat;
-   assign o_dbus.sel = o_dbus_sel;
-   assign o_dbus.we  = o_dbus_we;
-   assign o_dbus.cyc = o_dbus_cyc;
+   assign o_sys.dbus.adr = o_dbus_adr;
+   assign o_sys.dbus.dat = o_dbus_dat;
+   assign o_sys.dbus.sel = o_dbus_sel;
+   assign o_sys.dbus.we  = o_dbus_we;
+   assign o_sys.dbus.cyc = o_dbus_cyc;
 
-   assign o_rf.waddr = { {(9-AW_RF){1'b0}}, o_rf_waddr_raw };
-   assign o_rf.wdata = o_rf_wdata_raw;
-   assign o_rf.wen   = o_rf_wen_raw;
-   assign o_rf.raddr = { {(9-AW_RF){1'b0}}, o_rf_raddr_raw };
-   assign o_rf.ren   = o_rf_ren_raw;
+   assign o_sys.rf.waddr = { {(9-AW_RF){1'b0}}, o_rf_waddr_raw };
+   assign o_sys.rf.wdata = o_rf_wdata_raw;
+   assign o_sys.rf.wen   = o_rf_wen_raw;
+   assign o_sys.rf.raddr = { {(9-AW_RF){1'b0}}, o_rf_raddr_raw };
+   assign o_sys.rf.ren   = o_rf_ren_raw;
 
-   // Sinais da pilha de conexões (Header comum J_STACK)
-   logic       init;
-   logic       cnt_en;
-   logic       cnt0to3;
-   logic       cnt12to31;
-   logic       cnt0;
-   logic       cnt1;
-   logic       cnt2;
-   logic       cnt3;
-   logic       cnt7;
-   logic       cnt11;
-   logic       cnt12;
-   logic       cnt_done;
+   // Barramento de empilhamento (J_STACK): Union packed com structs aninhadas
+   serv_pkg::j_stack_t stack;
 
-   logic       ctrl_pc_en;
-   logic       ctrl_jump;
-   logic       ctrl_jal_or_jalr;
-   logic       ctrl_utype;
-   logic       ctrl_pc_rel;
-   logic       ctrl_mret;
-   logic       ctrl_rd;
-   logic       bad_pc;
-
-   logic       imm;
-   logic       bufreg_en;
-   logic       bufreg_rs1_en;
-   logic       bufreg_imm_en;
-   logic       bufreg_clr_lsb;
-   logic       bufreg_sh_signed;
-   logic       op_b_sel;
-   logic       shift_op;
-   logic       sh_right;
-   logic       bufreg_q;
-   logic       bufreg2_q;
-   logic       sh_done;
-   logic [1:0] lsb;
-
-   logic       alu_sub;
-   logic [1:0] alu_bool_op;
-   logic       alu_cmp_eq;
-   logic       alu_cmp_sig;
-   logic [2:0] alu_rd_sel;
-   logic       rd_alu_en;
-   logic       alu_rd;
-   logic       alu_cmp;
-
-   logic       mem_signed;
-   logic       mem_word;
-   logic       mem_half;
-   logic [1:0] mem_bytecnt;
-   logic       rd_mem_en;
-   logic       mem_misalign;
-
+   // Sinais de endereço com largura parametrizada WREG
    logic [WREG-1:0] rd_addr;
    logic [WREG-1:0] rs1_addr;
    logic [WREG-1:0] rs2_addr;
-   logic       rd_en;
-   logic       rs1;
-   logic       rs2;
-   logic       rf_rreq;
-   logic       rf_wreq;
-   logic       rf_ready;
+
+   assign stack.signals.rf.rd_addr  = { {(5-WREG){1'b0}}, rd_addr };
+   assign stack.signals.rf.rs1_addr = { {(5-WREG){1'b0}}, rs1_addr };
+   assign stack.signals.rf.rs2_addr = { {(5-WREG){1'b0}}, rs2_addr };
 
    serv_ctrl_board #(
       .WITH_E (WITH_E)
    ) u_ctrl (
       .clk                (clk),
       .i_rst              (i_rst),
-      .i_ibus_rdt         (i_ibus.rdt[31:2]),
-      .i_ibus_ack         (i_ibus.ack),
+      .i_ibus_rdt         (i_sys.ibus.rdt[31:2]),
+      .i_ibus_ack         (i_sys.ibus.ack),
       .o_ibus_cyc         (o_ibus_cyc),
       .o_dbus_cyc         (o_dbus_cyc),
       .o_dbus_we          (o_dbus_we),
-      .i_dbus_ack         (i_dbus.ack),
+      .i_dbus_ack         (i_sys.dbus.ack),
       .o_rf_rreq          (),
-      .o_rf_wreq          (rf_wreq),
-      .i_rf_ready         (rf_ready),
+      .o_rf_wreq          (stack.signals.rf.rf_wreq),
+      .i_rf_ready         (stack.signals.rf.rf_ready),
       .o_rd_addr          (rd_addr),
       .o_rs1_addr         (rs1_addr),
       .o_rs2_addr         (rs2_addr),
-      .o_rd_en            (rd_en),
-      .o_init             (init),
-      .o_cnt_en           (cnt_en),
-      .o_cnt0to3          (cnt0to3),
-      .o_cnt12to31        (cnt12to31),
-      .o_cnt0             (cnt0),
-      .o_cnt1             (cnt1),
-      .o_cnt2             (cnt2),
-      .o_cnt3             (cnt3),
-      .o_cnt7             (cnt7),
-      .o_cnt11            (cnt11),
-      .o_cnt12            (cnt12),
-      .o_cnt_done         (cnt_done),
-      .o_ctrl_pc_en       (ctrl_pc_en),
-      .o_ctrl_jump        (ctrl_jump),
-      .o_ctrl_jal_or_jalr (ctrl_jal_or_jalr),
-      .o_ctrl_utype       (ctrl_utype),
-      .o_ctrl_pc_rel      (ctrl_pc_rel),
-      .o_ctrl_mret        (ctrl_mret),
-      .o_imm              (imm),
-      .o_bufreg_en        (bufreg_en),
-      .o_bufreg_rs1_en    (bufreg_rs1_en),
-      .o_bufreg_imm_en    (bufreg_imm_en),
-      .o_bufreg_clr_lsb   (bufreg_clr_lsb),
-      .o_bufreg_sh_signed (bufreg_sh_signed),
-      .o_op_b_sel         (op_b_sel),
-      .o_shift_op         (shift_op),
-      .o_sh_right         (sh_right),
-      .o_alu_sub          (alu_sub),
-      .o_alu_bool_op      (alu_bool_op),
-      .o_alu_cmp_eq       (alu_cmp_eq),
-      .o_alu_cmp_sig      (alu_cmp_sig),
-      .o_alu_rd_sel       (alu_rd_sel),
-      .o_rd_alu_en        (rd_alu_en),
-      .o_mem_signed       (mem_signed),
-      .o_mem_word         (mem_word),
-      .o_mem_half         (mem_half),
-      .o_mem_bytecnt      (mem_bytecnt),
-      .o_rd_mem_en        (rd_mem_en),
-      .i_alu_cmp          (alu_cmp),
-      .i_sh_done          (sh_done),
-      .i_lsb1             (lsb[1]),
+      .o_rd_en            (stack.signals.ctrl.rd_en),
+      .o_init             (stack.signals.timing.init),
+      .o_cnt_en           (stack.signals.timing.cnt_en),
+      .o_cnt0to3          (stack.signals.timing.cnt0to3),
+      .o_cnt12to31        (stack.signals.timing.cnt12to31),
+      .o_cnt0             (stack.signals.timing.cnt0),
+      .o_cnt1             (stack.signals.timing.cnt1),
+      .o_cnt2             (stack.signals.timing.cnt2),
+      .o_cnt3             (stack.signals.timing.cnt3),
+      .o_cnt7             (stack.signals.timing.cnt7),
+      .o_cnt11            (stack.signals.timing.cnt11),
+      .o_cnt12            (stack.signals.timing.cnt12),
+      .o_cnt_done         (stack.signals.timing.cnt_done),
+      .o_ctrl_pc_en       (stack.signals.ctrl.pc_en),
+      .o_ctrl_jump        (stack.signals.ctrl.jump),
+      .o_ctrl_jal_or_jalr (stack.signals.ctrl.jal_or_jalr),
+      .o_ctrl_utype       (stack.signals.ctrl.utype),
+      .o_ctrl_pc_rel      (stack.signals.ctrl.pc_rel),
+      .o_ctrl_mret        (stack.signals.ctrl.mret),
+      .o_imm              (stack.signals.data.imm),
+      .o_bufreg_en        (stack.signals.bufreg.en),
+      .o_bufreg_rs1_en    (stack.signals.bufreg.rs1_en),
+      .o_bufreg_imm_en    (stack.signals.bufreg.imm_en),
+      .o_bufreg_clr_lsb   (stack.signals.bufreg.clr_lsb),
+      .o_bufreg_sh_signed (stack.signals.bufreg.sh_signed),
+      .o_op_b_sel         (stack.signals.alu.op_b_sel),
+      .o_shift_op         (stack.signals.alu.shift_op),
+      .o_sh_right         (stack.signals.alu.sh_right),
+      .o_alu_sub          (stack.signals.alu.sub),
+      .o_alu_bool_op      (stack.signals.alu.bool_op),
+      .o_alu_cmp_eq       (stack.signals.alu.cmp_eq),
+      .o_alu_cmp_sig      (stack.signals.alu.cmp_sig),
+      .o_alu_rd_sel       (stack.signals.alu.rd_sel),
+      .o_rd_alu_en        (stack.signals.ctrl.rd_alu_en),
+      .o_mem_signed       (stack.signals.mem.signed_op),
+      .o_mem_word         (stack.signals.mem.word_op),
+      .o_mem_half         (stack.signals.mem.half_op),
+      .o_mem_bytecnt      (stack.signals.mem.bytecnt),
+      .o_rd_mem_en        (stack.signals.ctrl.rd_mem_en),
+      .i_alu_cmp          (stack.signals.data.alu_cmp),
+      .i_sh_done          (stack.signals.data.sh_done),
+      .i_lsb1             (stack.signals.data.lsb[1]),
       .i_mem_misalign     (1'b0)
    );
 
@@ -190,57 +131,57 @@ module serv_system #(
    ) u_pc (
       .clk           (clk),
       .i_rst         (i_rst),
-      .i_pc_en       (ctrl_pc_en),
-      .i_cnt12to31   (cnt12to31),
-      .i_cnt0        (cnt0),
-      .i_cnt1        (cnt1),
-      .i_cnt2        (cnt2),
-      .i_jump        (ctrl_jump),
-      .i_jal_or_jalr (ctrl_jal_or_jalr),
-      .i_utype       (ctrl_utype),
-      .i_pc_rel      (ctrl_pc_rel),
-      .i_imm         (imm),
-      .i_bufreg_q    (bufreg_q),
-      .o_ctrl_rd     (ctrl_rd),
-      .o_bad_pc      (bad_pc),
+      .i_pc_en       (stack.signals.ctrl.pc_en),
+      .i_cnt12to31   (stack.signals.timing.cnt12to31),
+      .i_cnt0        (stack.signals.timing.cnt0),
+      .i_cnt1        (stack.signals.timing.cnt1),
+      .i_cnt2        (stack.signals.timing.cnt2),
+      .i_jump        (stack.signals.ctrl.jump),
+      .i_jal_or_jalr (stack.signals.ctrl.jal_or_jalr),
+      .i_utype       (stack.signals.ctrl.utype),
+      .i_pc_rel      (stack.signals.ctrl.pc_rel),
+      .i_imm         (stack.signals.data.imm),
+      .i_bufreg_q    (stack.signals.data.bufreg_q),
+      .o_ctrl_rd     (stack.signals.data.ctrl_rd),
+      .o_bad_pc      (),
       .o_ibus_adr    (o_ibus_adr)
    );
 
    serv_alu_board u_alu (
       .clk                (clk),
-      .i_cnt_en           (cnt_en),
-      .i_cnt0             (cnt0),
-      .i_cnt1             (cnt1),
-      .i_cnt7             (cnt7),
-      .i_cnt_done         (cnt_done),
-      .i_init             (init),
-      .i_alu_sub          (alu_sub),
-      .i_alu_bool_op      (alu_bool_op),
-      .i_alu_cmp_eq       (alu_cmp_eq),
-      .i_alu_cmp_sig      (alu_cmp_sig),
-      .i_alu_rd_sel       (alu_rd_sel),
-      .i_bufreg_en        (bufreg_en),
-      .i_bufreg_rs1_en    (bufreg_rs1_en),
-      .i_bufreg_imm_en    (bufreg_imm_en),
-      .i_bufreg_clr_lsb   (bufreg_clr_lsb),
-      .i_bufreg_sh_signed (bufreg_sh_signed),
-      .i_op_b_sel         (op_b_sel),
-      .i_shift_op         (shift_op),
-      .i_sh_right         (sh_right),
-      .i_rs1              (rs1),
-      .i_rs2              (rs2),
-      .i_imm              (imm),
-      .i_mem_bytecnt      (mem_bytecnt),
-      .o_alu_rd           (alu_rd),
-      .o_alu_cmp          (alu_cmp),
-      .o_sh_done          (sh_done),
-      .o_lsb              (lsb),
-      .o_bufreg_q         (bufreg_q),
-      .o_bufreg2_q        (bufreg2_q),
+      .i_cnt_en           (stack.signals.timing.cnt_en),
+      .i_cnt0             (stack.signals.timing.cnt0),
+      .i_cnt1             (stack.signals.timing.cnt1),
+      .i_cnt7             (stack.signals.timing.cnt7),
+      .i_cnt_done         (stack.signals.timing.cnt_done),
+      .i_init             (stack.signals.timing.init),
+      .i_alu_sub          (stack.signals.alu.sub),
+      .i_alu_bool_op      (stack.signals.alu.bool_op),
+      .i_alu_cmp_eq       (stack.signals.alu.cmp_eq),
+      .i_alu_cmp_sig      (stack.signals.alu.cmp_sig),
+      .i_alu_rd_sel       (stack.signals.alu.rd_sel),
+      .i_bufreg_en        (stack.signals.bufreg.en),
+      .i_bufreg_rs1_en    (stack.signals.bufreg.rs1_en),
+      .i_bufreg_imm_en    (stack.signals.bufreg.imm_en),
+      .i_bufreg_clr_lsb   (stack.signals.bufreg.clr_lsb),
+      .i_bufreg_sh_signed (stack.signals.bufreg.sh_signed),
+      .i_op_b_sel         (stack.signals.alu.op_b_sel),
+      .i_shift_op         (stack.signals.alu.shift_op),
+      .i_sh_right         (stack.signals.alu.sh_right),
+      .i_rs1              (stack.signals.data.rs1),
+      .i_rs2              (stack.signals.data.rs2),
+      .i_imm              (stack.signals.data.imm),
+      .i_mem_bytecnt      (stack.signals.mem.bytecnt),
+      .o_alu_rd           (stack.signals.data.alu_rd),
+      .o_alu_cmp          (stack.signals.data.alu_cmp),
+      .o_sh_done          (stack.signals.data.sh_done),
+      .o_lsb              (stack.signals.data.lsb),
+      .o_bufreg_q         (stack.signals.data.bufreg_q),
+      .o_bufreg2_q        (stack.signals.data.bufreg2_q),
       .o_dbus_adr         (o_dbus_adr),
       .o_dbus_dat         (o_dbus_dat),
-      .i_dbus_rdt         (i_dbus.rdt),
-      .i_dbus_ack         (i_dbus.ack)
+      .i_dbus_rdt         (i_sys.dbus.rdt),
+      .i_dbus_ack         (i_sys.dbus.ack)
    );
 
    serv_rf_mem_board #(
@@ -248,26 +189,26 @@ module serv_system #(
    ) u_rf_mem (
       .clk            (clk),
       .i_rst          (i_rst),
-      .i_cnt_en       (cnt_en),
-      .i_bytecnt      (mem_bytecnt),
-      .i_lsb          (lsb),
-      .i_rf_rreq      (i_ibus.ack),
-      .i_rf_wreq      (rf_wreq),
-      .o_rf_ready     (rf_ready),
+      .i_cnt_en       (stack.signals.timing.cnt_en),
+      .i_bytecnt      (stack.signals.mem.bytecnt),
+      .i_lsb          (stack.signals.data.lsb),
+      .i_rf_rreq      (i_sys.ibus.ack),
+      .i_rf_wreq      (stack.signals.rf.rf_wreq),
+      .o_rf_ready     (stack.signals.rf.rf_ready),
       .i_rd_addr      (rd_addr),
       .i_rs1_addr     (rs1_addr),
       .i_rs2_addr     (rs2_addr),
-      .i_rd_en        (rd_en),
-      .i_ctrl_rd      (ctrl_rd),
-      .i_alu_rd       (alu_rd),
-      .i_rd_alu_en    (rd_alu_en),
-      .i_rd_mem_en    (rd_mem_en),
-      .i_mem_signed   (mem_signed),
-      .i_mem_word     (mem_word),
-      .i_mem_half     (mem_half),
-      .i_bufreg2_q    (bufreg2_q),
-      .o_rs1          (rs1),
-      .o_rs2          (rs2),
+      .i_rd_en        (stack.signals.ctrl.rd_en),
+      .i_ctrl_rd      (stack.signals.data.ctrl_rd),
+      .i_alu_rd       (stack.signals.data.alu_rd),
+      .i_rd_alu_en    (stack.signals.ctrl.rd_alu_en),
+      .i_rd_mem_en    (stack.signals.ctrl.rd_mem_en),
+      .i_mem_signed   (stack.signals.mem.signed_op),
+      .i_mem_word     (stack.signals.mem.word_op),
+      .i_mem_half     (stack.signals.mem.half_op),
+      .i_bufreg2_q    (stack.signals.data.bufreg2_q),
+      .o_rs1          (stack.signals.data.rs1),
+      .o_rs2          (stack.signals.data.rs2),
       .o_mem_misalign (),
       .o_dbus_sel     (o_dbus_sel),
       .o_rf_waddr     (o_rf_waddr_raw),
@@ -275,7 +216,7 @@ module serv_system #(
       .o_rf_wen       (o_rf_wen_raw),
       .o_rf_raddr     (o_rf_raddr_raw),
       .o_rf_ren       (o_rf_ren_raw),
-      .i_rf_rdata     (i_rf.rdata)
+      .i_rf_rdata     (i_sys.rf.rdata)
    );
 
 endmodule
