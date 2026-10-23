@@ -29,6 +29,11 @@ def main(argv=None):
     ap.add_argument("--synth-only", action="store_true", help="Apenas síntese e empacotamento, sem gerar PCB")
     ap.add_argument("--place-only", action="store_true", help="Posiciona os chips na PCB sem rotear trilhas")
     ap.add_argument("--no-tb", action="store_true", help="Ignora simulação com testbench")
+    ap.add_argument("--tb", help="Arquivo de testbench Verilog para a simulação com Icarus Verilog")
+    ap.add_argument("--sim-iverilog", action="store_true",
+                    help="Executa simulação funcional e de temporização com Icarus Verilog (.vcd)")
+    ap.add_argument("--sim-spice", action="store_true",
+                    help="Executa simulação elétrica analógica transistor-level no ngspice (formas de onda V(t))")
 
     args = ap.parse_args(argv)
 
@@ -66,6 +71,9 @@ def main(argv=None):
             floorplan=args.floorplan,
             synth_only=args.synth_only,
             place_only=args.place_only,
+            sim_tb=Path(args.tb) if args.tb else None,
+            sim_spice=args.sim_spice,
+            sim_iverilog=args.sim_iverilog,
         )
     except Exception as e:
         print(f"ERRO durante o fluxo GAL: {e}", file=sys.stderr)
@@ -81,6 +89,12 @@ def main(argv=None):
         print(f"      -> {jf.resolve()}")
     print(f"    - Relatório detalhado: {result.report_file.resolve()}")
     print(f"    - Placa KiCad: {result.pcb_file.resolve()}")
+    if result.vcd_file:
+        print(f"    - Formas de onda Icarus Verilog: {result.vcd_file.resolve()}")
+    if result.spice_waveforms:
+        print(f"    - Formas de onda SPICE (ngspice):")
+        for sw in result.spice_waveforms:
+            print(f"      -> {sw.resolve()}")
     print("=" * 60 + "\n")
 
     return 0

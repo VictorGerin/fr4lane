@@ -11,6 +11,7 @@ from .jedec import generate_jedec
 from .packer import PackedGAL, pack_design_to_gals
 from .pcb import generate_gal_pcb
 from .report import generate_equations_pld, generate_packing_report
+from .sim import run_iverilog_timing_simulation, run_ngspice_electrical_simulation
 from .synth import SynthesizedDesign, synthesize_gal
 
 
@@ -28,6 +29,8 @@ class GALFlowResult:
     report_file: Path
     pcb_file: Path
     packed_chips: List[PackedGAL]
+    vcd_file: Optional[Path] = None
+    spice_waveforms: List[Path] = None
 
 
 def run_gal_flow(
@@ -40,6 +43,9 @@ def run_gal_flow(
     floorplan=None,
     synth_only: bool = False,
     place_only: bool = False,
+    sim_tb: Optional[Path] = None,
+    sim_spice: bool = False,
+    sim_iverilog: bool = False,
 ) -> GALFlowResult:
     """Executa o pipeline completo: Verilog -> Yosys SOP -> GAL Packing -> JEDEC + PCB."""
     dev = get_device(device)
@@ -132,6 +138,49 @@ def run_gal_flow(
     }
     (outdir / "placement.json").write_text(json.dumps(placement_data, indent=2, ensure_ascii=False), encoding="utf-8")
 
+    # 7. Simulações Elétrica Analógica (SPICE) e Digital com Timing (Icarus Verilog)
+    vcd_out: Optional[Path] = None
+    spice_plots: List[Path] = []
+
+    # Se sim_tb não foi explicitamente fornecido, procura tb_<top>.v na pasta das fontes
+    if (sim_iverilog or sim_tb) and not sim_tb:
+        for s in sources:
+            cand_tb = s.parent / f"tb_{top}.v"
+            if cand_tb.is_file():
+                sim_tb = cand_tb
+                break
+
+    if sim_iverilog and sim_tb:
+        print(f"[*] Executando simulação de temporização digital com Icarus Verilog...")
+        print(f"    Testbench: {sim_tb}")
+        ok_iv, log_iv, vcd_path = run_iverilog_timing_simulation(
+            chips=packed_chips,
+            design_name=top,
+            tb_source=sim_tb,
+            outdir=outdir,
+            design=synth_design,
+        )
+        if ok_iv and vcd_path.is_file():
+            vcd_out = vcd_path
+            print(f"[✓] Simulação Icarus Verilog concluída: {vcd_out}")
+        else:
+            print(f"[!] Aviso na simulação Icarus Verilog:\n{log_iv}")
+
+    if sim_spice:
+        print(f"[*] Executando simulação analógica SPICE nos transistores da GAL (ngspice)...")
+        for chip in packed_chips:
+            ok_sp, log_sp, cir_f, png_f = run_ngspice_electrical_simulation(
+                chip=chip,
+                design_name=top,
+                outdir=outdir,
+                t_sim_ns=80.0,
+            )
+            if png_f and png_f.is_file():
+                spice_plots.append(png_f)
+                print(f"[✓] Gráfico de formas de onda SPICE gerado: {png_f.name}")
+            elif not ok_sp:
+                print(f"[!] Aviso no SPICE para {chip.chip_id}:\n{log_sp}")
+
     # Métricas globais
     tot_used = sum(len(c.olmc_placements) for c in packed_chips)
     tot_avail = len(packed_chips) * dev.num_olmcs
@@ -152,4 +201,6 @@ def run_gal_flow(
         report_file=report_path,
         pcb_file=pcb_path,
         packed_chips=packed_chips,
+        vcd_file=vcd_out,
+        spice_waveforms=spice_plots,
     )

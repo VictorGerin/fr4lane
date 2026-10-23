@@ -168,6 +168,8 @@ def pack_design_to_gals(design: SynthesizedDesign, chip_prefix: str = "U") -> Li
                 ext_inputs = set()
                 for c in test_cluster:
                     ext_inputs.update(c.support_inputs - cluster_outputs)
+                    if c.rst_net and c.rst_net not in cluster_outputs:
+                        ext_inputs.add(c.rst_net)
                 if test_clk:
                     ext_inputs.discard(test_clk)
 
@@ -228,6 +230,8 @@ def pack_design_to_gals(design: SynthesizedDesign, chip_prefix: str = "U") -> Li
                     internal_fb.add(s)
                 else:
                     ext_inputs.add(s)
+            if cone.rst_net and cone.rst_net not in cluster_out_names:
+                ext_inputs.add(cone.rst_net)
 
         # Mapeamento de pinos físicos do chip
         pin_map: Dict[int, str] = {
