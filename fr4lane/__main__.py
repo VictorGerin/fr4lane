@@ -142,6 +142,20 @@ def main(argv=None):
                     help="não roda o DRC do KiCad (kicad-cli) sobre a placa gerada")
     args = ap.parse_args(argv)
 
+    # Fluxo PLD / GAL (Generic Array Logic)
+    if args.lib.lower() in ("gal22v10", "gal16v8", "gal", "atf22v10c", "atf16v8b"):
+        from .pld.cli import main as pld_main
+        dev = "GAL16V8" if "16v8" in args.lib.lower() else "GAL22V10"
+        pld_args = ["--top", args.top, "--device", dev]
+        if args.src:
+            pld_args.extend(["--src"] + args.src)
+        if args.out:
+            pld_args.extend(["--out", args.out])
+        if args.project:
+            pld_args.extend(["--project", args.project])
+        pld_args.extend(["--layers", str(args.layers)])
+        return pld_main(pld_args)
+
     # projeto (fr4lane.json): fontes, testbench, floorplan e pasta de saída padrão
     try:
         proj = project.find(args.project)

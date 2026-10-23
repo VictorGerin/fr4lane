@@ -27,6 +27,7 @@ test = ["pytest", "selenium"]
 
 [project.scripts]
 fr4lane = "fr4lane.__main__:main"
+fr4lane-pld = "fr4lane.pld.cli:main"
 fr4lane-fpedit = "fr4lane.fpedit:main"
 fr4lane-drc = "fr4lane.drc:main"
 fr4lane-system = "fr4lane.system:main"
