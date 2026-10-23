@@ -1,6 +1,7 @@
 """Fluxo completo de síntese, empacotamento, JEDEC e PCB para dispositivos GAL."""
 
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -37,11 +38,14 @@ def run_gal_flow(
     defines: Tuple[str, ...] = (),
     layers: int = 4,
     floorplan=None,
+    synth_only: bool = False,
+    place_only: bool = False,
 ) -> GALFlowResult:
     """Executa o pipeline completo: Verilog -> Yosys SOP -> GAL Packing -> JEDEC + PCB."""
     dev = get_device(device)
     if outdir is None:
-        outdir = Path("build") / f"{top}_{dev.name.lower()}"
+        folder_tag = f"{top}_{dev.name.lower()}" + ("_2l" if layers == 2 else "")
+        outdir = Path("build") / folder_tag
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
 
@@ -69,31 +73,56 @@ def run_gal_flow(
     # 4. Geração do relatório detalhado
     report_path = outdir / "gal_packing_report.md"
     generate_packing_report(synth_design, packed_chips, out_dir=outdir)
+    # Garante cópia para report.md para compatibilidade imediata com o fpedit
+    (outdir / "report.md").write_text(report_path.read_text(encoding="utf-8"), encoding="utf-8")
 
-    # 5. Geração do circuito impresso KiCad (.kicad_pcb)
+    # 5. Geração do circuito impresso KiCad (.kicad_pcb) ou apenas placement
     pcb_path = outdir / f"{top}_{dev.name.lower()}.kicad_pcb"
-    board = generate_gal_pcb(synth_design, packed_chips, out_pcb_path=pcb_path, layers=layers, floorplan=floorplan)
+    board = None
+    parts = []
+
+    if synth_only:
+        # Apenas síntese: calcula dimensões estimadas sem gerar PCB nem rotear
+        num_chips = len(packed_chips)
+        cols_count = 1 if num_chips <= 4 else (2 if num_chips <= 8 else 3)
+        chips_per_col = math.ceil(num_chips / cols_count)
+        board_w = 18.0 * 2 + cols_count * 35.0 + 22.0
+        board_h = 18.0 * 2 + chips_per_col * 38.0
+        board_dims = [board_w, board_h]
+        placed = False
+    else:
+        # Placement ou Roteamento Completo
+        do_route = not place_only
+        board = generate_gal_pcb(
+            synth_design,
+            packed_chips,
+            out_pcb_path=pcb_path,
+            layers=layers,
+            do_route=do_route,
+            floorplan=floorplan,
+        )
+        board_dims = [board.width, board.height]
+        placed = True
+        for f in board.footprints:
+            x0, y0, x1, y1 = f.courtyard
+            parts.append({
+                "ref": f.ref,
+                "module": None,
+                "box": [round(f.x + x0, 3), round(f.y + y0, 3), round(f.x + x1, 3), round(f.y + y1, 3)]
+            })
 
     # 6. Grava placement.json para integração visual com o editor de floorplan (fpedit)
-    parts = []
-    for f in board.footprints:
-        x0, y0, x1, y1 = f.courtyard
-        parts.append({
-            "ref": f.ref,
-            "module": None,
-            "box": [round(f.x + x0, 3), round(f.y + y0, 3), round(f.x + x1, 3), round(f.y + y1, 3)]
-        })
     placement_data = {
         "top": top,
         "family": dev.name.lower(),
         "library": dev.name,
         "sources": [str(s.resolve()) for s in sources],
         "layers": layers,
-        "placed": True,
-        "board": [board.width, board.height],
+        "placed": placed,
+        "board": board_dims,
         "floorplan": str(Path(floorplan).resolve()) if floorplan else None,
         "geo": {"row_pitch": 38.0, "pin_pitch": 2.54},
-        "min_width": board.width,
+        "min_width": board_dims[0],
         "module_width": {},
         "module_types": {},
         "footprints": parts,

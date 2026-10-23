@@ -156,6 +156,12 @@ def main(argv=None):
         if args.project:
             pld_args.extend(["--project", args.project])
         pld_args.extend(["--layers", str(args.layers)])
+        if getattr(args, "synth_only", False):
+            pld_args.append("--synth-only")
+        if getattr(args, "place_only", False):
+            pld_args.append("--place-only")
+        if getattr(args, "no_tb", False):
+            pld_args.append("--no-tb")
         return pld_main(pld_args)
 
     # projeto (fr4lane.json): fontes, testbench, floorplan e pasta de saída padrão
