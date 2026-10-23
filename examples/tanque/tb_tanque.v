@@ -5,28 +5,26 @@ module tb_tanque;
                      CHEIO      = 2'b10,
                      ESVAZIANDO = 2'b11;
 
-    reg        clk = 0, rst_n = 0;
-    reg        nivel_baixo = 0, nivel_alto = 0;
-    wire [1:0] estado;
-    wire       bomba;
-    integer    ciclo;
+    reg     clk = 0, rst_n = 0;
+    reg     nivel_baixo = 0, nivel_alto = 0;
+    wire    motor;
+    integer ciclo;
 
     tanque uut (
         .clk(clk),
         .rst_n(rst_n),
         .nivel_baixo(nivel_baixo),
         .nivel_alto(nivel_alto),
-        .estado(estado),
-        .bomba(bomba)
+        .motor(motor)
     );
 
     always #10 clk = ~clk;
 
-    task check(input [1:0] exp_est, input exp_bomba, input [127:0] etapa);
+    task check(input exp_motor, input [127:0] etapa);
         begin
-            if (estado !== exp_est || bomba !== exp_bomba) begin
-                $display("[ERRO] %0s: estado=%b (esp %b), bomba=%b (esp %b)",
-                         etapa, estado, exp_est, bomba, exp_bomba);
+            if (motor !== exp_motor) begin
+                $display("[ERRO] %0s: motor=%b (esperado %b)",
+                         etapa, motor, exp_motor);
                 $finish(1);
             end
         end
@@ -34,44 +32,45 @@ module tb_tanque;
 
     initial begin
         #25;
-        check(VAZIO, 1'b0, "reset inicial");
+        // No reset inicial (VAZIO), o motor deve estar ligado para encher
+        check(1'b1, "reset inicial (tanque vazio)");
         rst_n = 1;
 
         for (ciclo = 0; ciclo < 3; ciclo = ciclo + 1) begin
-            // 1. VAZIO -> ENCHENDO (sensor baixo em 0)
+            // 1. VAZIO -> ENCHENDO (sensor baixo em 0): motor continua ligado
             @(negedge clk); nivel_baixo = 0; nivel_alto = 0;
             @(posedge clk); #2;
-            check(ENCHENDO, 1'b1, "iniciou enchimento");
+            check(1'b1, "iniciou enchimento (motor ligado)");
 
-            // 2. Continua ENCHENDO quando passa pelo sensor de nível baixo
+            // 2. Continua ENCHENDO quando passa pelo sensor de nível baixo: motor ligado
             @(negedge clk); nivel_baixo = 1; nivel_alto = 0;
             @(posedge clk); #2;
-            check(ENCHENDO, 1'b1, "meio tanque subindo");
+            check(1'b1, "meio tanque subindo (motor ligado)");
 
-            // 3. Atingiu o topo (nivel_alto = 1) -> CHEIO (desliga a bomba)
+            // 3. Atingiu o topo (nivel_alto = 1) -> CHEIO (desliga o motor)
             @(negedge clk); nivel_baixo = 1; nivel_alto = 1;
             @(posedge clk); #2;
-            check(CHEIO, 1'b0, "tanque cheio");
+            check(1'b0, "tanque cheio (motor desligado)");
 
-            // Permanece CHEIO enquanto nivel_alto = 1
+            // Permanece CHEIO enquanto nivel_alto = 1: motor desligado
             @(negedge clk);
             @(posedge clk); #2;
-            check(CHEIO, 1'b0, "mantem cheio");
+            check(1'b0, "mantem cheio (motor desligado)");
 
-            // 4. Nível começou a descer (nivel_alto = 0, nivel_baixo = 1) -> ESVAZIANDO
+            // 4. Nível começou a descer (nivel_alto = 0, nivel_baixo = 1) -> ESVAZIANDO: motor desligado
             @(negedge clk); nivel_baixo = 1; nivel_alto = 0;
             @(posedge clk); #2;
-            check(ESVAZIANDO, 1'b0, "esvaziando meio tanque");
+            check(1'b0, "esvaziando meio tanque (motor desligado)");
 
-            // Continua ESVAZIANDO enquanto ainda há água acima de nivel_baixo
+            // Continua ESVAZIANDO enquanto ainda há água acima de nivel_baixo: motor desligado
             @(negedge clk);
             @(posedge clk); #2;
-            check(ESVAZIANDO, 1'b0, "continua esvaziando");
+            check(1'b0, "continua esvaziando (motor desligado)");
 
-            // 5. Esvaziou abaixo do sensor inferior (nivel_baixo = 0) -> VAZIO
+            // 5. Esvaziou abaixo do sensor inferior (nivel_baixo = 0) -> VAZIO: motor religa
             @(negedge clk); nivel_baixo = 0; nivel_alto = 0;
             @(posedge clk); #2;
-            check(VAZIO, 1'b0, "voltou para vazio");
+            check(1'b1, "voltou para vazio (motor religa)");
         end
 
         $display("--- tanque: todos os ciclos da maquina de estados conferem ---");

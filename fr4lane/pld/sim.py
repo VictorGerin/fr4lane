@@ -399,19 +399,21 @@ def generate_gal_spice_netlist(
         f"C_col2 col_b gnd 0.5p",
         f".ends in_buf",
         f"",
-        f"* Subcircuito Flip-Flop D Analógico (Master-Slave Estático)",
-        f".subckt dff_gal d clk q q_b vcc gnd",
+        f"* Subcircuito Flip-Flop D Analógico (Master-Slave Estático com Reset Assíncrono)",
+        f".subckt dff_gal d clk rst_b q q_b vcc gnd",
         f"S_m d n_m clk gnd sw_clk_off",
         f"C_m n_m gnd 0.2p",
         f"X_m1 n_m q_m vcc gnd inv_cmos",
         f"X_m2 q_m n_m_fb vcc gnd inv_cmos",
         f"R_fb_m n_m_fb n_m 15k",
+        f"M_ar_m n_m rst_b gnd gnd nmos_gal W=6u L=0.5u",
         f"",
         f"S_s q_m n_s clk gnd sw_clk_on",
         f"C_s n_s gnd 0.2p",
         f"X_s1 n_s q vcc gnd inv_cmos",
         f"X_s2 q q_b vcc gnd inv_cmos",
         f"R_fb_s q_b n_s 20k",
+        f"M_ar_q q rst_b gnd gnd nmos_gal W=8u L=0.5u",
         f".ends dff_gal",
         f"",
     ]
@@ -479,12 +481,14 @@ def generate_gal_spice_netlist(
                     col_drive = f"fb_bar_{out_pin}" if val == 1 else f"fb_true_{out_pin}"
                     lines.append(f"M_sw_{row_net}_{m_idx} {row_net} {col_drive} gnd gnd nmos_gal W=4u L=0.5u")
 
-        # Porta OR analógica (soma os termos de produto)
+        # Porta OR analógica Rail-to-Rail (NOR pull-down com inversor CMOS)
         or_sum_net = f"or_sum_{dip_pin}"
         if or_inputs:
-            lines.append(f"R_or_pd_{dip_pin} {or_sum_net} gnd 10k")
+            nor_sum_net = f"nor_sum_{dip_pin}"
+            lines.append(f"R_nor_pu_{dip_pin} vcc {nor_sum_net} 2.2k")
             for o_i, r_net in enumerate(or_inputs):
-                lines.append(f"M_or_{dip_pin}_{o_i} vcc {r_net} {or_sum_net} gnd nmos_gal W=6u L=0.5u")
+                lines.append(f"M_nor_{dip_pin}_{o_i} {nor_sum_net} {r_net} gnd gnd nmos_gal W=6u L=0.5u")
+            lines.append(f"X_or_inv_{dip_pin} {nor_sum_net} {or_sum_net} vcc gnd inv_cmos")
         else:
             lines.append(f"R_zero_{dip_pin} {or_sum_net} gnd 1k")
 
@@ -496,8 +500,9 @@ def generate_gal_spice_netlist(
             lines.append(f"R_pol_{dip_pin} {or_sum_net} {pol_out} 50")
 
         # Flip-Flop ou Combinacional com Buffer de Saída Não-Inversor
+        rst_drive = f"col_bar_{chip.rst_pin}" if chip.rst_pin else "gnd"
         if cone.is_registered and clk_signal:
-            lines.append(f"X_dff_{dip_pin} {pol_out} pin_{dev.clk_pin} q_{dip_pin} qb_{dip_pin} vcc gnd dff_gal")
+            lines.append(f"X_dff_{dip_pin} {pol_out} pin_{dev.clk_pin} {rst_drive} q_{dip_pin} qb_{dip_pin} vcc gnd dff_gal")
             lines.append(f"X_drv1_{dip_pin} q_{dip_pin} n_drv_{dip_pin} vcc gnd inv_cmos")
             lines.append(f"X_drv2_{dip_pin} n_drv_{dip_pin} pin_{dip_pin} vcc gnd inv_cmos")
         else:

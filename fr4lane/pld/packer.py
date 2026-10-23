@@ -273,6 +273,11 @@ def pack_design_to_gals(design: SynthesizedDesign, chip_prefix: str = "U") -> Li
                 pin_map[spare_olmc.dip_pin] = inp
                 in_pin_map[inp] = spare_olmc.dip_pin
 
+        rst_pin_used = None
+        if cluster_resets:
+            first_rst = sorted(list(cluster_resets))[0]
+            rst_pin_used = in_pin_map.get(first_rst)
+
         packed_gal = PackedGAL(
             chip_id=chip_id,
             device=dev,
@@ -282,7 +287,7 @@ def pack_design_to_gals(design: SynthesizedDesign, chip_prefix: str = "U") -> Li
             output_pins=out_pin_map,
             internal_feedbacks=internal_fb,
             clk_pin=clk_pin_used,
-            rst_pin=None,
+            rst_pin=rst_pin_used,
         )
         packed_chips.append(packed_gal)
 
