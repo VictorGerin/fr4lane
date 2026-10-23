@@ -9,8 +9,9 @@ import math
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from ..kicad import write_pcb
+from ..kicad import write_pcb, write_project
 from ..layout import Board, Footprint, Pad, Rules, mounting_hole
+from ..route import route
 from .devices import GAL22V10, GALDevice
 from .packer import PackedGAL
 from .synth import SynthesizedDesign
@@ -139,8 +140,9 @@ def generate_gal_pcb(
     packed_chips: List[PackedGAL],
     out_pcb_path: Path,
     layers: int = 4,
+    do_route: bool = True,
 ) -> Board:
-    """Gera o arquivo de circuito impresso KiCad (.kicad_pcb) com os chips GAL."""
+    """Gera o arquivo de circuito impresso KiCad (.kicad_pcb) com os chips GAL e trilhas roteadas."""
     dev = design.device
     num_chips = len(packed_chips)
 
@@ -234,9 +236,22 @@ def generate_gal_pcb(
         layers=layers,
     )
 
-    # Salva o arquivo de placa KiCad
+    # 4. Roteamento automático das trilhas e barramentos (A* Router)
+    if do_route:
+        print(f"[*] Roteando conexões entre chips GAL e conector de E/S ({len(board.nets())} nets)...")
+        route(board, max_iter=40)
+        routed_tracks = len(board.tracks)
+        routed_vias = len(board.vias)
+        print(f"[✓] Roteamento concluído: {routed_tracks} segmentos de trilha, {routed_vias} vias")
+        if board.unrouted:
+            print(f"[!] AVISO: {len(board.unrouted)} ligações não roteadas: {board.unrouted}")
+
+    # 5. Salva os arquivos de projeto KiCad (.kicad_pcb e .kicad_pro)
     out_pcb_path = Path(out_pcb_path)
     out_pcb_path.parent.mkdir(parents=True, exist_ok=True)
     write_pcb(board, out_pcb_path, title=f"PLD-{design.top} ({len(packed_chips)}x {dev.name})")
+
+    out_pro_path = out_pcb_path.with_suffix(".kicad_pro")
+    write_project(board, out_pro_path)
 
     return board
