@@ -352,6 +352,7 @@ def generate_gal_spice_netlist(
     design_name: str,
     out_path: Path,
     t_sim_ns: float = 60.0,
+    stimuli: Optional[Dict[str, str]] = None,
 ) -> Path:
     """Gera netlist elétrico SPICE (.cir) do chip GAL programado para ngspice.
 
@@ -398,17 +399,19 @@ def generate_gal_spice_netlist(
         f"C_col2 col_b gnd 0.5p",
         f".ends in_buf",
         f"",
-        f"* Subcircuito Flip-Flop D Analógico (Master-Slave)",
+        f"* Subcircuito Flip-Flop D Analógico (Master-Slave Estático)",
         f".subckt dff_gal d clk q q_b vcc gnd",
         f"S_m d n_m clk gnd sw_clk_off",
         f"C_m n_m gnd 0.2p",
         f"X_m1 n_m q_m vcc gnd inv_cmos",
         f"X_m2 q_m n_m_fb vcc gnd inv_cmos",
-        f"R_fb n_m_fb n_m 10k",
+        f"R_fb_m n_m_fb n_m 15k",
+        f"",
         f"S_s q_m n_s clk gnd sw_clk_on",
         f"C_s n_s gnd 0.2p",
-        f"X_s1 n_s q_b vcc gnd inv_cmos",
-        f"X_s2 q_b q vcc gnd inv_cmos",
+        f"X_s1 n_s q vcc gnd inv_cmos",
+        f"X_s2 q q_b vcc gnd inv_cmos",
+        f"R_fb_s q_b n_s 20k",
         f".ends dff_gal",
         f"",
     ]
@@ -419,14 +422,19 @@ def generate_gal_spice_netlist(
 
     lines.append("* Estímulos de Tensão nos Pinos de Entrada")
     if clk_signal:
-        lines.append(f"V_CLK pin_{dev.clk_pin} 0 PULSE(0 5.0 0 1.0n 1.0n 24n 50n)")
+        if stimuli and clk_signal in stimuli:
+            lines.append(f"V_CLK pin_{dev.clk_pin} 0 {stimuli[clk_signal]}")
+        else:
+            lines.append(f"V_CLK pin_{dev.clk_pin} 0 PULSE(0 5.0 0 1.0n 1.0n 24n 50n)")
 
     for sig, pin in sorted(chip.input_pins.items(), key=lambda x: x[1]):
         pin = int(pin)
         if sig == clk_signal or pin == dev.clk_pin:
             continue
-        # Trata resets especialmente (inicia em 0V e sobe para 5V em 5ns se for _n)
-        if sig.endswith("_n") or sig.startswith("rst_n") or sig.startswith("reset_n"):
+        if stimuli and sig in stimuli:
+            lines.append(f"V_IN_{pin} pin_{pin} 0 {stimuli[sig]}")
+        elif sig.endswith("_n") or sig.startswith("rst_n") or sig.startswith("reset_n"):
+            # Resets ativos em nível baixo: iniciam em 0V e sobem para 5V em 5ns
             lines.append(f"V_IN_{pin} pin_{pin} 0 PULSE(0 5.0 5.0n 1.0n 1.0n {t_sim_ns*2:.1f}n {t_sim_ns*4:.1f}n)")
         else:
             period = 15.0 + (pin % 7) * 5.0
@@ -487,14 +495,17 @@ def generate_gal_spice_netlist(
         else:
             lines.append(f"R_pol_{dip_pin} {or_sum_net} {pol_out} 50")
 
-        # Flip-Flop ou Combinacional
+        # Flip-Flop ou Combinacional com Buffer de Saída Não-Inversor
         if cone.is_registered and clk_signal:
             lines.append(f"X_dff_{dip_pin} {pol_out} pin_{dev.clk_pin} q_{dip_pin} qb_{dip_pin} vcc gnd dff_gal")
-            lines.append(f"X_out_{dip_pin} q_{dip_pin} pin_{dip_pin} vcc gnd inv_cmos")
-            lines.append(f"X_fb_{dip_pin} q_{dip_pin} fb_true_{dip_pin} fb_bar_{dip_pin} vcc gnd in_buf")
+            lines.append(f"X_drv1_{dip_pin} q_{dip_pin} n_drv_{dip_pin} vcc gnd inv_cmos")
+            lines.append(f"X_drv2_{dip_pin} n_drv_{dip_pin} pin_{dip_pin} vcc gnd inv_cmos")
         else:
-            lines.append(f"X_out_{dip_pin} {pol_out} pin_{dip_pin} vcc gnd inv_cmos")
-            lines.append(f"X_fb_{dip_pin} {pol_out} fb_true_{dip_pin} fb_bar_{dip_pin} vcc gnd in_buf")
+            lines.append(f"X_drv1_{dip_pin} {pol_out} n_drv_{dip_pin} vcc gnd inv_cmos")
+            lines.append(f"X_drv2_{dip_pin} n_drv_{dip_pin} pin_{dip_pin} vcc gnd inv_cmos")
+
+        # Feedback para a matriz AND alimentado a partir do pino da macrocélula
+        lines.append(f"X_fb_{dip_pin} pin_{dip_pin} fb_true_{dip_pin} fb_bar_{dip_pin} vcc gnd in_buf")
 
         # Carga capacitiva externa típica de pino e trilha PCB (15 pF)
         lines.append(f"C_load_{dip_pin} pin_{dip_pin} gnd 15p")
@@ -502,9 +513,9 @@ def generate_gal_spice_netlist(
 
     # Análise de Transitório e Medidas
     out_pins_str = " ".join(f"V(pin_{p})" for p in chip.olmc_placements.keys())
-    driven_in_pins = [dev.clk_pin] if clk_signal else []
-    driven_in_pins += [p for p, _ in inputs_to_drive[:3]]
-    in_pins_str = " ".join(f"V(pin_{p})" for p in driven_in_pins)
+    all_in_pins = [dev.clk_pin] if clk_signal else []
+    all_in_pins += [p for p, _ in inputs_to_drive]
+    in_pins_str = " ".join(f"V(pin_{p})" for p in all_in_pins)
 
     lines.append("* Comandos de Simulação e Exportação")
     lines.append(f".control")
@@ -525,13 +536,14 @@ def run_ngspice_electrical_simulation(
     design_name: str,
     outdir: Path,
     t_sim_ns: float = 60.0,
+    stimuli: Optional[Dict[str, str]] = None,
 ) -> Tuple[bool, str, Path, Optional[Path]]:
     """Executa simulação analógica SPICE no ngspice e plota formas de onda V(t)."""
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
 
     spice_file = outdir / f"{chip.chip_id}_{design_name}_spice.cir"
-    generate_gal_spice_netlist(chip, design_name, spice_file, t_sim_ns=t_sim_ns)
+    generate_gal_spice_netlist(chip, design_name, spice_file, t_sim_ns=t_sim_ns, stimuli=stimuli)
 
     ngspice = find_ngspice()
     if not ngspice:
@@ -559,16 +571,14 @@ def run_ngspice_electrical_simulation(
                 data = data.reshape(1, -1)
 
             num_vectors = data.shape[1] // 2
-            max_plots = min(num_vectors, 6)
+            max_plots = min(num_vectors, 10)
 
-            fig, axs = plt.subplots(max_plots, 1, figsize=(10, 2.0 * max_plots), sharex=True)
+            fig, axs = plt.subplots(max_plots, 1, figsize=(11, 1.8 * max_plots), sharex=True)
             if not isinstance(axs, np.ndarray):
                 axs = [axs]
 
             driven_in_pins = [chip.device.clk_pin] if chip.clk_pin else []
             for sig, pin in sorted(chip.input_pins.items(), key=lambda x: x[1]):
-                if len(driven_in_pins) >= 4:
-                    break
                 if pin not in driven_in_pins:
                     driven_in_pins.append(pin)
 
@@ -579,17 +589,17 @@ def run_ngspice_electrical_simulation(
                 t_vec = data[:, 2 * i] * 1e9
                 sig_v = data[:, 2 * i + 1]
                 lbl = labels[i] if i < len(labels) else f"Sinal {i}"
-                color = "tab:orange" if "Saída" in lbl else "tab:blue"
+                color = "tab:orange" if "Saída" in lbl else ("tab:green" if "Pino 1 (" in lbl else "tab:blue")
                 axs[i].plot(t_vec, sig_v, color=color, lw=1.5, label=lbl)
-                axs[i].set_ylabel("Tensão (V)", fontsize=9)
+                axs[i].set_ylabel("Tensão (V)", fontsize=8)
                 axs[i].set_ylim(-0.5, 5.5)
-                axs[i].grid(True, linestyle="--", alpha=0.6)
+                axs[i].grid(True, linestyle="--", alpha=0.5)
                 axs[i].legend(loc="upper right", fontsize=8)
 
             axs[-1].set_xlabel("Tempo (ns)", fontsize=10)
-            fig.suptitle(f"Simulação Elétrica Analógica SPICE - GAL22V10 ({chip.chip_id}: {design_name})", fontsize=12)
+            fig.suptitle(f"Simulação Elétrica Analógica SPICE (ngspice) - {chip.device.name} ({chip.chip_id}: {design_name})", fontsize=12, y=0.995)
             plt.tight_layout()
-            plt.savefig(png_plot, dpi=160)
+            plt.savefig(png_plot, dpi=180)
             plt.close()
     except Exception as e:
         print(f"Erro ao gerar gráfico SPICE: {e}")
