@@ -35,6 +35,7 @@ def run_gal_flow(
     outdir: Optional[Path] = None,
     defines: Tuple[str, ...] = (),
     layers: int = 4,
+    floorplan=None,
 ) -> GALFlowResult:
     """Executa o pipeline completo: Verilog -> Yosys SOP -> GAL Packing -> JEDEC + PCB."""
     dev = get_device(device)
@@ -70,7 +71,7 @@ def run_gal_flow(
 
     # 5. Geração do circuito impresso KiCad (.kicad_pcb)
     pcb_path = outdir / f"{top}_{dev.name.lower()}.kicad_pcb"
-    generate_gal_pcb(synth_design, packed_chips, out_pcb_path=pcb_path, layers=layers)
+    generate_gal_pcb(synth_design, packed_chips, out_pcb_path=pcb_path, layers=layers, floorplan=floorplan)
 
     # Métricas globais
     tot_used = sum(len(c.olmc_placements) for c in packed_chips)

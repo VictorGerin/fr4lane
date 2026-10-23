@@ -141,8 +141,13 @@ def generate_gal_pcb(
     out_pcb_path: Path,
     layers: int = 4,
     do_route: bool = True,
+    floorplan=None,
 ) -> Board:
     """Gera o arquivo de circuito impresso KiCad (.kicad_pcb) com os chips GAL e trilhas roteadas."""
+    if floorplan and isinstance(floorplan, (str, Path)):
+        from .. import floorplan as fp_mod
+        floorplan = fp_mod.load(floorplan)
+
     dev = design.device
     num_chips = len(packed_chips)
 
@@ -165,8 +170,19 @@ def generate_gal_pcb(
     margin_x = 18.0
     margin_y = 18.0
 
-    board_w = margin_x * 2 + cols_count * chip_spacing_x + 22.0  # espaço extra para conector
-    board_h = margin_y * 2 + chips_per_col * chip_spacing_y
+    # Dimensões da placa: definidas pelo floorplan ou calculadas automaticamente
+    if floorplan and getattr(floorplan, "board", None):
+        board_w, board_h = float(floorplan.board[0]), float(floorplan.board[1])
+        # Centraliza o bloco de chips na área disponível da placa
+        grid_w = cols_count * chip_spacing_x
+        grid_h = chips_per_col * chip_spacing_y
+        start_x = max(12.0, (board_w - 22.0 - grid_w) / 2.0)
+        start_y = max(12.0, (board_h - grid_h) / 2.0)
+    else:
+        board_w = margin_x * 2 + cols_count * chip_spacing_x + 22.0  # espaço extra para conector
+        board_h = margin_y * 2 + chips_per_col * chip_spacing_y
+        start_x = margin_x + 5.0
+        start_y = margin_y + 5.0
 
     footprints: List[Footprint] = []
 
@@ -175,8 +191,8 @@ def generate_gal_pcb(
         col_idx = idx // chips_per_col
         row_idx = idx % chips_per_col
 
-        cx = margin_x + col_idx * chip_spacing_x + 5.0
-        cy = margin_y + row_idx * chip_spacing_y + 5.0
+        cx = start_x + col_idx * chip_spacing_x
+        cy = start_y + row_idx * chip_spacing_y
 
         # Soquete DIP
         socket = make_dip_socket(chip.chip_id, dev.name, dev.num_pins, cx, cy)
@@ -218,12 +234,16 @@ def generate_gal_pcb(
             pass
     footprints.append(conn)
 
-    # 3. Furos de fixação nos 4 cantos (M3)
-    hole_inset = 5.0
-    footprints.append(mounting_hole("H1", hole_inset, hole_inset, "M3"))
-    footprints.append(mounting_hole("H2", board_w - hole_inset, hole_inset, "M3"))
-    footprints.append(mounting_hole("H3", hole_inset, board_h - hole_inset, "M3"))
-    footprints.append(mounting_hole("H4", board_w - hole_inset, board_h - hole_inset, "M3"))
+    # 3. Furos de fixação
+    if floorplan and getattr(floorplan, "mounting_holes", None):
+        for h in floorplan.mounting_holes:
+            footprints.append(mounting_hole(h.ref, h.x, h.y, h.size))
+    else:
+        hole_inset = 5.0
+        footprints.append(mounting_hole("H1", hole_inset, hole_inset, "M3"))
+        footprints.append(mounting_hole("H2", board_w - hole_inset, hole_inset, "M3"))
+        footprints.append(mounting_hole("H3", hole_inset, board_h - hole_inset, "M3"))
+        footprints.append(mounting_hole("H4", board_w - hole_inset, board_h - hole_inset, "M3"))
 
     rules = Rules()
     board = Board(

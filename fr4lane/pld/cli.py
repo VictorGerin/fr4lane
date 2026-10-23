@@ -24,6 +24,7 @@ def main(argv=None):
     ap.add_argument("--out", help="Diretório de saída para arquivos .jed, .pld, relatório e PCB")
     ap.add_argument("--layers", type=int, choices=(2, 4), default=4,
                     help="Camadas da placa PCB (4 = planos internos VCC/GND; 2 = trilhos de alimentação)")
+    ap.add_argument("--floorplan", help="Arquivo de restrições de geometria/tamanho da placa (.floorplan.json)")
     ap.add_argument("--project", help="Pasta do projeto com fr4lane.json (opcional)")
 
     args = ap.parse_args(argv)
@@ -58,6 +59,7 @@ def main(argv=None):
             device=args.device,
             outdir=outdir,
             layers=args.layers,
+            floorplan=args.floorplan,
         )
     except Exception as e:
         print(f"ERRO durante o fluxo GAL: {e}", file=sys.stderr)

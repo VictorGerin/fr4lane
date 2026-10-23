@@ -151,6 +151,8 @@ def main(argv=None):
             pld_args.extend(["--src"] + args.src)
         if args.out:
             pld_args.extend(["--out", args.out])
+        if args.floorplan:
+            pld_args.extend(["--floorplan", args.floorplan])
         if args.project:
             pld_args.extend(["--project", args.project])
         pld_args.extend(["--layers", str(args.layers)])
