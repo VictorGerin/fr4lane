@@ -18,13 +18,18 @@ Verilog ──Yosys/ABC──▶ células (.lib) ──expansão (.sp)──▶ 
 
 **Exemplo de resultado:** o [`demo_top`](https://github.com/VictorGerin/fr4lane/wiki/Exemplo-completo) (somador de 8 bits, contador e registrador) na família RTL vira a placa acima, de 256 x 258 mm, com 340 transistores BC548 e 518 resistores, 100 % roteada em 4 camadas, com 0 erros no DRC do KiCad, em pouco mais de 1 minuto. Em escala maior, uma ALU de 32 bits na família RTL vira uma placa de 860 x 681 mm com 3 234 transistores BC548 e 4 908 resistores, totalmente roteada em 4 camadas (66 mil trilhas, 6 mil vias), com 0 erros no DRC do KiCad. A geração leva cerca de 17 minutos, com os somadores e os estágios do shifter montados como [macros](https://github.com/VictorGerin/fr4lane/wiki/Módulos-e-macros#macros-fluxo-hierárquico).
 
-**Um computador inteiro:** o [SAP-1](examples/sap1) do Ben Eater, em SystemVerilog, vira uma pilha de 6 placas de 400 x 350 mm (controle, ALU e 4 de RAM) ligadas por um barramento tri-state, com 13 587 componentes, 5 363 deles BC548. Cada placa sai 100 % roteada e com 0 erros no DRC do KiCad, e o testbench roda contra as 6 placas montadas.
+**Um computador inteiro:** o [SAP-1](examples/sap1) do Ben Eater, em SystemVerilog, vira uma pilha de 6 placas de 400 x 350 mm (controle, ALU e 4 de RAM) ligadas por um barramento tri-state, com 13 587 componentes, 5 363 deles BC548. Cada placa sai 100 % roteada e com 0 erros no DRC do KiCad, e o testbench roda contra as 6 placas montadas. Veja mais na página do [Computador SAP-1 na Wiki](https://github.com/VictorGerin/fr4lane/wiki/Computador-SAP-1).
 
 <p align="center">
   <img src="docs/img/sap1_pilha.jpg" alt="As 6 placas do SAP-1 empilhadas" width="620">
 </p>
 
-**Processador RISC-V completo em relés:** o [SERV](examples/serv) (RV32I bit-serial de Olof Kindgren), em SystemVerilog moderno, vira uma pilha de 4 placas modulares (controle, PC, ALU e RF/Memória) montadas com 2 139 relés eletromecânicos SPDT de 5 V (Omron G5V-1) e 1 969 diodos 1N4148. Todas as placas saem 100 % roteadas em 4 camadas com macros (`serv_immdec`, `serv_ctrl`, `serv_alu`, `serv_mem_if`) e isolamento por buffers (`buffer_ports`), validadas pelo `fr4lane-system`. Veja mais na [Wiki](https://github.com/VictorGerin/fr4lane/wiki/SERV-RISC‐V-em-Relés).
+**Processador RISC-V completo:** o [SERV](examples/serv) (RV32I bit-serial de Olof Kindgren), em SystemVerilog moderno com barramento unificado `serv_pkg.sv`, implementado em três tecnologias:
+1. **[Versão em Relés](https://github.com/VictorGerin/fr4lane/wiki/SERV-em-Reles)**: 4 placas filhas com 2 139 relés SPDT de 5 V (Omron G5V-1) e Backplane dedicado de 4 camadas;
+2. **[Versão CMOS com Card Edge](https://github.com/VictorGerin/fr4lane/wiki/SERV-em-CMOS-Card-Edge)**: 4 placas filhas com dedos de ouro (*Gold Fingers*) na borda inferior alinhados a 20 mm e Backplane CMOS de 4 camadas;
+3. **[Versão RTL Discreta](https://github.com/VictorGerin/fr4lane/wiki/SERV-em-RTL-Discreto)**: 10 placas modulares com 11 177 componentes físicos (BC548B + resistores) e simulação analógica SPICE em 4 cantos PVT.
+
+Veja a documentação completa no hub do [Processador SERV RISC-V na Wiki](https://github.com/VictorGerin/fr4lane/wiki/Processador-SERV-RISC-V).
 
 <p align="center">
   <img src="docs/img/serv_alu_board_relay_3d.png" alt="Placa da ALU do SERV RISC-V em tecnologia Relay" width="620">
@@ -39,8 +44,8 @@ Verilog ──Yosys/ABC──▶ células (.lib) ──expansão (.sp)──▶ 
 - floorplan com fences, regions, guides e keepouts, editado num [editor visual](https://github.com/VictorGerin/fr4lane/wiki/Editor-visual) no navegador, e [conectores](https://github.com/VictorGerin/fr4lane/wiki/Floorplan#conectores) em qualquer borda com a pinagem escolhida (para casar placas vizinhas);
 - placement por anelamento simulado e roteamento por negociação (PathFinder) em grade, compilados com numba;
 - fluxo hierárquico com [macros](https://github.com/VictorGerin/fr4lane/wiki/Módulos-e-macros#macros-fluxo-hierárquico): blocos repetidos são montados uma vez e copiados;
-- barramentos tri-state (drivers de coletor aberto e a terminação do barramento) e sistemas de várias placas ligadas por um conector comum, conferidos juntos pelo `fr4lane-system` (drive entre placas e simulação do conjunto);
-- gerador automático de Backplane PCB (`fr4lane-backplane`): cria a placa mãe física com slots para placas filhas, bornes de alimentação, capacitores de desacoplamento, barras de E/S externa e roteamento 100% automático de barramentos e trilhas inter-placas;
+- barramentos tri-state (drivers de coletor aberto e a terminação do barramento) e sistemas de várias placas ligadas por um conector comum, conferidos juntos pelo [`fr4lane-system`](https://github.com/VictorGerin/fr4lane/wiki/Verificacao-de-Sistemas) (drive entre placas e simulação do conjunto);
+- gerador automático de Backplane PCB ([`fr4lane-backplane`](https://github.com/VictorGerin/fr4lane/wiki/Gerador-de-Backplanes)): cria a placa mãe física com slots para placas filhas, bornes de alimentação, capacitores de desacoplamento, barras de E/S externa e roteamento 100% automático de barramentos e trilhas inter-placas;
 - placas de 4 camadas (VDD e GND em planos) ou de [2 camadas](https://github.com/VictorGerin/fr4lane/wiki/Placa-de-2-camadas);
 - projeto KiCad com grupos por módulo, modelos 3D, lista de materiais e DRC.
 
