@@ -137,8 +137,10 @@ def synthesize_gal(
     reads = "\n".join(f"read_verilog -sv {defs} {Path(s).resolve().as_posix()}" for s in sources)
 
     # Restrições de síntese do ABC baseadas no dispositivo GAL
+    # GAL22V10 possui macrocélulas com até 16 termos de produto. Limitamos as entradas
+    # a 16 para garantir que qualquer cone caiba confortavelmente num único chip.
     max_p = 16 if dev.name == "GAL22V10" else 8
-    max_in = dev.max_inputs
+    max_in = 16 if dev.name == "GAL22V10" else 10
 
     script_content = f"""{reads}
 hierarchy -check -top {top}

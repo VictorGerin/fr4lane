@@ -148,9 +148,12 @@ def pack_design_to_gals(design: SynthesizedDesign, chip_prefix: str = "U") -> Li
 
             for idx, candidate in enumerate(unplaced):
                 # 1. Verifica compatibilidade de clock
+                test_clk = cluster_clock
                 if candidate.is_registered:
-                    if cluster_clock is not None and candidate.clk_net != cluster_clock:
+                    if test_clk is not None and candidate.clk_net != test_clk:
                         continue
+                    test_clk = candidate.clk_net
+
                 # 2. Verifica termos de produto
                 test_cluster = current_cluster + [candidate]
                 caps = [olmc.product_terms for olmc in dev.olmcs]
@@ -165,9 +168,12 @@ def pack_design_to_gals(design: SynthesizedDesign, chip_prefix: str = "U") -> Li
                 ext_inputs = set()
                 for c in test_cluster:
                     ext_inputs.update(c.support_inputs - cluster_outputs)
+                if test_clk:
+                    ext_inputs.discard(test_clk)
 
-                # Pinos de entrada disponíveis: dedicados + macrocélulas sobressalentes
-                available_in_pins = len(dev.dedicated_inputs) + (dev.num_olmcs - len(test_cluster))
+                # Pinos de entrada disponíveis: dedicados (menos clock se houver) + macrocélulas sobressalentes
+                avail_ded = len(dev.dedicated_inputs) - (1 if test_clk else 0)
+                available_in_pins = avail_ded + (dev.num_olmcs - len(test_cluster))
                 if len(ext_inputs) > available_in_pins:
                     continue
 
