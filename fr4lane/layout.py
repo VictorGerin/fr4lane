@@ -235,6 +235,16 @@ def card_edge_socket(ref, n_pins, value="", pitch=2.54, horizontal=False):
         (bw / 2, span + 3.0, bw / 2, -3.0),
         (bw / 2, -3.0, -bw / 2, -3.0),
     ]
+
+    # Modelo 3D mapeado para a biblioteca oficial do KiCad (Connector_PinSocket_2.54mm)
+    m_pins = min(n_pins, 40)
+    scl_y = 1.0 if n_pins <= 40 else round(((n_pins - 1) * pitch) / (39.0 * 2.54), 4)
+    fp.model = {
+        "path": f"${{KICAD_3DMODEL_DIR}}/Connector_PinSocket_2.54mm.3dshapes/PinSocket_1x{m_pins:02d}_P2.54mm_Vertical.step",
+        "offset": (0.0, 0.0, 0.0),
+        "scale": (1.0, scl_y, 1.0),
+        "rotate": (0.0, 0.0, 0.0),
+    }
     return fp
 
 
