@@ -19,7 +19,7 @@ funções: o que o editor desenha é o que o fluxo monta.
 import re
 from dataclasses import dataclass
 
-from .floorplan import MAX_PINS, FloorplanError
+from .floorplan import MAX_PINS, MAX_CARD_EDGE_PINS, FloorplanError
 
 PITCH = 2.54
 HALF = 1.8                 # meia largura do contorno (courtyard) da barra de pinos
@@ -151,8 +151,9 @@ def plan(declared, ports, vdd, gnd, geo, source="floorplan"):
                         raise FloorplanError(f"{where}: a porta '{label}' já está no conector '{used[label]}'")
                     used[label] = c.name
                 entries.append((net, label))
-        if len(entries) > MAX_PINS:
-            raise FloorplanError(f"{where}: {len(entries)} pinos; o máximo é {MAX_PINS} por conector "
+        max_p = MAX_CARD_EDGE_PINS if getattr(c, "type", "pin_header") == "card_edge" else MAX_PINS
+        if len(entries) > max_p:
+            raise FloorplanError(f"{where}: {len(entries)} pinos; o máximo é {max_p} por conector "
                                  "(divida em mais de um)")
         out.append(Plan(c.name, c.side, c.at, entries, auto=False,
                         type=getattr(c, "type", "pin_header"),

@@ -257,3 +257,36 @@ O sistema SERV pode ser montado fisicamente como um **rack modular** ou chassi d
 <p align="center">
   <img src="img/serv_system_backplane_relay_3d.png" alt="Backplane PCB do SERV em Tecnologia Relay (3D)" width="820">
 </p>
+
+---
+
+## 8. Arquitetura CMOS com Card Edge (Dedos de Ouro) e Alinhamento Mecânico
+
+Na família **discrete CMOS** (MOSFETs 2N7002 / BSS84 em SOT-23), as 4 placas filhas foram reprojetadas para inserção vertical em gaiola de cartões (*card cage*) utilizando **exclusivamente dedos de ouro (`card_edge`)** na borda inferior (`side: "bottom"`), eliminando todos os conectores laterais:
+
+<p align="center">
+  <img src="img/serv_system_backplane_cmos_3d.png" alt="Backplane PCB do SERV em Tecnologia CMOS com Card Edge (3D)" width="820">
+</p>
+
+### Alinhamento Frontal das Placas Filhas
+Para assegurar montagem nivelada no chassi:
+1. **Pino 1 Unificado ($at = 20.0$ mm)**: Em todas as 4 placas filhas, o primeiro dedo de ouro do conector `J_EDGE1` inicia rigorosamente a $20.0$ mm da borda frontal.
+2. **Entalhes de Chaveamento Padronizados**: Placas com múltiplos barramentos (`serv_rf_mem_board`, `serv_ctrl_board`, `serv_alu_board`) possuem entalhes (*keying notches*) com folga de $6.0$ mm casando perfeitamente com os soquetes fêmea receptores no backplane.
+3. **Placa do PC (`serv_pc_board_cmos`)**:
+   - 986 componentes MOSFET discretos, 242 × 204 mm.
+   - 100% roteada em 2 camadas (0 nets incompletas, 0 violações de folga).
+   - Conector Card Edge de 49 pinos contínuos na borda inferior.
+
+<p align="center">
+  <img src="img/serv_pc_board_cmos_3d.png" alt="Placa do PC do SERV em CMOS com Dedos de Ouro (3D)" width="780">
+</p>
+
+### Comandos de Compilação e Geração:
+```bash
+# Síntese e Roteamento da Placa Filha do PC em CMOS
+fr4lane --top serv_pc_board --lib cmos --src "rtl/*.sv" --floorplan floorplan/serv_pc_board.floorplan.json
+
+# Síntese e Roteamento do Backplane CMOS com Soquetes Card Edge
+fr4lane-backplane --top serv_system --boards serv_ctrl_board serv_pc_board serv_alu_board serv_rf_mem_board --lib cmos --sources "rtl/*.sv"
+```
+

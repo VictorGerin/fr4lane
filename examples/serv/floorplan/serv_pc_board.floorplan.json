@@ -1,11 +1,31 @@
 {
-  "_comment": "Placa do Program Counter (PC) do SERV RV32I bit-serial com macro serv_ctrl",
-  "board": {
-    "width": 400,
-    "height": 420
-  },
-  "buffer_ports": true,
-  "macros": [
-    "serv_ctrl"
+  "_comment": "Placa do Program Counter (PC) do SERV RV32I bit-serial em tecnologia CMOS com Card Edge alinhado",
+  "connectors": [
+    {
+      "name": "J_EDGE",
+      "side": "bottom",
+      "at": 20.0,
+      "type": "card_edge",
+      "pins": [
+        "VDD",
+        "GND",
+        "clk",
+        "i_rst",
+        "i_pc_en",
+        "i_cnt12to31",
+        "i_cnt0",
+        "i_cnt1",
+        "i_cnt2",
+        "i_jump",
+        "i_jal_or_jalr",
+        "i_utype",
+        "i_pc_rel",
+        "i_imm",
+        "i_bufreg_q",
+        "o_ctrl_rd",
+        "o_bad_pc",
+        "o_ibus_adr[*]"
+      ]
+    }
   ]
 }

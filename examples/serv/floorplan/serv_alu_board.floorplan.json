@@ -1,11 +1,79 @@
 {
-  "_comment": "Placa da ALU do SERV RV32I bit-serial com macro serv_alu",
-  "board": {
-    "width": 520,
-    "height": 750
-  },
-  "buffer_ports": true,
-  "macros": [
-    "serv_alu"
+  "_comment": "Placa de ALU e Registradores do SERV em CMOS com Card Edge qu\u00e1druplo alinhado",
+  "connectors": [
+    {
+      "name": "J_EDGE1",
+      "side": "bottom",
+      "at": 20.0,
+      "type": "card_edge",
+      "pins": [
+        "VDD",
+        "GND",
+        "clk",
+        "i_cnt_en",
+        "i_cnt0",
+        "i_cnt1",
+        "i_cnt7",
+        "i_cnt_done",
+        "i_init",
+        "i_alu_sub",
+        "i_alu_cmp_eq",
+        "i_alu_cmp_sig",
+        "i_bufreg_en",
+        "i_bufreg_rs1_en",
+        "i_bufreg_imm_en",
+        "i_bufreg_clr_lsb",
+        "i_bufreg_sh_signed",
+        "i_op_b_sel",
+        "i_shift_op",
+        "i_sh_right",
+        "i_rs1",
+        "i_rs2",
+        "i_imm",
+        "o_alu_rd",
+        "o_alu_cmp",
+        "o_sh_done",
+        "o_bufreg_q",
+        "o_bufreg2_q",
+        "i_dbus_ack",
+        "i_alu_bool_op[*]",
+        "i_alu_rd_sel[*]",
+        "i_mem_bytecnt[*]",
+        "o_lsb[*]"
+      ]
+    },
+    {
+      "name": "J_EDGE2",
+      "side": "bottom",
+      "at": 119.98,
+      "type": "card_edge",
+      "pins": [
+        "VDD",
+        "GND",
+        "o_dbus_adr[*]"
+      ]
+    },
+    {
+      "name": "J_EDGE3",
+      "side": "bottom",
+      "at": 209.8,
+      "type": "card_edge",
+      "pins": [
+        "VDD",
+        "GND",
+        "o_dbus_dat[*]"
+      ]
+    },
+    {
+      "name": "J_EDGE4",
+      "side": "bottom",
+      "at": 299.62,
+      "type": "card_edge",
+      "pins": [
+        "VDD",
+        "GND",
+        "i_dbus_rdt[*]"
+      ]
+    }
   ]
 }

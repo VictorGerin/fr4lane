@@ -92,6 +92,7 @@ WHAT = ("place", "route")
 LAYERS = ("F.Cu", "B.Cu")
 SIDES = ("left", "right", "top", "bottom")
 MAX_PINS = 40          # maior barra de pinos 1xN da biblioteca do KiCad
+MAX_CARD_EDGE_PINS = 120 # conectores de borda suportam até 120 pinos
 CONNECTOR_TYPES = ("pin_header", "pin_socket", "card_edge", "screw_terminal", "idc_box_header", "din41612")
 
 

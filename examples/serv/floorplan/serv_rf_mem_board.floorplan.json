@@ -1,11 +1,55 @@
 {
-  "_comment": "Placa do Register File e Interface de Memória do SERV RV32I bit-serial com macro serv_mem_if",
-  "board": {
-    "width": 320,
-    "height": 400
-  },
-  "buffer_ports": true,
-  "macros": [
-    "serv_mem_if"
+  "_comment": "Placa de Banco de Registradores e Mem\u00f3ria do SERV em CMOS com Card Edge duplo alinhado",
+  "connectors": [
+    {
+      "name": "J_EDGE1",
+      "side": "bottom",
+      "at": 20.0,
+      "type": "card_edge",
+      "pins": [
+        "VDD",
+        "GND",
+        "clk",
+        "i_rst",
+        "i_cnt_en",
+        "i_rf_rreq",
+        "i_rf_wreq",
+        "o_rf_ready",
+        "i_rd_en",
+        "i_ctrl_rd",
+        "i_alu_rd",
+        "i_rd_alu_en",
+        "i_rd_mem_en",
+        "i_mem_signed",
+        "i_mem_word",
+        "i_mem_half",
+        "i_bufreg2_q",
+        "o_rs1",
+        "o_rs2",
+        "o_mem_misalign",
+        "o_rf_wen",
+        "o_rf_ren",
+        "i_bytecnt[*]",
+        "i_lsb[*]",
+        "i_rd_addr[*]",
+        "i_rs1_addr[*]",
+        "i_rs2_addr[*]"
+      ]
+    },
+    {
+      "name": "J_EDGE2",
+      "side": "bottom",
+      "at": 127.6,
+      "type": "card_edge",
+      "pins": [
+        "VDD",
+        "GND",
+        "o_dbus_sel[*]",
+        "o_rf_waddr[*]",
+        "o_rf_wdata[*]",
+        "o_rf_raddr[*]",
+        "i_rf_rdata[*]"
+      ]
+    }
   ]
 }

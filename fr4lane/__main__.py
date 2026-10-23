@@ -10,6 +10,7 @@ e --out saem dele quando não são dados.
 """
 
 import argparse
+import glob
 import json
 import os
 import re
@@ -154,6 +155,15 @@ def main(argv=None):
             log("ERRO: sem fontes: use --src ou 'src' no fr4lane.json"
                 + (f" ({proj.config})" if proj.config else " (nenhum fr4lane.json na pasta atual nem acima)"))
             return 3
+    else:
+        expanded = []
+        for s in args.src:
+            if "*" in s or "?" in s:
+                g = glob.glob(s)
+                expanded.extend(g if g else [s])
+            else:
+                expanded.append(s)
+        args.src = expanded
     if args.no_tb:
         args.tb = None
     elif not args.tb and proj.testbench(args.top):

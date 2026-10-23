@@ -1,11 +1,92 @@
 {
-  "_comment": "Placa de Controle do SERV RV32I bit-serial com macro serv_immdec",
-  "board": {
-    "width": 520,
-    "height": 660
-  },
-  "buffer_ports": true,
-  "macros": [
-    "serv_immdec"
+  "_comment": "Placa de Controle e Decodifica\u00e7\u00e3o do SERV em CMOS com Card Edge triplo alinhado",
+  "connectors": [
+    {
+      "name": "J_EDGE1",
+      "side": "bottom",
+      "at": 20.0,
+      "type": "card_edge",
+      "pins": [
+        "VDD",
+        "GND",
+        "clk",
+        "i_rst",
+        "i_ibus_ack",
+        "o_ibus_cyc",
+        "o_dbus_cyc",
+        "o_dbus_we",
+        "i_dbus_ack",
+        "o_rf_rreq",
+        "o_rf_wreq",
+        "i_rf_ready",
+        "o_rd_en",
+        "o_init",
+        "o_cnt_en",
+        "o_cnt0to3",
+        "o_cnt12to31",
+        "o_cnt0",
+        "o_cnt1",
+        "o_cnt2",
+        "o_cnt3",
+        "o_cnt7",
+        "o_cnt11",
+        "o_cnt12",
+        "o_cnt_done",
+        "o_ctrl_pc_en",
+        "o_ctrl_jump",
+        "o_ctrl_jal_or_jalr",
+        "o_ctrl_utype",
+        "o_ctrl_pc_rel",
+        "o_ctrl_mret",
+        "o_imm",
+        "i_alu_cmp",
+        "i_sh_done",
+        "i_lsb1",
+        "i_mem_misalign"
+      ]
+    },
+    {
+      "name": "J_EDGE2",
+      "side": "bottom",
+      "at": 114.9,
+      "type": "card_edge",
+      "pins": [
+        "VDD",
+        "GND",
+        "o_bufreg_en",
+        "o_bufreg_rs1_en",
+        "o_bufreg_imm_en",
+        "o_bufreg_clr_lsb",
+        "o_bufreg_sh_signed",
+        "o_op_b_sel",
+        "o_shift_op",
+        "o_sh_right",
+        "o_alu_sub",
+        "o_alu_cmp_eq",
+        "o_alu_cmp_sig",
+        "o_rd_alu_en",
+        "o_mem_signed",
+        "o_mem_word",
+        "o_mem_half",
+        "o_rd_mem_en",
+        "o_rd_addr[*]",
+        "o_rs1_addr[*]",
+        "o_rs2_addr[*]",
+        "o_alu_bool_op[*]",
+        "o_alu_rd_sel[*]",
+        "o_mem_bytecnt[*]"
+      ]
+    },
+    {
+      "name": "J_EDGE3",
+      "side": "bottom",
+      "at": 219.96,
+      "type": "card_edge",
+      "pins": [
+        "VDD",
+        "GND",
+        "i_ibus_rdt[*]"
+      ]
+    }
   ]
 }
