@@ -31,6 +31,7 @@ fr4lane-fpedit = "fr4lane.fpedit:main"
 fr4lane-drc = "fr4lane.drc:main"
 fr4lane-system = "fr4lane.system:main"
 fr4lane-cellsim = "fr4lane.cellsim:main"
+fr4lane-backplane = "fr4lane.backplane:main"
 
 [tool.setuptools]
 packages = ["fr4lane"]

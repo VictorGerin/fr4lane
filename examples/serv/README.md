@@ -231,3 +231,29 @@ Testes inclusos na suíte:
 - `test_fibonacci.c`: Sequência de Fibonacci iterativa.
 - `test_fibonacci_rec.c`: Fibonacci recursivo (testa chamadas de função e pilha de registradores).
 - `test_array.c`: Manipulação de ponteiros, arrays e laços na memória RAM.
+
+---
+
+## 7. Backplane PCB Automatizado (`fr4lane-backplane`)
+
+O sistema SERV pode ser montado fisicamente como um **rack modular** ou chassi de placas filhas conectadas por uma placa mãe / backplane dedicada:
+
+- **Top do Sistema**: `serv_system.sv` (backplane 100% estrutural sem portas lógicas ativas, interligando `u_ctrl`, `u_pc`, `u_alu` e `u_rf_mem`).
+- **Comando do Backplane**:
+  ```bash
+  fr4lane-backplane --top serv_system --boards serv_ctrl_board serv_pc_board serv_alu_board serv_rf_mem_board --lib relay --sources "rtl/*.sv"
+  ```
+- **Especificações e Características Técnicas**:
+  - **4 Slots Mecânicos Padronizados**: Barras de soquetes fêmea de 2,54 mm (`PinSocket_1xN_P2.54mm_Vertical`) casando perfeitamente com os pinos macho das 4 placas filhas.
+  - **Distribuição de Potência Industrial**:
+    - Borne Phoenix MKDS 5.08 mm para entrada de 5V DC e GND;
+    - Capacitor eletrolítico bulk de 1000 µF 16V na entrada de alimentação;
+    - Capacitores cerâmicos de desacoplamento de 100 nF dedicados por slot;
+    - Stackup de 4 camadas com planos internos maciços `In1.Cu` (GND) e `In2.Cu` (VDD) para suportar altas correntes instantâneas de comutação.
+  - **Conectores de E/S Externa (`J_EXT1` a `J_EXT6`)**: 195 sinais externos roteados para barramentos de memória Wishbone (`ibus` e `dbus`), registradores, clock e reset.
+  - **Roteamento 100% Automático**: 266 nets de sinal roteadas pelo algoritmo A* adaptativo (3.633 segmentos de trilha, 863 vias, 0 nets incompletas).
+  - **Furação M3**: 4 furos de fixação mecânica para rack Eurocard / gabinete.
+
+<p align="center">
+  <img src="img/serv_system_backplane_relay_3d.png" alt="Backplane PCB do SERV em Tecnologia Relay (3D)" width="820">
+</p>

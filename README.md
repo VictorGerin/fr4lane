@@ -40,6 +40,7 @@ Verilog ──Yosys/ABC──▶ células (.lib) ──expansão (.sp)──▶ 
 - placement por anelamento simulado e roteamento por negociação (PathFinder) em grade, compilados com numba;
 - fluxo hierárquico com [macros](https://github.com/VictorGerin/fr4lane/wiki/Módulos-e-macros#macros-fluxo-hierárquico): blocos repetidos são montados uma vez e copiados;
 - barramentos tri-state (drivers de coletor aberto e a terminação do barramento) e sistemas de várias placas ligadas por um conector comum, conferidos juntos pelo `fr4lane-system` (drive entre placas e simulação do conjunto);
+- gerador automático de Backplane PCB (`fr4lane-backplane`): cria a placa mãe física com slots para placas filhas, bornes de alimentação, capacitores de desacoplamento, barras de E/S externa e roteamento 100% automático de barramentos e trilhas inter-placas;
 - placas de 4 camadas (VDD e GND em planos) ou de [2 camadas](https://github.com/VictorGerin/fr4lane/wiki/Placa-de-2-camadas);
 - projeto KiCad com grupos por módulo, modelos 3D, lista de materiais e DRC.
 

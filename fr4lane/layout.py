@@ -175,3 +175,19 @@ def pin_header(ref, n_pins, value="", horizontal=False):
         fp.pads.append(Pad(str(i + 1), rx, ry, 1.7, 1.7, shape, tht=True, drill=1.0, fp=fp))
     fp.silk = [(-1.33, -1.33, -1.33, 1.33)] if horizontal else [(-1.33, -1.33, 1.33, -1.33)]
     return fp
+
+
+def pin_socket(ref, n_pins, value="", horizontal=False):
+    """Barra de soquetes fêmea 1xN, 2.54 mm (KiCad Connector_PinSocket_2.54mm).
+    Mating connector padrão para barras de pinos macho."""
+    lib_name = f"Connector_PinSocket_2.54mm:PinSocket_1x{n_pins:02d}_P2.54mm_Vertical"
+    span = (n_pins - 1) * 2.54
+    courtyard = (-1.8, -1.8, span + 1.8, 1.8) if horizontal else (-1.8, -1.8, 1.8, span + 1.8)
+    fp = Footprint(ref, value or f"Socket_01x{n_pins:02d}", lib_name, courtyard=courtyard, tht=True,
+                   rot=90 if horizontal else 0)
+    for i in range(n_pins):
+        shape = "rect" if i == 0 else "oval"
+        rx, ry = (i * 2.54, 0.0) if horizontal else (0.0, i * 2.54)
+        fp.pads.append(Pad(str(i + 1), rx, ry, 1.7, 1.7, shape, tht=True, drill=1.0, fp=fp))
+    fp.silk = [(-1.33, -1.33, -1.33, 1.33)] if horizontal else [(-1.33, -1.33, 1.33, -1.33)]
+    return fp
