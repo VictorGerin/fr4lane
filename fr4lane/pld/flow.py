@@ -1,5 +1,6 @@
 """Fluxo completo de síntese, empacotamento, JEDEC e PCB para dispositivos GAL."""
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -71,7 +72,36 @@ def run_gal_flow(
 
     # 5. Geração do circuito impresso KiCad (.kicad_pcb)
     pcb_path = outdir / f"{top}_{dev.name.lower()}.kicad_pcb"
-    generate_gal_pcb(synth_design, packed_chips, out_pcb_path=pcb_path, layers=layers, floorplan=floorplan)
+    board = generate_gal_pcb(synth_design, packed_chips, out_pcb_path=pcb_path, layers=layers, floorplan=floorplan)
+
+    # 6. Grava placement.json para integração visual com o editor de floorplan (fpedit)
+    parts = []
+    for f in board.footprints:
+        x0, y0, x1, y1 = f.courtyard
+        parts.append({
+            "ref": f.ref,
+            "module": None,
+            "box": [round(f.x + x0, 3), round(f.y + y0, 3), round(f.x + x1, 3), round(f.y + y1, 3)]
+        })
+    placement_data = {
+        "top": top,
+        "family": dev.name.lower(),
+        "library": dev.name,
+        "sources": [str(s.resolve()) for s in sources],
+        "layers": layers,
+        "placed": True,
+        "board": [board.width, board.height],
+        "floorplan": str(Path(floorplan).resolve()) if floorplan else None,
+        "geo": {"row_pitch": 38.0, "pin_pitch": 2.54},
+        "min_width": board.width,
+        "module_width": {},
+        "module_types": {},
+        "footprints": parts,
+        "macros": None,
+        "ports": [{"name": p, "dir": "input" if p in synth_design.primary_inputs else "output"} for p in list(synth_design.primary_inputs) + list(synth_design.primary_outputs)],
+        "connectors": [],
+    }
+    (outdir / "placement.json").write_text(json.dumps(placement_data, indent=2, ensure_ascii=False), encoding="utf-8")
 
     # Métricas globais
     tot_used = sum(len(c.olmc_placements) for c in packed_chips)

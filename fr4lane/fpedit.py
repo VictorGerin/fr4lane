@@ -78,7 +78,9 @@ def run_summary(run_file):
 
 
 def families():
-    return library.families()
+    base = library.families()
+    pld_fams = ["gal22v10", "gal16v8"]
+    return sorted(base + [f for f in pld_fams if f not in base])
 
 
 def macro_boxes(run, top, mods_w, geo):
