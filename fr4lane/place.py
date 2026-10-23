@@ -31,7 +31,9 @@ from types import SimpleNamespace
 from .floorplan import FloorplanError, contains, overlap
 from . import anneal, connectors
 from .jit import COMPILED
-from .layout import Board, Rules, Track, Via, footprint_from_library, pin_header
+from .layout import (Board, Rules, Track, Via, footprint_from_library,
+                     pin_header, pin_socket, card_edge_fingers, screw_terminal_block,
+                     idc_box_header, mounting_hole)
 from .progress import Progress
 
 
@@ -412,10 +414,22 @@ def place(lib, design, params=None, rules=None, floorplan=None, extra_fixed=None
     if dec.get("bulk") and not params.bare:
         decap(dec["bulk"], left_x - 1.0, connectors.bulk_y(plans, geo))
 
-    # conectores: barras de pinos verticais nas laterais e deitadas (giradas 90°) em cima e embaixo
+    # conectores: barras de pinos, soquetes, dedos de ouro ou bornes conforme o floorplan
     port_label = {}
     for jn, c in enumerate(placed, 1):
-        hdr = pin_header(f"J{jn}", len(c.plan.entries), c.plan.name, horizontal=c.horizontal)
+        conn_type = getattr(c.plan, "type", "pin_header")
+        n_pins = len(c.plan.entries)
+        pitch = getattr(c.plan, "pitch", 2.54)
+        if conn_type == "pin_socket":
+            hdr = pin_socket(f"J{jn}", n_pins, c.plan.name, horizontal=c.horizontal)
+        elif conn_type == "card_edge":
+            hdr = card_edge_fingers(f"J{jn}", n_pins, c.plan.name, pitch=pitch, horizontal=c.horizontal)
+        elif conn_type == "screw_terminal":
+            hdr = screw_terminal_block(f"J{jn}", n_pins, c.plan.name, pitch=pitch, horizontal=c.horizontal)
+        elif conn_type == "idc_box_header":
+            hdr = idc_box_header(f"J{jn}", n_pins, c.plan.name, horizontal=c.horizontal)
+        else:
+            hdr = pin_header(f"J{jn}", n_pins, c.plan.name, horizontal=c.horizontal)
         hdr.x, hdr.y = c.pins[0]
         for pad, (net, label) in zip(hdr.pads, c.plan.entries):
             pad.net = net or ""
@@ -423,6 +437,11 @@ def place(lib, design, params=None, rules=None, floorplan=None, extra_fixed=None
         hdr.side = c.plan.side
         port_label[hdr.ref] = [lbl for _, lbl in c.plan.entries]
         footprints.append(hdr)
+
+    # furos de fixação com parafuso declarados no floorplan
+    if floorplan and getattr(floorplan, "mounting_holes", None):
+        for h in floorplan.mounting_holes:
+            footprints.append(mounting_hole(h.ref, h.x, h.y, size=h.size))
 
     board = Board(W, H, footprints, design.vdd, design.gnd, rules)
     board.layers = params.layers

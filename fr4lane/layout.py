@@ -191,3 +191,110 @@ def pin_socket(ref, n_pins, value="", horizontal=False):
         fp.pads.append(Pad(str(i + 1), rx, ry, 1.7, 1.7, shape, tht=True, drill=1.0, fp=fp))
     fp.silk = [(-1.33, -1.33, -1.33, 1.33)] if horizontal else [(-1.33, -1.33, 1.33, -1.33)]
     return fp
+
+
+def card_edge_fingers(ref, n_pins, value="", pitch=2.54, horizontal=False):
+    """Dedos de ouro (Gold Fingers) para borda da PCB. Pads SMD chanfrados."""
+    lib_name = f"Connector_PCBEdge:CardEdge_1x{n_pins:02d}_P{pitch:.2f}mm_Fingers"
+    span = (n_pins - 1) * pitch
+    # No sentido horizontal, pads alongados em Y (7mm); no vertical, alongados em X (7mm)
+    pw, ph = (1.5, 7.0) if not horizontal else (7.0, 1.5)
+    courtyard = (-1.0, -4.0, span + 1.0, 4.0) if not horizontal else (-4.0, -1.0, 4.0, span + 1.0)
+    fp = Footprint(ref, value or f"GoldFingers_1x{n_pins:02d}", lib_name, courtyard=courtyard, tht=False,
+                   rot=90 if horizontal else 0)
+    for i in range(n_pins):
+        rx, ry = (i * pitch, 0.0) if not horizontal else (0.0, i * pitch)
+        fp.pads.append(Pad(str(i + 1), rx, ry, pw, ph, "roundrect", tht=False, fp=fp))
+    # Linha guia do chanfro da borda (bevel) na serigrafia
+    fp.silk = [(-1.0, 3.5, span + 1.0, 3.5)] if not horizontal else [(3.5, -1.0, 3.5, span + 1.0)]
+    return fp
+
+
+def card_edge_socket(ref, n_pins, value="", pitch=2.54, horizontal=False):
+    """Slot receptor fêmea para Card Edge (dedos de ouro) no Backplane."""
+    lib_name = f"Connector_PCBEdge:CardEdge_1x{n_pins:02d}_P{pitch:.2f}mm_Socket"
+    span = (n_pins - 1) * pitch
+    courtyard = (-4.5, -2.5, span + 4.5, 2.5) if not horizontal else (-2.5, -4.5, 2.5, span + 4.5)
+    fp = Footprint(ref, value or f"CardEdgeSocket_1x{n_pins:02d}", lib_name, courtyard=courtyard, tht=True,
+                   rot=90 if horizontal else 0)
+    for i in range(n_pins):
+        shape = "rect" if i == 0 else "oval"
+        rx, ry = (i * pitch, 0.0) if not horizontal else (0.0, i * pitch)
+        fp.pads.append(Pad(str(i + 1), rx, ry, 1.8, 1.8, shape, tht=True, drill=1.1, fp=fp))
+    # Contorno plástico do slot fêmea
+    bw = 8.0
+    fp.silk = [
+        (-3.0, -bw / 2, span + 3.0, -bw / 2),
+        (span + 3.0, -bw / 2, span + 3.0, bw / 2),
+        (span + 3.0, bw / 2, -3.0, bw / 2),
+        (-3.0, bw / 2, -3.0, -bw / 2),
+    ] if not horizontal else [
+        (-bw / 2, -3.0, -bw / 2, span + 3.0),
+        (-bw / 2, span + 3.0, bw / 2, span + 3.0),
+        (bw / 2, span + 3.0, bw / 2, -3.0),
+        (bw / 2, -3.0, -bw / 2, -3.0),
+    ]
+    return fp
+
+
+def screw_terminal_block(ref, n_pins, value="", pitch=5.08, horizontal=False):
+    """Bloco terminal a parafuso (Phoenix MKDS ou compatível)."""
+    lib_name = f"TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-{n_pins}-5.08_1x{n_pins:02d}_P5.08mm_Horizontal"
+    span = (n_pins - 1) * pitch
+    courtyard = (-2.5, -4.5, span + 2.5, 4.5) if not horizontal else (-4.5, -2.5, 4.5, span + 2.5)
+    fp = Footprint(ref, value or f"TerminalBlock_1x{n_pins:02d}", lib_name, courtyard=courtyard, tht=True,
+                   rot=90 if horizontal else 0)
+    for i in range(n_pins):
+        shape = "rect" if i == 0 else "oval"
+        rx, ry = (i * pitch, 0.0) if not horizontal else (0.0, i * pitch)
+        fp.pads.append(Pad(str(i + 1), rx, ry, 3.2, 3.2, shape, tht=True, drill=1.3, fp=fp))
+    fp.silk = [
+        (-2.5, -4.0, span + 2.5, -4.0),
+        (span + 2.5, -4.0, span + 2.5, 4.0),
+        (span + 2.5, 4.0, -2.5, 4.0),
+        (-2.5, 4.0, -2.5, -4.0),
+    ] if not horizontal else [
+        (-4.0, -2.5, -4.0, span + 2.5),
+        (-4.0, span + 2.5, 4.0, span + 2.5),
+        (4.0, span + 2.5, 4.0, -2.5),
+        (4.0, -2.5, -4.0, -2.5),
+    ]
+    return fp
+
+
+def idc_box_header(ref, n_pins, value="", horizontal=False):
+    """Conector IDC com trava plástica (Shrouded Box Header 2xN)."""
+    rows = 2
+    cols = n_pins // rows
+    pitch = 2.54
+    lib_name = f"Connector_IDC:IDC-Header_2x{cols:02d}_P2.54mm_Vertical"
+    span = (cols - 1) * pitch
+    courtyard = (-3.5, -4.5, span + 3.5, 4.5)
+    fp = Footprint(ref, value or f"IDC_Header_2x{cols:02d}", lib_name, courtyard=courtyard, tht=True,
+                   rot=90 if horizontal else 0)
+    pad_idx = 1
+    for c in range(cols):
+        for r in range(rows):
+            rx = c * pitch
+            ry = (r - 0.5) * pitch
+            shape = "rect" if pad_idx == 1 else "oval"
+            fp.pads.append(Pad(str(pad_idx), rx, ry, 1.7, 1.7, shape, tht=True, drill=1.0, fp=fp))
+            pad_idx += 1
+    # Caixa plástica do conector
+    fp.silk = [
+        (-3.0, -4.0, span + 3.0, -4.0),
+        (span + 3.0, -4.0, span + 3.0, 4.0),
+        (span + 3.0, 4.0, -3.0, 4.0),
+        (-3.0, 4.0, -3.0, -4.0),
+    ]
+    return fp
+
+
+def mounting_hole(ref, x, y, size="M3"):
+    """Furo de fixação com parafuso (M2.5, M3, M4)."""
+    drill_map = {"M2.5": 2.7, "M3": 3.2, "M4": 4.3}
+    drill = drill_map.get(size.upper(), 3.2)
+    lib_name = f"MountingHole:MountingHole_{drill:.1f}mm_{size.upper()}"
+    fp = Footprint(ref, size.upper(), lib_name, x=x, y=y, courtyard=(-3.0, -3.0, 3.0, 3.0), tht=True)
+    fp.pads.append(Pad("1", 0.0, 0.0, drill, drill, "circle", tht=True, drill=drill, fp=fp))
+    return fp

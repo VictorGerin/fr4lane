@@ -92,6 +92,7 @@ WHAT = ("place", "route")
 LAYERS = ("F.Cu", "B.Cu")
 SIDES = ("left", "right", "top", "bottom")
 MAX_PINS = 40          # maior barra de pinos 1xN da biblioteca do KiCad
+CONNECTOR_TYPES = ("pin_header", "pin_socket", "card_edge", "screw_terminal", "idc_box_header", "din41612")
 
 
 class FloorplanError(Exception):
@@ -117,11 +118,21 @@ class Keepout:
 
 
 @dataclass
+class MountingHoleRule:
+    ref: str
+    x: float
+    y: float
+    size: str = "M3"
+
+
+@dataclass
 class Connector:
     name: str
     side: str              # left | right | top | bottom
     at: float              # posição do pino 1 ao longo da borda (mm), ou None (automático)
     pins: list             # textos do arquivo: portas, barramentos, VDD, GND, NC
+    type: str = "pin_header" # pin_header | pin_socket | card_edge | screw_terminal | idc_box_header | din41612
+    pitch: float = 2.54
 
 
 @dataclass
@@ -134,6 +145,7 @@ class Floorplan:
     macro_keepout: bool = False                    # nenhuma rota de fora por cima dos macros
     macro_channel: float = None                    # canal em volta de cada macro, mm (None: o padrão)
     connectors: list = field(default_factory=list)  # Connector, na ordem do arquivo
+    mounting_holes: list = field(default_factory=list) # MountingHoleRule
     bus_termination: object = True             # True, False ou [portas]: terminação das linhas que saem
     buffer_ports: object = False               # True, False ou [portas]: buffer na entrada das portas
 
@@ -208,7 +220,7 @@ def parse(data, path="floorplan"):
     if not isinstance(data, dict):
         raise FloorplanError(f"{path}: esperado um objeto JSON")
     _keys(data, ("board", "modules", "keepouts", "macros", "macro_keepout", "macro_channel", "connectors",
-                 "bus_termination", "buffer_ports", "_comment"), path)
+                 "mounting_holes", "bus_termination", "buffer_ports", "_comment"), path)
     fp = Floorplan(str(path))
     macros = data.get("macros", [])
     if not isinstance(macros, list) or not all(isinstance(m, str) and m for m in macros):
@@ -290,6 +302,30 @@ def parse(data, path="floorplan"):
             raise FloorplanError(f"{where}: 'layers' deve conter 'F.Cu' e/ou 'B.Cu'")
         fp.keepouts.append(Keepout(name, _rect(k.get("rect"), where), "place" in what, "route" in what, layers))
 
+    holes = data.get("mounting_holes", [])
+    if not isinstance(holes, list):
+        raise FloorplanError(f"{path}: 'mounting_holes' deve ser uma lista")
+    for i, h in enumerate(holes):
+        where = f"{path}: mounting_hole {i + 1}"
+        if isinstance(h, dict):
+            _keys(h, ("ref", "x", "y", "at", "size", "_comment"), where)
+            ref = h.get("ref", f"H{i+1}")
+            size = h.get("size", "M3")
+            if "at" in h:
+                at = h["at"]
+                if not isinstance(at, (list, tuple)) or len(at) != 2:
+                    raise FloorplanError(f"{where}: 'at' deve ser [x, y] em mm")
+                x, y = map(float, at)
+            elif "x" in h and "y" in h:
+                x, y = float(h["x"]), float(h["y"])
+            else:
+                raise FloorplanError(f"{where}: esperado 'at': [x, y] ou 'x' e 'y'")
+            fp.mounting_holes.append(MountingHoleRule(ref, x, y, size))
+        elif isinstance(h, (list, tuple)) and len(h) == 2:
+            fp.mounting_holes.append(MountingHoleRule(f"H{i+1}", float(h[0]), float(h[1]), "M3"))
+        else:
+            raise FloorplanError(f"{where}: esperado objeto ou [x, y]")
+
     conns = data.get("connectors", [])
     if not isinstance(conns, list):
         raise FloorplanError(f"{path}: 'connectors' deve ser uma lista")
@@ -299,7 +335,7 @@ def parse(data, path="floorplan"):
             raise FloorplanError(f"{path}: conector {i + 1}: esperado um objeto")
         name = c.get("name")
         where = f"{path}: conector '{name}'" if name else f"{path}: conector {i + 1}"
-        _keys(c, ("name", "side", "at", "pins", "_comment"), where)
+        _keys(c, ("name", "side", "at", "pins", "type", "pitch", "_comment"), where)
         if not isinstance(name, str) or not name.strip():
             raise FloorplanError(f"{where}: falta 'name'")
         if name in names:
@@ -312,11 +348,15 @@ def parse(data, path="floorplan"):
             at = _num(at, "at", where)
             if at < 0:
                 raise FloorplanError(f"{where}: 'at' não pode ser negativo")
+        conn_type = c.get("type", "pin_header")
+        if conn_type not in CONNECTOR_TYPES:
+            raise FloorplanError(f"{where}: 'type' inválido '{conn_type}' (aceitos: {', '.join(CONNECTOR_TYPES)})")
+        pitch = _num(c.get("pitch", 2.54), "pitch", where) if "pitch" in c else 2.54
         pins = c.get("pins")
         if not isinstance(pins, list) or not pins or not all(isinstance(x, str) and x.strip() for x in pins):
             raise FloorplanError(f"{where}: 'pins' deve ser uma lista de textos (portas, \"a[*]\", "
                                  "\"VDD\", \"GND\", \"NC\")")
-        fp.connectors.append(Connector(name, c["side"], at, [x.strip() for x in pins]))
+        fp.connectors.append(Connector(name, c["side"], at, [x.strip() for x in pins], type=conn_type, pitch=pitch))
 
     # áreas obrigatórias não podem se sobrepor (a não ser um submódulo dentro do pai)
     hard = [r for r in fp.modules.values() if r.type in ("fence", "region")]

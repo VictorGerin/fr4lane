@@ -38,11 +38,13 @@ class Plan:
     at: float
     entries: list
     auto: bool = False
+    type: str = "pin_header"
+    pitch: float = PITCH
 
     @property
     def end(self):
         """Posição do último pino ao longo da borda."""
-        return self.at + (len(self.entries) - 1) * PITCH
+        return self.at + (len(self.entries) - 1) * self.pitch
 
 
 @dataclass
@@ -152,7 +154,9 @@ def plan(declared, ports, vdd, gnd, geo, source="floorplan"):
         if len(entries) > MAX_PINS:
             raise FloorplanError(f"{where}: {len(entries)} pinos; o máximo é {MAX_PINS} por conector "
                                  "(divida em mais de um)")
-        out.append(Plan(c.name, c.side, c.at, entries))
+        out.append(Plan(c.name, c.side, c.at, entries, auto=False,
+                        type=getattr(c, "type", "pin_header"),
+                        pitch=getattr(c, "pitch", PITCH)))
 
     labels = {e[1] for p in out for e in p.entries}
     inputs = [(p.net, p.name) for p in ports if p.direction == "input" and p.name not in used]

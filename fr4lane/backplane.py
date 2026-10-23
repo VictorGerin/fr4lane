@@ -34,8 +34,19 @@ import time
 from pathlib import Path
 
 from . import drc, kicad, layout, route, system, synth
-from .layout import Board, Footprint, Pad, Rules, pin_header, pin_socket
+from .layout import (Board, Footprint, Pad, Rules, pin_header, pin_socket,
+                     card_edge_fingers, card_edge_socket, screw_terminal_block,
+                     idc_box_header, mounting_hole)
 from .library import Library, resolve_family
+
+MATING_MAP = {
+    "pin_header": "pin_socket",        # pino macho na filha -> soquete fêmea no backplane
+    "pin_socket": "pin_header",        # soquete fêmea na filha -> pino macho no backplane
+    "card_edge": "card_edge_socket",   # dedos de ouro na filha -> slot receptor card edge no backplane
+    "screw_terminal": "screw_terminal",# borne parafuso na filha -> borne parafuso no backplane
+    "idc_box_header": "idc_box_header",
+    "din41612": "din41612_socket",
+}
 
 
 # ------------------------------------------------------------------ Auxiliares de Footprints
@@ -124,6 +135,7 @@ def generate_backplane(
     col_gap=7.62,
     layers=4,
     ext_io=True,
+    floorplan=None,
     out_dir=None,
     no_route=False,
     no_drc=False,
@@ -137,12 +149,43 @@ def generate_backplane(
     out_dir = Path(out_dir) if out_dir else Path("build/pcb") / f"{top}_backplane_{lib_family_name}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # Carrega floorplan do backplane se existir
+    bp_fplan = None
+    fplan_cands = [floorplan] if floorplan else [
+        Path(f"{top}.floorplan.json"),
+        Path("floorplan") / f"{top}.floorplan.json",
+        Path("build") / f"{top}.floorplan.json",
+    ]
+    for cand in fplan_cands:
+        if cand and Path(cand).is_file():
+            try:
+                bp_fplan = json.loads(Path(cand).read_text(encoding="utf-8"))
+                print(f"  Floorplan do backplane detectado: {cand}")
+                break
+            except Exception:
+                pass
+
+    if bp_fplan:
+        slot_pitch = bp_fplan.get("slot_pitch", slot_pitch)
+        col_gap = bp_fplan.get("col_gap", col_gap)
+        layers = bp_fplan.get("layers", layers)
+
+    ext_io_type = "pin_header"
+    bp_mounting_holes = []
+    if bp_fplan:
+        if "external_io" in bp_fplan:
+            eio = bp_fplan["external_io"]
+            ext_io_type = eio.get("type", "pin_header") if isinstance(eio, dict) else str(eio)
+        bp_mounting_holes = bp_fplan.get("mounting_holes", [])
+
     print(f"\n=======================================================")
     print(f"  fr4lane Backplane Generator: {top}")
     print(f"  Tecnologia das filhas: {lib_family_name}")
     print(f"  Placas filhas: {', '.join(boards)}")
     print(f"  Camadas: {layers} (plano GND In1.Cu / plano VDD In2.Cu)")
     print(f"  Slot Pitch: {slot_pitch} mm | Gap entre colunas: {col_gap} mm")
+    if bp_fplan:
+        print(f"  Configuração Externa: E/S = {ext_io_type} | Furos customizados = {len(bp_mounting_holes)}")
     print(f"=======================================================\n")
 
     # 1. Carrega o placement das placas filhas
@@ -230,9 +273,23 @@ def generate_backplane(
                 n_pins = len(pins)
                 if n_pins == 0:
                     continue
-                # Soquete fêmea correspondente
+                # Conector correspondente via Mating Map (card_edge -> socket, pin_header -> pin_socket, etc.)
+                conn_type = c.get("type", "pin_header")
+                mating = MATING_MAP.get(conn_type, "pin_socket")
+                c_pitch = c.get("pitch", 2.54)
                 ref = f"J_{inst}_{c['name']}"
-                fp = pin_socket(ref=ref, n_pins=n_pins, value=f"{inst}:{c['name']}")
+                val = f"{inst}:{c['name']}"
+
+                if mating == "card_edge_socket":
+                    fp = card_edge_socket(ref=ref, n_pins=n_pins, value=val, pitch=c_pitch)
+                elif mating == "screw_terminal":
+                    fp = screw_terminal_block(ref=ref, n_pins=n_pins, value=val, pitch=c_pitch)
+                elif mating == "idc_box_header":
+                    fp = idc_box_header(ref=ref, n_pins=n_pins, value=val)
+                elif mating == "pin_header":
+                    fp = pin_header(ref=ref, n_pins=n_pins, value=val)
+                else:
+                    fp = pin_socket(ref=ref, n_pins=n_pins, value=val)
                 fp.x = col_x
                 fp.y = cur_y
 
@@ -286,7 +343,14 @@ def generate_backplane(
             n_pins = len(chunk) + 2
             ref = f"J_EXT{ch_idx + 1}"
             col = ch_idx % 2
-            fp = pin_header(ref=ref, n_pins=n_pins, value=f"EXT_IO_{ch_idx + 1}")
+            if ext_io_type == "idc_box_header":
+                fp = idc_box_header(ref=ref, n_pins=n_pins, value=f"EXT_IO_{ch_idx + 1}")
+            elif ext_io_type == "pin_socket":
+                fp = pin_socket(ref=ref, n_pins=n_pins, value=f"EXT_IO_{ch_idx + 1}")
+            elif ext_io_type == "screw_terminal":
+                fp = screw_terminal_block(ref=ref, n_pins=n_pins, value=f"EXT_IO_{ch_idx + 1}", pitch=5.08)
+            else:
+                fp = pin_header(ref=ref, n_pins=n_pins, value=f"EXT_IO_{ch_idx + 1}")
             fp.x = ext_io_x + col * col_gap
             fp.y = ext_col_y[col]
 
@@ -320,11 +384,27 @@ def generate_backplane(
     board_w = math.ceil((last_slot_x + 25.0) / 5.0) * 5.0
     board_h = math.ceil((max_y_reached + 25.0) / 5.0) * 5.0
 
-    m_margin = 5.0
-    footprints.append(mounting_hole("H1", m_margin, m_margin))
-    footprints.append(mounting_hole("H2", board_w - m_margin, m_margin))
-    footprints.append(mounting_hole("H3", m_margin, board_h - m_margin))
-    footprints.append(mounting_hole("H4", board_w - m_margin, board_h - m_margin))
+    if bp_mounting_holes:
+        for idx, h in enumerate(bp_mounting_holes):
+            if isinstance(h, dict):
+                href = h.get("ref", f"H{idx + 1}")
+                hsize = h.get("size", "M3")
+                if "at" in h:
+                    hx, hy = h["at"]
+                else:
+                    hx, hy = h.get("x", 5.0), h.get("y", 5.0)
+            elif isinstance(h, (list, tuple)) and len(h) == 2:
+                href, hsize = f"H{idx + 1}", "M3"
+                hx, hy = h[0], h[1]
+            else:
+                continue
+            footprints.append(mounting_hole(href, float(hx), float(hy), size=hsize))
+    else:
+        m_margin = 5.0
+        footprints.append(mounting_hole("H1", m_margin, m_margin))
+        footprints.append(mounting_hole("H2", board_w - m_margin, m_margin))
+        footprints.append(mounting_hole("H3", m_margin, board_h - m_margin))
+        footprints.append(mounting_hole("H4", board_w - m_margin, board_h - m_margin))
 
     # Criação do objeto Board do fr4lane
     rules = Rules(grid=0.5, track_width=0.3, clearance=0.25, via_size=0.6, via_drill=0.3)
@@ -444,6 +524,7 @@ def main():
     parser.add_argument("--slot-pitch", type=float, default=45.0, help="Distância entre slots adjacentes em mm")
     parser.add_argument("--col-gap", type=float, default=7.62, help="Distância entre colunas de um slot em mm")
     parser.add_argument("--layers", type=int, default=4, help="Número de camadas de cobre (padrão 4)")
+    parser.add_argument("--floorplan", default=None, help="Arquivo .floorplan.json do backplane")
     parser.add_argument("--no-ext-io", action="store_true", help="Não adiciona barras de conectores de E/S externa")
     parser.add_argument("--no-route", action="store_true", help="Pula o roteamento automático (somente placement)")
     parser.add_argument("--no-drc", action="store_true", help="Pula o DRC")
@@ -462,6 +543,7 @@ def main():
         col_gap=args.col_gap,
         layers=args.layers,
         ext_io=not args.no_ext_io,
+        floorplan=args.floorplan,
         out_dir=args.out,
         no_route=args.no_route,
         no_drc=args.no_drc,

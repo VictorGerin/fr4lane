@@ -516,6 +516,8 @@ def _write_placement(path, args, lib, design, info, board=None, fplan=None):
             # portas do topo (o editor resolve a pinagem dos conectores com elas) e os conectores montados
             "ports": [{"name": p.name, "dir": p.direction} for p in design.ports],
             "connectors": [{"name": c.plan.name, "side": c.plan.side, "at": c.plan.at, "auto": c.plan.auto,
+                            "type": getattr(c.plan, "type", "pin_header"),
+                            "pitch": getattr(c.plan, "pitch", 2.54),
                             "pins": [lbl for _, lbl in c.plan.entries]}
                            for c in getattr(board, "connectors", [])] if board is not None else None}
     Path(path).write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
