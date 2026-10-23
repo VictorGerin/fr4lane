@@ -147,6 +147,7 @@ class Floorplan:
     macro_channel: float = None                    # canal em volta de cada macro, mm (None: o padrão)
     connectors: list = field(default_factory=list)  # Connector, na ordem do arquivo
     mounting_holes: list = field(default_factory=list) # MountingHoleRule
+    chips: dict = field(default_factory=dict)          # chip_id -> [x, y]
     bus_termination: object = True             # True, False ou [portas]: terminação das linhas que saem
     buffer_ports: object = False               # True, False ou [portas]: buffer na entrada das portas
 
@@ -220,9 +221,11 @@ def parse(data, path="floorplan"):
     """Valida um floorplan já lido do JSON (path só aparece nas mensagens)."""
     if not isinstance(data, dict):
         raise FloorplanError(f"{path}: esperado um objeto JSON")
-    _keys(data, ("board", "modules", "keepouts", "macros", "macro_keepout", "macro_channel", "connectors",
+    _keys(data, ("board", "modules", "chips", "keepouts", "macros", "macro_keepout", "macro_channel", "connectors",
                  "mounting_holes", "bus_termination", "buffer_ports", "_comment"), path)
     fp = Floorplan(str(path))
+    if "chips" in data and isinstance(data["chips"], dict):
+        fp.chips = {str(k): list(v) for k, v in data["chips"].items()}
     macros = data.get("macros", [])
     if not isinstance(macros, list) or not all(isinstance(m, str) and m for m in macros):
         raise FloorplanError(f"{path}: 'macros' deve ser uma lista de tipos de módulo (ex.: [\"adder\"])")

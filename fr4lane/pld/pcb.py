@@ -188,11 +188,26 @@ def generate_gal_pcb(
 
     # 1. Posiciona os chips GAL e seus capacitores de desacoplamento
     for idx, chip in enumerate(packed_chips):
-        col_idx = idx // chips_per_col
-        row_idx = idx % chips_per_col
+        custom_pos = None
+        # Posição customizada via floorplan.chips (ex: "U1": [x, y])
+        if floorplan and getattr(floorplan, "chips", None) and chip.chip_id in floorplan.chips:
+            pos = floorplan.chips[chip.chip_id]
+            custom_pos = (float(pos[0]), float(pos[1]))
+        # Ou via floorplan.modules (ex: "U1": {"near": [x, y]} ou {"rect": [x0, y0, ...]})
+        elif floorplan and getattr(floorplan, "modules", None) and chip.chip_id in floorplan.modules:
+            rule = floorplan.modules[chip.chip_id]
+            if getattr(rule, "near", None):
+                custom_pos = (float(rule.near[0]), float(rule.near[1]))
+            elif getattr(rule, "rect", None):
+                custom_pos = (float(rule.rect[0]), float(rule.rect[1]))
 
-        cx = start_x + col_idx * chip_spacing_x
-        cy = start_y + row_idx * chip_spacing_y
+        if custom_pos:
+            cx, cy = custom_pos
+        else:
+            col_idx = idx // chips_per_col
+            row_idx = idx % chips_per_col
+            cx = start_x + col_idx * chip_spacing_x
+            cy = start_y + row_idx * chip_spacing_y
 
         # Soquete DIP
         socket = make_dip_socket(chip.chip_id, dev.name, dev.num_pins, cx, cy)
