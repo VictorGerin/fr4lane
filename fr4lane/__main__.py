@@ -497,10 +497,10 @@ def _simulate(args, lib, design, out, gates_v, models, sims, clock):
                                                    Path(s).read_text(encoding="utf-8", errors="replace"), re.M)]
     ok, text = run_sim(args.tb, [gates_v, models], out, "sim_gates", "simulação gate-level", pre_files=pkgs)
     log(f"      gate-level:       {'OK' if ok else 'FALHOU'}")
-    (out / "sim_gates.log").write_text(text)
+    (out / "sim_gates.log").write_text(text, encoding="utf-8")
     ok2, text2 = run_sim(args.tb, [sw], out, "sim_switch", "simulação de componentes", pre_files=pkgs)
     log(f"      componentes:      {'OK' if ok2 else 'FALHOU'}")
-    (out / "sim_switch.log").write_text(text2)
+    (out / "sim_switch.log").write_text(text2, encoding="utf-8")
     if not (ok and ok2):
         log("      veja sim_gates.log / sim_switch.log")
     sims[th] = (ok, ok2)
